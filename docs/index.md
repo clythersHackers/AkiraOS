@@ -12,6 +12,9 @@ permalink: /
 
 <img src="AKIRAOS-LOGO-removebg-preview.png" alt="AkiraOS Logo" width="300"/>
 
+
+</div>
+
 # AkiraOS
 **High-Performance WebAssembly OS for Embedded Systems**
 
@@ -21,8 +24,6 @@ permalink: /
 
 *Production-ready embedded OS combining Zephyr RTOS with WebAssembly sandboxed execution.*
 
----
-</div>
 
 ---
 
