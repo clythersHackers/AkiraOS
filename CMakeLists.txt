@@ -10,6 +10,10 @@ set(KCONFIG_WERROR OFF CACHE BOOL "Disable Kconfig warnings as errors" FORCE)
 # BOARD_ROOT should point to directory that CONTAINS a 'boards' subdirectory
 list(APPEND BOARD_ROOT ${CMAKE_CURRENT_LIST_DIR})
 
+# Set custom device tree bindings root - MUST be before find_package(Zephyr)
+# DTS_ROOT should point to directory that CONTAINS a 'dts/bindings' subdirectory
+list(APPEND DTS_ROOT ${CMAKE_CURRENT_LIST_DIR})
+
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(akira_os VERSION 1.2.3)
 
@@ -221,6 +225,10 @@ if(CONFIG_SHELL)
     if(CONFIG_AKIRA_HID)
         target_sources(app PRIVATE src/shell/hid_shell.c)
     endif()
+    
+    if(CONFIG_AKIRA_MODULE_RF)
+        target_sources(app PRIVATE src/shell/shell_rf.c)
+    endif()
 endif()
 
 # New Display Drivers (conditional)
@@ -235,15 +243,15 @@ endif()
 # RF Framework and Drivers (conditional on module gating)
 if(CONFIG_AKIRA_MODULE_RF)
     if(CONFIG_AKIRA_RF_FRAMEWORK)
-        target_sources(app PRIVATE src/drivers/rf_framework.c)
+        target_sources(app PRIVATE src/drivers/rf/rf_framework.c)
     endif()
 
     if(CONFIG_AKIRA_LR1121)
-        target_sources(app PRIVATE src/drivers/lr1121.c)
+        target_sources(app PRIVATE src/drivers/rf/lr1121.c)
     endif()
 
     if(CONFIG_AKIRA_CC1101)
-        target_sources(app PRIVATE src/drivers/cc1101.c)
+        target_sources(app PRIVATE src/drivers/rf/cc1101.c)
     endif()
 endif()
 

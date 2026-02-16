@@ -115,6 +115,11 @@ int main(void)
     }
 #endif
 
+#ifdef CONFIG_AKIRA_MODULE_RF
+    /* RF module enabled - framework will auto-init on first API call */
+    LOG_INF("RF module enabled");
+#endif
+
 
 #ifdef CONFIG_AKIRA_HTTP_SERVER
     /* Initialize OTA manager before starting web server */
