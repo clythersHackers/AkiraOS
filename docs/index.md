@@ -12,6 +12,7 @@ permalink: /
 
 <img src="AKIRAOS-LOGO-removebg-preview.png" alt="AkiraOS Logo" width="300"/>
 
+# AkiraOS
 **High-Performance WebAssembly OS for Embedded Systems**
 
 [![Version](https://img.shields.io/badge/version-1.4.8-blue.svg)](../VERSION)
@@ -20,6 +21,7 @@ permalink: /
 
 *Production-ready embedded OS combining Zephyr RTOS with WebAssembly sandboxed execution.*
 
+---
 </div>
 
 ---
@@ -199,7 +201,13 @@ AkiraOS is open source and welcomes contributions!
 
 ## 📄 License
 
-AkiraOS is licensed under the [Apache License 2.0](../LICENSE).
+AkiraOS is licensed under the [GNU General Public License v3.0](../LICENSE).
+
+**Third-Party Components:**
+- Zephyr RTOS 
+- WASM Micro Runtime (WAMR) 
+- MCUboot 
+- ESP-IDF 
 
 ---
 

@@ -9,7 +9,7 @@
 [![Version](https://img.shields.io/badge/version-1.4.7-blue.svg)](VERSION)
 [![Zephyr](https://img.shields.io/badge/Zephyr-4.3.0-green.svg)](https://github.com/zephyrproject-rtos/zephyr)
 [![WAMR](https://img.shields.io/badge/WAMR-2.0-purple.svg)](https://github.com/bytecodealliance/wasm-micro-runtime)
-[![License](https://img.shields.io/badge/license-Apache%202.0-orange.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL%20v3-blue.svg)](LICENSE)
 
 *A production-ready embedded OS combining Zephyr RTOS with WebAssembly sandboxed execution.*
 
@@ -249,44 +249,6 @@ AkiraOS implements **defense-in-depth** security:
 
 ---
 
-## 🌐 Connectivity Protocols
-
-### WiFi (HTTP Server)
-
-- **Port:** 80 (configurable)
-- **Endpoints:**
-  - `POST /upload` – Multipart file upload
-  - `POST /ota/upload` – Firmware update
-  - `GET /status` – System status JSON
-
-### Bluetooth
-
-- **Profiles:** HID (keyboard, mouse, gamepad)
-- **Services:** Custom GATT for app transfer
-- **Security:** Pairing with PIN/passkey
-
-### USB
-
-- **Mass Storage Class** – Drag-and-drop file access
-- **CDC ACM** – Serial console over USB
-
----
-
-## 📊 Performance Metrics
-
-Measured on **ESP32-S3 @ 240MHz** with 8MB PSRAM:
-
-| Metric | Value | Notes |
-|--------|-------|-------|
-| **Boot Time** | ~2.5s | Cold boot to shell prompt |
-| **WASM Load** | ~150ms | 100KB module from PSRAM |
-| **Native Call Latency** | <50ns | Direct jump table dispatch |
-| **HTTP Upload** | ~1.1MB/s | Multipart to file system |
-| **OTA Flash Write** | ~200KB/s | Includes verification |
-| **WASM Execution** | ~70% native | AOT-compiled benchmarks |
-
----
-
 ## 🛠️ Development Workflow
 
 ### 1. Local Development
@@ -338,15 +300,14 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ## 📜 License
 
-AkiraOS is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for details.
+AkiraOS is licensed under the **GNU General Public License v3.0**. See [LICENSE](LICENSE) for details.
 
 ### Third-Party Components
 
-- **Zephyr RTOS** – Apache 2.0
-- **WASM Micro Runtime** – Apache 2.0
-- **MCUboot** – Apache 2.0
-- **ESP-IDF Components** – Apache 2.0
-
+- **Zephyr RTOS** 
+- **WASM Micro Runtime (WAMR)**
+- **MCUboot**
+- **ESP-IDF Components** 
 ---
 
 ## 💬 Community

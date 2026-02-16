@@ -11,7 +11,7 @@ mermaid:
   version: "10.6.1"
 
 # Site settings
-title: AkiraOS Documentation
+title: AkiraOS
 description: High-Performance WebAssembly OS for Embedded Systems
 baseurl: ""
 url: "https://akiraos.pen.engineering"
@@ -97,8 +97,13 @@ aux_links:
   "AkiraOS on GitHub":
     - "//github.com/ArturR0k3r/AkiraOS"
 
+# Navigation
+nav_enabled: true
+nav_sort: nav_order
+search_enabled: true
+
 # Footer content
-footer_content: "Copyright &copy; 2025-2026 AkiraOS Project. Distributed under the Apache 2.0 License."
+footer_content: "Copyright &copy; 2025-2026 AkiraOS Project. Licensed under GNU GPL v3."
 
 # Enable search
 search_enabled: true
