@@ -72,12 +72,13 @@ graph TB
 ### [User Space](../api-reference/)
 WebAssembly applications run in isolated sandboxes with capability-based access control.
 
-- **Execution:** WASM bytecode via WAMR
+- **Execution:** WASM bytecode (interpreter) or AOT (native code)
 - **Security:** Per-app capabilities, memory quotas
 - **Size:** 50KB-200KB per app
 - **Max Instances:** 4 concurrent apps
+- **Performance:** 1x (interpreter) or 10-50x (AOT)
 
-[Learn more about the Runtime →](runtime.md)
+[Learn more about the Runtime →](runtime.md) | [AOT Compilation →](aot-compilation.md)
 
 ### [AkiraRuntime](runtime.md)
 Custom WASM runtime managing application lifecycle, security, and native API bridging.
@@ -175,6 +176,7 @@ WASM Code → WAMR Import → Native Bridge → Inline Cap Check → HAL Functio
 - [System Overview](system-overview.md) - Complete architecture guide
 - [Connectivity Layer](connectivity.md) - Network protocols
 - [AkiraRuntime](runtime.md) - WASM execution environment
+- [AOT Compilation](aot-compilation.md) - Native code compilation for 10-50x performance
 - [Security Model](security.md) - Capability system
 - [Data Flow](data-flow.md) - Information flow diagrams
 

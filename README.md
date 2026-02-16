@@ -172,19 +172,6 @@ west espmonitor
 
 ---
 
-## 📚 Documentation
-
-| Document | Description |
-|----------|-------------|
-| [QUICKSTART.md](QUICKSTART.md) | Step-by-step setup guide |
-| [Architecture.md](docs/Architecture.md) | System design and data flows |
-| [Runtime README](src/runtime/README.md) | WAMR integration and execution model |
-| [Connectivity README](src/connectivity/README.md) | Network stack and transport layer |
-| [Hardware.md](docs/Hardware.md) | Supported boards and peripherals |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development guidelines |
-
----
-
 ## 🎮 Supported Hardware
 
 | Platform | Status | Memory | Features |
@@ -362,29 +349,11 @@ AkiraOS is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) for
 
 ---
 
-## 🌟 Roadmap
-
-### v1.5.0 (Planned)
-
-- [ ] ARM Cortex-M support (nRF54L15, STM32)
-- [ ] LVGL integration for GUI applications
-- [ ] LoRa mesh networking
-- [ ] Python bindings for native API
-
-### v2.0.0 (Future)
-
-- [ ] Multi-core WASM execution
-- [ ] GPU acceleration (ESP32-P4)
-- [ ] Real-time scheduling guarantees
-- [ ] Cloud integration (MQTT, AWS IoT)
-
----
-
 ## 💬 Community
 
 - **GitHub Issues:** [Report bugs](https://github.com/ArturR0k3r/AkiraOS/issues)
 - **Discussions:** [Ask questions](https://github.com/ArturR0k3r/AkiraOS/discussions)
-- **Wiki:** [Community documentation](https://github.com/ArturR0k3r/AkiraOS/wiki)
+- **Wiki:** [Community documentation](https://docs.akiraos.dev/)
 
 ---
 

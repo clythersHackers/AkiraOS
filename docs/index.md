@@ -49,6 +49,7 @@ AkiraOS is a production-ready embedded operating system that enables **secure, d
 
 ✅ **Zero-Trust Execution** - WASM sandboxing + capability-based access control  
 ✅ **Real-Time Performance** - Zephyr RTOS with <60ns native call overhead  
+✅ **AOT Compilation** - Optional native code execution (10-50x faster than interpreter)  
 ✅ **OTA Updates** - MCUboot secure firmware updates with rollback  
 ✅ **Multi-Platform** - ESP32, nRF54, STM32, native simulation  
 ✅ **Modular Connectivity** - WiFi, Bluetooth, USB, mesh (future)  
@@ -85,6 +86,7 @@ AkiraOS is a production-ready embedded operating system that enables **secure, d
 - [System Overview](architecture/system-overview.md) - Complete architecture
 - [Connectivity Layer](architecture/connectivity.md) - Network protocols
 - [AkiraRuntime](architecture/runtime.md) - WASM execution environment
+- [AOT Compilation](architecture/aot-compilation.md) - Native code compilation for 10-50x performance
 - [Security Model](architecture/security.md) - Capability system
 - [Data Flow](architecture/data-flow.md) - End-to-end diagrams
 

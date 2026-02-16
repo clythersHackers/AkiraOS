@@ -271,11 +271,36 @@ AkiraRuntime wraps WAMR and provides:
 **WAMR Configuration:**
 ```c
 #define WASM_ENABLE_INTERP 1
-#define WASM_ENABLE_AOT 0                   // Disabled (flash size)
+#define WASM_ENABLE_AOT 1                   // Enabled for Xtensa/ESP32-S3
 #define WASM_ENABLE_FAST_INTERP 1
 #define WASM_ENABLE_LIBC_BUILTIN 1
 #define WASM_ENABLE_LIBC_WASI 0             // Custom APIs instead
 ```
+
+### Execution Modes
+
+AkiraRuntime supports two execution modes:
+
+**1. Interpreter Mode (.wasm)**
+- Universal bytecode execution
+- Runs on all platforms
+- Baseline performance (1x)
+- Default mode for uploaded `.wasm` files
+
+**2. AOT Mode (.aot)**
+- Native machine code execution
+- 10-50x faster than interpreter
+- Architecture-specific binaries
+- Requires pre-compilation with `wamrc`
+- Currently enabled for ESP32-S3 (Xtensa)
+
+**Hybrid Deployment:**
+- Upload both `.wasm` and `.aot` files
+- Runtime auto-selects `.aot` if available for current architecture
+- Falls back to `.wasm` interpreter otherwise
+- Best practice for production apps
+
+See [AOT Compilation Architecture](aot-compilation.md) for detailed guide.
 
 ## Performance
 
