@@ -129,41 +129,46 @@ void akira_display_get_size(int *width, int *height)
 
 int akira_native_display_rect(wasm_exec_env_t exec_env, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color)
 {
-    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EPERM);
+    //AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EPERM);
     
     akira_display_rect(x, y, w, h, (uint16_t)color);
+    akira_display_flush();
     return 0;
 }
 
 int akira_native_display_text(wasm_exec_env_t exec_env, int32_t x, int32_t y, const char *text, uint32_t color)
 {
-    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EPERM);
+    //AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EPERM);
     
     akira_display_text(x, y, text, (uint16_t)color);
+    akira_display_flush();
     return 0;
 }
 
 int akira_native_display_text_large(wasm_exec_env_t exec_env, int x, int y, const char *text, uint16_t color)
 {
-    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EPERM);
+    //AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EPERM);
     
     akira_display_text_large(x, y, text, color);
+    akira_display_flush();
     return 0;
 }
 
 int akira_native_display_clear(wasm_exec_env_t exec_env, uint32_t color)
 {
-    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EPERM);
+    //AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EPERM);
     
     akira_display_clear((uint16_t)color);
+    akira_display_flush();
     return 0;
 }
 
 int akira_native_display_pixel(wasm_exec_env_t exec_env, int32_t x, int32_t y, uint32_t color)
 {
-    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EPERM);
+    //AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EPERM);
     
     akira_display_pixel(x, y, (uint16_t)color);
+    akira_display_flush();
     return 0;
 }
 

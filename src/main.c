@@ -250,6 +250,8 @@ int main(void)
     /* Idle loop */
     while (1) {
         k_sleep(K_SECONDS(10));
+        // may be add show to display all installed apps and add posibility to run them from there? or just show some system info and status?
+        // and if display available show some nice animation or something?
     }
 
     return 0;

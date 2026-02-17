@@ -965,7 +965,7 @@ config AKIRA_WASM_API
 config AKIRA_WASM_DISPLAY
     bool "Export Display API to WASM"
     default y
-    depends on AKIRA_WASM_API && AKIRA_DISPLAY
+    depends on AKIRA_WASM_API 
     help
       Export display drawing functions to WASM applications.
       Provides pixel, rectangle, text, and clear operations.

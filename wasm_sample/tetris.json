@@ -1,0 +1,10 @@
+{
+  "name": "tetris",
+  "version": "1.0.0",
+  "capabilities": [
+    "display.write",
+    "input.read",
+    "gpio.read"
+  ],
+  "memory_quota": 131072
+}

@@ -36,6 +36,7 @@ build_app() {
     local app_name=$1
     local source_file="${WASM_APPS_DIR}/${app_name}.c"
     local output_file="${OUTPUT_DIR}/${app_name}.wasm"
+    local manifest_file="${WASM_APPS_DIR}/${app_name}.json"
 
     if [ ! -f "$source_file" ]; then
         echo -e "${YELLOW}Warning: Source file not found: $source_file${NC}"
@@ -49,23 +50,30 @@ build_app() {
                    sed 's/export[^a-zA-Z0-9_]*//g' | \
                    sed 's/(.*//' || true)
 
-    # Build export flags
+    # Export main via linker (not source attributes)
     local export_flags="-Wl,--export=main"
-    if [ ! -z "$exports" ]; then
-        echo "  Found exports: $exports"
-        for func in $exports; do
-            export_flags="$export_flags -Wl,--export=$func"
-        done
+
+    # Check for manifest file and prepare for embedding
+    local manifest_flags=""
+    local temp_manifest_obj=""
+    if [ -f "$manifest_file" ]; then
+        echo "  Found manifest: ${app_name}.json"
+        # We'll copy the manifest for external loading
+        # Embedding in WASM custom section would require wasm-tools post-processing
     fi
 
-    # Compile with WASI SDK
+    # Compile with WASI SDK (using bare wasm32 target to avoid auto-exports)
     "${WASI_SDK}/bin/clang" \
-        -target wasm32-wasi \
+        -target wasm32-unknown-unknown \
         -nostdlib \
+        -fvisibility=hidden \
         -Wl,--no-entry \
+        -Wl,--allow-undefined \
+        -Wl,--strip-all \
+        -I"${WASM_APPS_DIR}/include" \
         $export_flags \
+        $manifest_flags \
         -O2 \
-        -g \
         -o "$output_file" \
         "$source_file"
 
@@ -76,6 +84,12 @@ build_app() {
         # Show exported functions
         echo "  Exported symbols:"
         "${WASI_SDK}/bin/wasm-nm" "$output_file" | grep -v "^U " | sed 's/^/    /' || true
+        
+        # Copy manifest to output directory if present
+        if [ -f "$manifest_file" ]; then
+            cp "$manifest_file" "${OUTPUT_DIR}/${app_name}.json"
+            echo -e "  ${GREEN}✓ Copied manifest${NC}"
+        fi
         
         return 0
     else

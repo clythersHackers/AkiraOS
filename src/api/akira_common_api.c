@@ -11,7 +11,7 @@ int akira_native_log(wasm_exec_env_t exec_env, uint32_t level, char* message){
     wasm_module_inst_t module_inst = wasm_runtime_get_module_inst(exec_env);
     if (!module_inst) return -1;
 
-    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_INPUT_READ, -EPERM);
+    /* Note: log() does not require capability checks - basic debugging should always be allowed */
 
     switch (level)
     {
@@ -34,4 +34,12 @@ int akira_native_log(wasm_exec_env_t exec_env, uint32_t level, char* message){
 
     return 0;
 }
+
+int akira_native_delay(wasm_exec_env_t exec_env, uint32_t microseconds)
+{
+    /* Note: delay() does not require capability checks - basic timing should always be allowed */
+    k_usleep(microseconds);
+    return 0;
+}
+
 #endif
