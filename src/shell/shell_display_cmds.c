@@ -299,6 +299,42 @@ static int cmd_display_line(const struct shell *sh, size_t argc, char **argv)
     return 0;
 }
 
+/* display rotate <rotation> - Set display rotation */
+static int cmd_display_rotate(const struct shell *sh, size_t argc, char **argv)
+{
+    if (argc != 2) {
+        shell_error(sh, "Usage: display rotate <0|1|2|3>");
+        shell_print(sh, "  0 = 0° (Portrait)");
+        shell_print(sh, "  1 = 90° (Landscape)");
+        shell_print(sh, "  2 = 180° (Portrait inverted)");
+        shell_print(sh, "  3 = 270° (Landscape inverted)");
+        return -EINVAL;
+    }
+
+    int rotation = atoi(argv[1]);
+    if (rotation < 0 || rotation > 3) {
+        shell_error(sh, "Invalid rotation: %d (must be 0-3)", rotation);
+        return -EINVAL;
+    }
+
+    int ret = akira_display_hal_set_rotation((uint8_t)rotation);
+    if (ret == -ENOTSUP) {
+        shell_warn(sh, "Runtime rotation not supported");
+        shell_print(sh, "To change rotation, edit 'mdac' in device tree:");
+        shell_print(sh, "  0° (Portrait):     mdac = <0x08>;");
+        shell_print(sh, "  90° (Landscape):   mdac = <0x68>;");
+        shell_print(sh, "  180° (Inverted):   mdac = <0xC8>;");
+        shell_print(sh, "  270° (Landscape2): mdac = <0xA8>;");
+        return 0;
+    } else if (ret < 0) {
+        shell_error(sh, "Rotation failed: %d", ret);
+        return ret;
+    }
+
+    shell_print(sh, "Display rotated to %d degrees", rotation * 90);
+    return 0;
+}
+
 /* Subcommands */
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_display,
     SHELL_CMD_ARG(info, NULL, "Show display information", cmd_display_info, 1, 0),
@@ -310,6 +346,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_display,
     SHELL_CMD_ARG(flush, NULL, "Flush framebuffer to display", cmd_display_flush, 1, 0),
     SHELL_CMD_ARG(brightness, NULL, "Set brightness <0-100>", cmd_display_brightness, 2, 0),
     SHELL_CMD_ARG(blanking, NULL, "Control blanking <on|off>", cmd_display_blanking, 2, 0),
+    SHELL_CMD_ARG(rotate, NULL, "Set rotation <0|1|2|3> (0/90/180/270°)", cmd_display_rotate, 2, 0),
     SHELL_SUBCMD_SET_END
 );
 

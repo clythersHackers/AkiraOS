@@ -5,6 +5,7 @@
 #include "akira_api.h"
 #include <runtime/security.h>
 #include <drivers/platform_hal.h>
+#include "../drivers/display/fonts.h"
 #include <zephyr/drivers/display.h>
 #include <zephyr/logging/log.h>
 
@@ -80,14 +81,14 @@ void akira_display_rect(int x, int y, int w, int h, uint16_t color)
 
 void akira_display_text(int x, int y, const char *text, uint16_t color)
 {
-    (void)x; (void)y; (void)text; (void)color;
-    LOG_WRN("akira_display_text: not implemented in minimal API");
+    if (!text) return;
+    draw_string(x, y, text, color, akira_display_pixel, FONT_7X10);
 }
 
 void akira_display_text_large(int x, int y, const char *text, uint16_t color)
 {
-    (void)x; (void)y; (void)text; (void)color;
-    LOG_WRN("akira_display_text_large: not implemented in minimal API");
+    if (!text) return;
+    draw_string(x, y, text, color, akira_display_pixel, FONT_11X18);
 }
 
 void akira_display_flush(void)

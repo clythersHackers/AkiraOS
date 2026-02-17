@@ -21,11 +21,6 @@ bool akira_register_native_apis()
         {"display_pixel", (void *)akira_native_display_pixel, "(iii)i", NULL},
         #endif
 
-        #ifdef CONFIG_AKIRA_WASM_INPUT
-        {"input_read_buttons", (void *)akira_native_input_read_buttons, "()i", NULL},
-        {"input_button_pressed", (void *)akira_native_input_button_pressed, "(i)i", NULL},
-        #endif
-
         #ifdef CONFIG_AKIRA_WASM_GPIO
         {"gpio_configure", (void *)akira_native_gpio_configure, "(ii)i", NULL},
         {"gpio_read", (void *)akira_native_gpio_read, "(i)i", NULL},

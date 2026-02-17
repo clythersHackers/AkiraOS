@@ -843,14 +843,6 @@ config AKIRA_WASM_DISPLAY
       Provides pixel, rectangle, text, and clear operations.
       Requires AKIRA_CAP_DISPLAY_WRITE capability.
 
-config AKIRA_WASM_INPUT
-    bool "Export Input API to WASM"
-    default y
-    depends on AKIRA_WASM_API && GPIO
-    help
-      Export input/button reading functions to WASM applications.
-      Provides button state reading and callback registration.
-      Requires AKIRA_CAP_INPUT_READ capability.
 
 config AKIRA_WASM_GPIO
     bool "Export GPIO API to WASM"

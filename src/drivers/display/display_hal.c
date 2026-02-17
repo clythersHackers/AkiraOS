@@ -140,3 +140,44 @@ void akira_display_hal_set_brightness(uint8_t brightness)
         gpio_pin_set(backlight_gpio_dev, BACKLIGHT_GPIO_PIN, (brightness > 0) ? 1 : 0);
     }
 }
+
+/**
+ * @brief Set display orientation/rotation
+ * @param rotation Rotation mode (0=0°, 1=90°, 2=180°, 3=270°)
+ * @return 0 on success, negative errno on error
+ */
+int akira_display_hal_set_rotation(uint8_t rotation)
+{
+#if DT_NODE_EXISTS(DT_CHOSEN(zephyr_display))
+    if (display_dev == NULL) {
+        LOG_ERR("Display not initialized");
+        return -ENODEV;
+    }
+
+    /* ST7789V MADCTL register values with BGR bit (0x08)
+     * MY=bit7, MX=bit6, MV=bit5, ML=bit4, BGR=bit3 */
+    uint8_t madctl_values[4] = {
+        0x08,  /* 0°:   Portrait - BGR only */
+        0x68,  /* 90°:  Landscape - MX + MV + BGR */
+        0xC8,  /* 180°: Portrait inverted - MY + MX + BGR */
+        0xA8   /* 270°: Landscape inverted - MY + MV + BGR */
+    };
+
+    if (rotation > 3) {
+        return -EINVAL;
+    }
+
+    /* Use Zephyr display API to send custom command if supported */
+    /* For ST7789V: command 0x36 (MADCTL) with data byte */
+    
+    /* Note: Zephyr's display API doesn't have a standard rotation function yet,
+     * so we log the request but cannot actually change it without modifying
+     * the device tree mdac property and rebuilding. */
+    LOG_INF("Display rotation requested: %d° (MADCTL=0x%02X)", rotation * 90, madctl_values[rotation]);
+    LOG_WRN("Runtime rotation not yet implemented - change 'mdac' in device tree");
+    
+    return -ENOTSUP;
+#else
+    return -ENOTSUP;
+#endif
+}

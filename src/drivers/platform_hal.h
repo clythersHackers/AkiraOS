@@ -215,4 +215,11 @@ int akira_display_hal_get_capabilities(struct display_capabilities *caps);
  */
 void akira_display_hal_set_brightness(uint8_t brightness);
 
+/**
+ * @brief Set display orientation/rotation
+ * @param rotation Rotation mode (0=0°, 1=90°, 2=180°, 3=270°)
+ * @return 0 on success, negative errno on error
+ */
+int akira_display_hal_set_rotation(uint8_t rotation);
+
 #endif /* PLATFORM_HAL_H */

@@ -57,31 +57,39 @@ int main(void)
 
     /* Display test - runs AFTER HAL initialization */
 #ifdef CONFIG_DISPLAY
-    akira_display_clear(0xF800);  // RED
-    akira_display_flush();
-    k_sleep(K_SECONDS(2));
-    akira_display_clear(0x07E0);  // GREEN  
-    akira_display_flush();
-    k_sleep(K_SECONDS(2));
+    akira_display_clear(0x0021);  
+    /* Display boot info on screen */
+    char buf[64];
+    int y_pos = 20;
+    const int line_height = 12;
+    const uint16_t text_color = 0xFFFF;  // White
     
-    /* Test 3: Fill with BLUE */
-    LOG_INF("TEST 3: Filling screen with BLUE (0x001F)");
-    akira_display_clear(0x001F);  // BLUE
-    akira_display_flush();
-    k_sleep(K_SECONDS(2));
+    akira_display_text(5, y_pos, "====================================", text_color);
+    y_pos += line_height;
     
-    /* Test 4: Fill with WHITE */
-    LOG_INF("TEST 4: Filling screen with WHITE (0xFFFF)");
-    akira_display_clear(0xFFFF);  // WHITE
-    akira_display_flush();
-    k_sleep(K_SECONDS(2));
+    akira_display_text(5, y_pos, "AkiraOS booting", text_color);
+    y_pos += line_height;
     
-    /* Test 5: Back to BLACK */
-    LOG_INF("TEST 5: Filling screen with BLACK (0x0000)");
-    akira_display_clear(0x0000);  // BLACK
-    akira_display_flush();
+    akira_display_text(5, y_pos, "Minimalist v1.4.8", text_color);
+    y_pos += line_height;
     
-    LOG_INF("=== Display Test Complete ===");
+    snprintf(buf, sizeof(buf), "Platform: %s", akira_get_platform_name());
+    akira_display_text(5, y_pos, buf, text_color);
+    y_pos += line_height;
+    
+    snprintf(buf, sizeof(buf), "Build: %s", __DATE__);
+    akira_display_text(5, y_pos, buf, text_color);
+    y_pos += line_height;
+    
+    snprintf(buf, sizeof(buf), "       %s", __TIME__);
+    akira_display_text(5, y_pos, buf, text_color);
+    y_pos += line_height;
+    
+    akira_display_text(5, y_pos, "====================================", text_color);
+    
+    akira_display_flush();
+    k_sleep(K_SECONDS(3));
+
 #endif
 
 #ifdef CONFIG_BT

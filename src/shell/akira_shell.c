@@ -47,6 +47,7 @@
 #endif
 #include "akira.h"
 #include "../storage/fs_manager.h"
+#include "../api/akira_gpio_api.h"
 #ifdef CONFIG_AKIRA_APP_MANAGER
 #include <runtime/app_manager/app_manager.h>
 #endif
@@ -314,12 +315,6 @@ static const struct gpio_dt_spec button_specs[] = {
     /* Add more buttons as defined in overlay */
 };
 
-/* Button name lookup table for efficient display */
-static const char *const button_names[] = {
-    "ON/OFF", "Settings", "D-Pad Up", "D-Pad Down",
-    "D-Pad Left", "D-Pad Right", "Button A", "Button B",
-    "Button X", "Button Y"};
-
 /* Work queue for periodic tasks */
 static struct k_work_q shell_workq;
 static K_THREAD_STACK_DEFINE(shell_workq_stack, 1024); /* Reduced to save memory */
@@ -370,7 +365,7 @@ static int init_gpio_pins(void)
             return -ENODEV;
         }
 
-        int ret = gpio_pin_configure_dt(&button_specs[i], GPIO_INPUT | GPIO_PULL_UP);
+        int ret = gpio_pin_configure_dt(&button_specs[i], GPIO_INPUT | GPIO_PULL_DOWN);
         if (ret)
         {
             LOG_ERR("Failed to configure button %zu: %d", i, ret);
@@ -578,8 +573,8 @@ uint32_t shell_read_buttons(void)
         if (gpio_is_ready_dt(&button_specs[i]))
         {
             int val = gpio_pin_get_dt(&button_specs[i]);
-            if (val == 0)
-            { /* Active low buttons */
+            if (val == 1)
+            { /* Active high buttons (pull-down) */
                 button_state |= (1U << i);
             }
         }
@@ -838,139 +833,90 @@ static int cmd_system_info(const struct shell *sh, size_t argc, char **argv)
     return 0;
 }
 
-static int cmd_buttons_read(const struct shell *sh, size_t argc, char **argv)
-{
-    ARG_UNUSED(argc);
-    ARG_UNUSED(argv);
-
-    uint32_t button_state = shell_read_buttons();
-
-    shell_print(sh, "\n=== Gaming Button States (0x%08x) ===", button_state);
-
-    if (button_state == 0)
-    {
-        shell_print(sh, "No buttons are currently pressed");
-    }
-    else
-    {
-        for (int i = 0; i < 10 && i < ARRAY_SIZE(button_names); i++)
-        {
-            if (button_state & (1U << i))
-            {
-                shell_print(sh, "%s: PRESSED", button_names[i]);
-            }
-        }
-    }
-
-    add_to_history("game buttons");
-    return 0;
-}
-
-static int cmd_display_control(const struct shell *sh, size_t argc, char **argv)
+static int cmd_gpio_read(const struct shell *sh, size_t argc, char **argv)
 {
     if (argc < 2)
     {
-        struct display_config config;
-        if (shell_get_display_config(&config) != 0)
-        {
-            shell_error(sh, "Failed to get display config");
-            return -EIO;
-        }
-
-        shell_print(sh, "\n=== Display Configuration ===");
-        shell_print(sh, "Backlight: %s", config.backlight_on ? "ON" : "OFF");
-        shell_print(sh, "Brightness: %d/255", config.brightness);
-        shell_print(sh, "Rotation: %d degrees", config.rotation);
-        shell_print(sh, "Inverted: %s", config.inverted ? "YES" : "NO");
-        shell_print(sh, "\nUsage: game display <backlight|brightness|rotation> <value>");
-        return 0;
-    }
-
-    struct display_config config;
-    if (shell_get_display_config(&config) != 0)
-    {
-        shell_error(sh, "Failed to get current config");
-        return -EIO;
-    }
-
-    bool changed = false;
-    char history_cmd[64];
-
-    if (strcmp(argv[1], "backlight") == 0)
-    {
-        if (argc < 3)
-        {
-            shell_error(sh, "Usage: game display backlight <on|off>");
-            return -EINVAL;
-        }
-        bool new_state = (strcmp(argv[2], "on") == 0);
-        if (config.backlight_on != new_state)
-        {
-            config.backlight_on = new_state;
-            changed = true;
-        }
-        snprintf(history_cmd, sizeof(history_cmd), "game display backlight %s", argv[2]);
-        shell_print(sh, "Display backlight %s", new_state ? "enabled" : "disabled");
-    }
-    else if (strcmp(argv[1], "brightness") == 0)
-    {
-        if (argc < 3)
-        {
-            shell_error(sh, "Usage: game display brightness <0-255>");
-            return -EINVAL;
-        }
-        long brightness = strtol(argv[2], NULL, 10);
-        if (brightness < 0 || brightness > 255)
-        {
-            shell_error(sh, "Brightness must be 0-255");
-            return -EINVAL;
-        }
-        if (config.brightness != (uint8_t)brightness)
-        {
-            config.brightness = (uint8_t)brightness;
-            changed = true;
-        }
-        snprintf(history_cmd, sizeof(history_cmd), "game display brightness %s", argv[2]);
-        shell_print(sh, "Display brightness set to %ld", brightness);
-    }
-    else if (strcmp(argv[1], "rotation") == 0)
-    {
-        if (argc < 3)
-        {
-            shell_error(sh, "Usage: game display rotation <0|90|180|270>");
-            return -EINVAL;
-        }
-        long rotation = strtol(argv[2], NULL, 10);
-        if (rotation != 0 && rotation != 90 && rotation != 180 && rotation != 270)
-        {
-            shell_error(sh, "Rotation must be 0, 90, 180, or 270 degrees");
-            return -EINVAL;
-        }
-        if (config.rotation != (uint16_t)rotation)
-        {
-            config.rotation = (uint16_t)rotation;
-            changed = true;
-        }
-        snprintf(history_cmd, sizeof(history_cmd), "game display rotation %s", argv[2]);
-        shell_print(sh, "Display rotation set to %ld degrees", rotation);
-    }
-    else
-    {
-        shell_error(sh, "Unknown parameter: %s", argv[1]);
+        shell_error(sh, "Usage: gpio read <pin_number>");
         return -EINVAL;
     }
 
-    if (changed)
+    uint32_t pin = strtoul(argv[1], NULL, 10);
+    
+    /* Configure pin as input with pull-down before reading */
+    uint32_t flags = AKIRA_GPIO_INPUT | AKIRA_GPIO_PULL_DOWN;
+    int ret = akira_gpio_configure(pin, flags);
+    if (ret < 0)
     {
-        int ret = shell_control_display(&config);
-        if (ret != 0)
-        {
-            shell_error(sh, "Failed to update display: %d", ret);
-            return ret;
-        }
+        shell_error(sh, "Failed to configure GPIO %u: error %d", pin, ret);
+        return ret;
+    }
+    
+    /* Small delay to let pull-up stabilize */
+    k_msleep(1);
+    
+    int value = akira_gpio_read(pin);
+    if (value < 0)
+    {
+        shell_error(sh, "Failed to read GPIO %u: error %d", pin, value);
+        return value;
     }
 
-    add_to_history(history_cmd);
+    shell_print(sh, "GPIO %u: %d", pin, value);
+    return 0;
+}
+
+static int cmd_gpio_configure(const struct shell *sh, size_t argc, char **argv)
+{
+    if (argc < 3)
+    {
+        shell_error(sh, "Usage: gpio configure <pin_number> <mode>");
+        shell_print(sh, "Modes:");
+        shell_print(sh, "  input          - Input without pull resistor");
+        shell_print(sh, "  input_pullup   - Input with pull-up");
+        shell_print(sh, "  input_pulldown - Input with pull-down");
+        shell_print(sh, "  output         - Output (init low)");
+        shell_print(sh, "  output_high    - Output (init high)");
+        return -EINVAL;
+    }
+
+    uint32_t pin = strtoul(argv[1], NULL, 10);
+    uint32_t flags = 0;
+
+    if (strcmp(argv[2], "input") == 0)
+    {
+        flags = AKIRA_GPIO_INPUT;
+    }
+    else if (strcmp(argv[2], "input_pullup") == 0)
+    {
+        flags = AKIRA_GPIO_INPUT | AKIRA_GPIO_PULL_UP;
+    }
+    else if (strcmp(argv[2], "input_pulldown") == 0)
+    {
+        flags = AKIRA_GPIO_INPUT | AKIRA_GPIO_PULL_DOWN;
+    }
+    else if (strcmp(argv[2], "output") == 0)
+    {
+        flags = AKIRA_GPIO_OUTPUT | AKIRA_GPIO_OUTPUT_INIT_LOW;
+    }
+    else if (strcmp(argv[2], "output_high") == 0)
+    {
+        flags = AKIRA_GPIO_OUTPUT | AKIRA_GPIO_OUTPUT_INIT_HIGH;
+    }
+    else
+    {
+        shell_error(sh, "Unknown mode: %s", argv[2]);
+        return -EINVAL;
+    }
+
+    int ret = akira_gpio_configure(pin, flags);
+    if (ret < 0)
+    {
+        shell_error(sh, "Failed to configure GPIO %u: error %d", pin, ret);
+        return ret;
+    }
+
+    shell_print(sh, "GPIO %u configured as %s", pin, argv[2]);
     return 0;
 }
 
@@ -1816,9 +1762,9 @@ SHELL_STATIC_SUBCMD_SET_CREATE(system_cmds,
                                SHELL_CMD(reboot, NULL, "Reboot system [delay_seconds]", cmd_reboot),
                                SHELL_SUBCMD_SET_END);
 
-SHELL_STATIC_SUBCMD_SET_CREATE(gaming_cmds,
-                               SHELL_CMD(buttons, NULL, "Read gaming button states", cmd_buttons_read),
-                               SHELL_CMD(display, NULL, "Control display settings", cmd_display_control),
+SHELL_STATIC_SUBCMD_SET_CREATE(gpio_cmds,
+                               SHELL_CMD(read, NULL, "Read GPIO pin state", cmd_gpio_read),
+                               SHELL_CMD(configure, NULL, "Configure GPIO pin", cmd_gpio_configure),
                                SHELL_SUBCMD_SET_END);
 
 SHELL_STATIC_SUBCMD_SET_CREATE(debug_cmds,
@@ -1832,7 +1778,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(debug_cmds,
                                SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(sys, &system_cmds, "System management commands", NULL);
-SHELL_CMD_REGISTER(game, &gaming_cmds, "Gaming-specific commands", NULL);
+SHELL_CMD_REGISTER(gpio, &gpio_cmds, "GPIO control commands", NULL);
 SHELL_CMD_REGISTER(debug, &debug_cmds, "Debug and diagnostic commands", NULL);
 #ifdef CONFIG_AKIRA_APP_MANAGER
 SHELL_CMD_REGISTER(app, &app_cmds, "App management commands", NULL);
