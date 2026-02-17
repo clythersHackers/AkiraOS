@@ -184,4 +184,35 @@ void akira_sim_draw_pixel(int x, int y, uint16_t color);
  */
 void akira_sim_show_display(void);
 
+/**
+ * @brief Get pointer to hardware framebuffer (240x320 RGB565)
+ * @return Pointer to framebuffer or NULL if not available
+ */
+uint16_t *akira_framebuffer_get(void);
+
+/**
+ * @brief Initialize hardware display HAL
+ * @return 0 on success, negative errno on error
+ */
+int akira_display_hal_init(void);
+
+/**
+ * @brief Flush framebuffer to physical display hardware
+ */
+void akira_display_hal_flush(void);
+
+/**
+ * @brief Get display capabilities
+ * @param caps Pointer to capabilities structure to fill
+ * @return 0 on success, negative errno on error
+ */
+struct display_capabilities;
+int akira_display_hal_get_capabilities(struct display_capabilities *caps);
+
+/**
+ * @brief Set display backlight brightness
+ * @param brightness Brightness level (0-100)
+ */
+void akira_display_hal_set_brightness(uint8_t brightness);
+
 #endif /* PLATFORM_HAL_H */

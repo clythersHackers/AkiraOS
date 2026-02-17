@@ -134,6 +134,7 @@ target_sources(app PRIVATE
     src/drivers/driver_registry.c
     src/shell/akira_shell.c
     src/shell/shell_display.c
+    src/shell/shell_display_cmds.c
     src/settings/settings.c
 )
 
@@ -236,8 +237,11 @@ if(CONFIG_AKIRA_SSD1306)
     target_sources(app PRIVATE src/drivers/ssd1306.c)
 endif()
 
-if(CONFIG_AKIRA_ST7789)
-    target_sources(app PRIVATE src/drivers/st7789.c)
+# Hardware Display HAL (using Zephyr display subsystem)
+if(CONFIG_DISPLAY)
+    target_sources(app PRIVATE 
+        src/drivers/display/display_hal.c
+    )
 endif()
 
 # RF Framework and Drivers (conditional on module gating)

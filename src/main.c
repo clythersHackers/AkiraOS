@@ -6,6 +6,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <drivers/platform_hal.h>
+#include <api/akira_display_api.h>
 #include <runtime/akira_runtime.h>
 #include <runtime/app_loader/app_loader.h>
 #include <runtime/security/sandbox.h>
@@ -42,13 +43,46 @@ LOG_MODULE_REGISTER(akira_main, CONFIG_AKIRA_LOG_LEVEL);
 
 int main(void)
 {
-    LOG_INF("AkiraOS booting (Minimalist v1.4.8 - Hardened Runtime)");
+    LOG_INF("=====================================================)");
+    LOG_INF("AkiraOS booting (Minimalist v1.4.8 - Hardened Runtime)"); 
+    LOG_INF("Platform: %s", akira_get_platform_name());
+    LOG_INF("Build: %s %s", __DATE__, __TIME__);
+    LOG_INF("=====================================================)");
 
     /* Initialize hardware HAL */
     if (akira_hal_init() < 0) {
         LOG_ERR("HAL init failed");
         return -ENODEV;
     }
+
+    /* Display test - runs AFTER HAL initialization */
+#ifdef CONFIG_DISPLAY
+    akira_display_clear(0xF800);  // RED
+    akira_display_flush();
+    k_sleep(K_SECONDS(2));
+    akira_display_clear(0x07E0);  // GREEN  
+    akira_display_flush();
+    k_sleep(K_SECONDS(2));
+    
+    /* Test 3: Fill with BLUE */
+    LOG_INF("TEST 3: Filling screen with BLUE (0x001F)");
+    akira_display_clear(0x001F);  // BLUE
+    akira_display_flush();
+    k_sleep(K_SECONDS(2));
+    
+    /* Test 4: Fill with WHITE */
+    LOG_INF("TEST 4: Filling screen with WHITE (0xFFFF)");
+    akira_display_clear(0xFFFF);  // WHITE
+    akira_display_flush();
+    k_sleep(K_SECONDS(2));
+    
+    /* Test 5: Back to BLACK */
+    LOG_INF("TEST 5: Filling screen with BLACK (0x0000)");
+    akira_display_clear(0x0000);  // BLACK
+    akira_display_flush();
+    
+    LOG_INF("=== Display Test Complete ===");
+#endif
 
 #ifdef CONFIG_BT
     /* Initialize Bluetooth manager */

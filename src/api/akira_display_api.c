@@ -5,6 +5,7 @@
 #include "akira_api.h"
 #include <runtime/security.h>
 #include <drivers/platform_hal.h>
+#include <zephyr/drivers/display.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(akira_display_api, LOG_LEVEL_INF);
@@ -21,10 +22,17 @@ void akira_display_clear(uint16_t color)
             akira_sim_draw_pixel(x, y, color);
     akira_sim_show_display();
 #else
+    struct display_capabilities caps;
+    if (akira_display_hal_get_capabilities(&caps) < 0) {
+        LOG_ERR("Failed to get display capabilities");
+        return;
+    }
+    
     uint16_t *fb = akira_framebuffer_get();
     if (fb)
     {
-        for (int i = 0; i < 240 * 320; i++)
+        int pixels = caps.x_resolution * caps.y_resolution;
+        for (int i = 0; i < pixels; i++)
             fb[i] = color;
     }
     else
@@ -36,15 +44,21 @@ void akira_display_clear(uint16_t color)
 
 void akira_display_pixel(int x, int y, uint16_t color)
 {
+#if AKIRA_PLATFORM_NATIVE_SIM
     if (x < 0 || x >= 240 || y < 0 || y >= 320)
         return;
-
-#if AKIRA_PLATFORM_NATIVE_SIM
     akira_sim_draw_pixel(x, y, color);
 #else
+    struct display_capabilities caps;
+    if (akira_display_hal_get_capabilities(&caps) < 0)
+        return;
+    
+    if (x < 0 || x >= caps.x_resolution || y < 0 || y >= caps.y_resolution)
+        return;
+
     uint16_t *fb = akira_framebuffer_get();
     if (fb)
-        fb[y * 240 + x] = color;
+        fb[y * caps.x_resolution + x] = color;
 #endif
 }
 
@@ -78,15 +92,34 @@ void akira_display_text_large(int x, int y, const char *text, uint16_t color)
 
 void akira_display_flush(void)
 {
+    //LOG_INF("akira_display_flush() called");
 #if AKIRA_PLATFORM_NATIVE_SIM
+    LOG_INF("Using sim display path");
     akira_sim_show_display();
+#else
+    //LOG_INF("Using hardware display path");
+    akira_display_hal_flush();
 #endif
+    //LOG_INF("akira_display_flush() completed");
 }
 
 void akira_display_get_size(int *width, int *height)
 {
+#if AKIRA_PLATFORM_NATIVE_SIM
     if (width) *width = 240;
     if (height) *height = 320;
+#else
+    struct display_capabilities caps;
+    if (akira_display_hal_get_capabilities(&caps) < 0) {
+        LOG_ERR("Failed to get display capabilities");
+        if (width) *width = 0;
+        if (height) *height = 0;
+        return;
+    }
+    
+    if (width) *width = caps.x_resolution;
+    if (height) *height = caps.y_resolution;
+#endif
 }
 
 /* WASM Native export API */

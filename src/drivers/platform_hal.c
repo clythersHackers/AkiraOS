@@ -20,7 +20,7 @@
 #endif
 
 /* Logging module set at source level */
-LOG_MODULE_REGISTER(akira_hal, CONFIG_AKIRA_LOG_LEVEL);
+LOG_MODULE_REGISTER(akira_hal, LOG_LEVEL_DBG);
 
 #if AKIRA_PLATFORM_NATIVE_SIM
 /* Simulated display framebuffer (240x320 RGB565) */
@@ -118,8 +118,26 @@ int akira_hal_init(void)
 
 #elif AKIRA_PLATFORM_ESP32S3
     LOG_INF("Running on ESP32-S3 - full hardware support");
+    
+    /* Initialize hardware display if configured */
+#if defined(CONFIG_DISPLAY) && defined(CONFIG_AKIRA_FRAMEBUFFER_IN_PSRAM)
+    int ret = akira_display_hal_init();
+    if (ret < 0) {
+        LOG_WRN("Display HAL initialization failed: %d", ret);
+    }
+#endif
+    
 #elif AKIRA_PLATFORM_ESP32
     LOG_INF("Running on ESP32 - full hardware support");
+    
+    /* Initialize hardware display if configured */
+#if defined(CONFIG_DISPLAY) && defined(CONFIG_AKIRA_FRAMEBUFFER_IN_PSRAM)
+    int ret = akira_display_hal_init();
+    if (ret < 0) {
+        LOG_WRN("Display HAL initialization failed: %d", ret);
+    }
+#endif
+    
 #else
     LOG_WRN("Running on unknown platform");
 #endif
@@ -133,8 +151,10 @@ int akira_hal_init(void)
 uint16_t *akira_framebuffer_get(void)
 {
 #if defined(CONFIG_AKIRA_FRAMEBUFFER_IN_PSRAM) && defined(CONFIG_MEMC)
+    LOG_DBG("Framebuffer get: returning PSRAM buffer at %p", hw_framebuffer);
     return hw_framebuffer;
 #else
+    LOG_WRN("Framebuffer get: no PSRAM framebuffer configured");
     return NULL;
 #endif
 }

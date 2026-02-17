@@ -1,6 +1,7 @@
 // Include required headers
 #include <zephyr/dt-bindings/gpio/gpio.h>
 #include <zephyr/dt-bindings/spi/spi.h>
+#include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
 
 // ============================================================================
 // PSRAM Configuration - ESP32-S3 N16R8 (8MB OPI PSRAM)
@@ -13,7 +14,7 @@
 };
 
 // ============================================================================
-// SPI2 Configuration for LR1121 LoRa Transceiver
+// SPI2 Configuration for LR1121 LoRa Transceiver and ST7789 Display
 // ============================================================================
 &pinctrl
 {
@@ -31,21 +32,68 @@
     status = "okay";
     pinctrl-0 = <&spim2_default>;
     pinctrl-names = "default";
-    clock-frequency = <1000000>; // Start at 1 MHz for LR1121 (can go up to 10 MHz)
+    clock-frequency = <1000000>; // 20 MHz for display (LR1121 will override with its own max)
+    
+    // CS GPIO array: GPIO38 for LR1121, GPIO10 for ST7789
+    cs-gpios = <&gpio1 6 GPIO_ACTIVE_LOW>,  // CS0: GPIO38 for LR1121
+               <&gpio0 10 GPIO_ACTIVE_LOW>; // CS1: GPIO10 for ST7789 display
     
     // LR1121 as child of SPI2
     lr1121_config: lr1121@0 {
         compatible = "semtech,lr1121";
-        reg = <0>; // Chip select 0
+        reg = <0>; // Chip select 0 (GPIO38)
         status = "okay";
         label = "LR1121";
         spi-max-frequency = <10000000>; // 10 MHz max
-        // ESP32-S3 GPIO mapping: GPIO32-48 are on gpio1 bank
-        cs-gpios = <&gpio1 5 GPIO_ACTIVE_LOW>;      // GPIO37 (37-32=5)
+        cs-gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;      // GPIO38 (on DIY version is GPIO37 but this is conf) - required by LR1121 binding
         reset-gpios = <&gpio0 0 GPIO_ACTIVE_LOW>;   // GPIO0
         busy-gpios = <&gpio1 4 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>; // GPIO36 (36-32=4)
         // IRQ optional - uncomment if connected:
         // irq-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;  // GPIO35 (35-32=3)
+    };
+};
+
+/ {
+    // Chosen node for display
+    chosen {
+        zephyr,display = &st7789v_akiraconsole;
+    };
+
+    // MIPI DBI interface for ST7789 Display
+    mipi_dbi_st7789_akiraconsole {
+        compatible = "zephyr,mipi-dbi-spi";
+        spi-dev = <&spi2>;
+        dc-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;    // TFT_DC  - GPIO9
+        reset-gpios = <&gpio0 15 GPIO_ACTIVE_LOW>; // TFT_RST - GPIO15
+        write-only;
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        st7789v_akiraconsole: st7789v@1 {
+            compatible = "sitronix,st7789v";
+            mipi-max-frequency = <20000000>;
+            reg = <1>;
+            width = <240>;
+            height = <320>;
+            x-offset = <0>;
+            y-offset = <0>;
+            vcom = <0x19>;
+            gctrl = <0x35>;
+            vrhs = <0x12>;
+            vdvs = <0x20>;
+            mdac = <0x00>;
+            gamma = <0x01>;
+            colmod = <0x55>;
+            lcm = <0x2c>;
+            porch-param = [0c 0c 00 33 33];
+            cmd2en-param = [5a 69 02 01];
+            pwctrl1-param = [a4 a1];
+            pvgam-param = [D0 04 0D 11 13 2B 3F 54 4C 18 0D 0B 1F 23];
+            nvgam-param = [D0 04 0C 11 13 2C 3F 44 51 2F 1F 1F 20 23];
+            ram-param = [00 F0];
+            rgb-param = [CD 08 14];
+            mipi-mode = "MIPI_DBI_MODE_SPI_4WIRE";
+        };
     };
 };
 

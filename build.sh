@@ -22,7 +22,7 @@
 #   esp32s3_devkitm_esp32s3_procpu     ESP32-S3 DevKitM (Akira Console)
 #   akiraconsole                       Akira Console (ESP32-S3 DevKitM) - short alias
 #   akiraconsole_esp32s3_procpu        Akira Console (ESP32-S3 DevKitM) - full name
-#   esp32s3_supermini_esp32s3_procpu   ESP32-S3 Super Mini (compact)
+#   esp32s3_super_mini_esp32s3_procpu   ESP32-S3 Super Mini (compact)
 #   esp32_devkitc_procpu               ESP32 DevKitC (Akira Micro)
 #   nrf54l15dk_nrf54l15_cpuapp         nRF54L15 DK (Nordic)
 #   steval_stwinbx1                    STM32 STWIN.box
@@ -71,7 +71,7 @@ declare -A BOARD_MAP=(
     ["esp32s3_devkitm_esp32s3_procpu"]="esp32s3_devkitm/esp32s3/procpu"
     ["akiraconsole"]="akiraconsole/esp32s3/procpu"
     ["akiraconsole_esp32s3_procpu"]="akiraconsole/esp32s3/procpu"
-    ["esp32s3_supermini_esp32s3_procpu"]="esp32s3_supermini/esp32s3/procpu"
+    ["esp32s3_super_mini_esp32s3_procpu"]="esp32s3_super_mini/esp32s3/procpu"
     ["esp32s3_super_mini"]="esp32s3_super_mini/esp32s3/procpu"
     ["esp32c3_devkitm"]="esp32c3_devkitm"
     ["esp32_devkitc_procpu"]="esp32_devkitc/esp32/procpu"
@@ -85,7 +85,7 @@ declare -A BOARD_CHIP=(
     ["esp32s3_devkitm_esp32s3_procpu"]="esp32s3"
     ["akiraconsole"]="esp32s3"
     ["akiraconsole_esp32s3_procpu"]="esp32s3"
-    ["esp32s3_supermini_esp32s3_procpu"]="esp32s3"
+    ["esp32s3_super_mini_esp32s3_procpu"]="esp32s3"
     ["esp32s3_super_mini"]="esp32s3"
     ["esp32c3_devkitm"]="esp32c3"
     ["esp32_devkitc_procpu"]="esp32"
@@ -100,7 +100,7 @@ declare -A BOARD_DESC=(
     ["akiraconsole"]="Akira Console (ESP32-S3 DevKitM)"
     ["akiraconsole_esp32s3_procpu"]="Akira Console (ESP32-S3 DevKitM)"
     ["esp32s3_super_mini"]="ESP32-S3 Super Mini"
-    ["esp32s3_supermini_esp32s3_procpu"]="ESP32-S3 Super Mini"
+    ["esp32s3_super_mini_esp32s3_procpu"]="ESP32-S3 Super Mini"
     ["esp32c3_devkitm"]="ESP32-C3 DevKitM (RISC-V)"
     ["esp32_devkitc_procpu"]="ESP32 DevKitC "
     ["nrf54l15dk_nrf54l15_cpuapp"]="Nordic nRF54L15 DK"
@@ -157,7 +157,7 @@ ${BOLD}BOARDS:${NC}
     esp32s3_devkitm_esp32s3_procpu     ESP32-S3 DevKitM (Akira Console)
     akiraconsole                       Akira Console - short alias
     akiraconsole_esp32s3_procpu        Akira Console - full name
-    esp32s3_supermini_esp32s3_procpu   ESP32-S3 Super Mini (compact)
+    esp32s3_super_mini_esp32s3_procpu  ESP32-S3 Super Mini (compact)
     esp32c3_devkitm                    ESP32-C3 DevKitM (RISC-V)
     esp32_devkitc_procpu               ESP32 DevKitC (Legacy)
     nrf54l15dk_nrf54l15_cpuapp         Nordic nRF54L15 DK

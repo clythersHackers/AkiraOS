@@ -1,6 +1,0 @@
-board:
-  name: esp32s3_supermini
-  full_name: ESP32-S3 Super Mini
-  vendor: generic
-  socs:
-  - name: esp32s3
