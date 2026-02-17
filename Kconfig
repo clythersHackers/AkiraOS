@@ -852,6 +852,15 @@ config AKIRA_WASM_INPUT
       Provides button state reading and callback registration.
       Requires AKIRA_CAP_INPUT_READ capability.
 
+config AKIRA_WASM_GPIO
+    bool "Export GPIO API to WASM"
+    default y
+    depends on AKIRA_WASM_API && GPIO
+    help
+      Export GPIO control functions to WASM applications.
+      Provides pin configuration, reading, and writing capabilities.
+      Requires AKIRA_CAP_GPIO_READ and AKIRA_CAP_GPIO_WRITE capabilities.
+
 config AKIRA_WASM_RF
     bool "Export RF API to WASM"
     default y

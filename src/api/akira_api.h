@@ -27,6 +27,10 @@
 #include "akira_input_api.h"
 #endif
 
+#ifdef CONFIG_AKIRA_WASM_GPIO
+#include "akira_gpio_api.h"
+#endif
+
 #ifdef CONFIG_AKIRA_WASM_RF
 #include "akira_rf_api.h"
 #endif

@@ -198,6 +198,143 @@ int file_read(const char *filename, void *buffer, int buf_len);
  */
 int file_write(const char *filename, const void *buffer, int buf_len);
 
+/* ===== Input APIs ===== */
+
+/**
+ * @brief Button ID constants for gamepad-style input
+ *
+ * These constants match the akira_button_id_t enum and correspond
+ * to the zephyr,code values in the device tree button definitions.
+ */
+#define AKIRA_BTN_POWER    0  /* ON/OFF button */
+#define AKIRA_BTN_SETTINGS 1  /* Settings button */
+#define AKIRA_BTN_UP       2  /* D-Pad Up */
+#define AKIRA_BTN_DOWN     3  /* D-Pad Down */
+#define AKIRA_BTN_LEFT     4  /* D-Pad Left */
+#define AKIRA_BTN_RIGHT    5  /* D-Pad Right */
+#define AKIRA_BTN_A        6  /* Action button A */
+#define AKIRA_BTN_B        7  /* Action button B */
+#define AKIRA_BTN_X        8  /* Action button X */
+#define AKIRA_BTN_Y        9  /* Action button Y */
+
+/**
+ * @brief Read all button states as bitmask
+ *
+ * Signature: "()i"
+ *
+ * @return Bitmask of pressed buttons. Bit N is set if button N is pressed.
+ *
+ * Requires: AKIRA_CAP_INPUT_READ capability
+ *
+ * Example in WASM:
+ * @code
+ * int buttons = input_read_buttons();
+ * if (buttons & (1 << AKIRA_BTN_A)) {
+ *     // Button A is pressed
+ * }
+ * if (buttons & (1 << AKIRA_BTN_UP)) {
+ *     // D-Pad Up is pressed
+ * }
+ * @endcode
+ */
+int input_read_buttons(void);
+
+/**
+ * @brief Check if specific button is pressed
+ *
+ * Signature: "(i)i"
+ *
+ * @param button_id Button ID to check (use AKIRA_BTN_* constants)
+ * @return 1 if button is pressed, 0 if not pressed
+ *
+ * Requires: AKIRA_CAP_INPUT_READ capability
+ *
+ * Example in WASM:
+ * @code
+ * if (input_button_pressed(AKIRA_BTN_A)) {
+ *     // A button is pressed
+ * }
+ * @endcode
+ */
+int input_button_pressed(int button_id);
+
+/* ===== GPIO APIs ===== */
+
+/**
+ * @brief GPIO configuration flags
+ *
+ * These flags can be combined using bitwise OR to configure GPIO pins.
+ */
+#define AKIRA_GPIO_INPUT            (1U << 0)  /* Configure as input */
+#define AKIRA_GPIO_OUTPUT           (1U << 1)  /* Configure as output */
+#define AKIRA_GPIO_OUTPUT_INIT_LOW  (1U << 2)  /* Initialize output to low */
+#define AKIRA_GPIO_OUTPUT_INIT_HIGH (1U << 3)  /* Initialize output to high */
+#define AKIRA_GPIO_PULL_UP          (1U << 4)  /* Enable internal pull-up resistor */
+#define AKIRA_GPIO_PULL_DOWN        (1U << 5)  /* Enable internal pull-down resistor */
+#define AKIRA_GPIO_ACTIVE_LOW       (1U << 6)  /* Active-low (inverted logic) */
+#define AKIRA_GPIO_ACTIVE_HIGH      (1U << 7)  /* Active-high (normal logic) */
+
+/**
+ * @brief Configure a GPIO pin
+ *
+ * Signature: "(ii)i"
+ *
+ * @param pin GPIO pin number (0-48 for ESP32-S3)
+ * @param flags Configuration flags (AKIRA_GPIO_* constants)
+ * @return 0 on success, negative error code on failure
+ *
+ * Requires: AKIRA_CAP_GPIO_READ for input, AKIRA_CAP_GPIO_WRITE for output
+ *
+ * Example in WASM:
+ * @code
+ * // Configure GPIO 2 as output, initially low
+ * gpio_configure(2, AKIRA_GPIO_OUTPUT | AKIRA_GPIO_OUTPUT_INIT_LOW);
+ *
+ * // Configure GPIO 4 as input with pull-up
+ * gpio_configure(4, AKIRA_GPIO_INPUT | AKIRA_GPIO_PULL_UP);
+ * @endcode
+ */
+int gpio_configure(int pin, int flags);
+
+/**
+ * @brief Read a GPIO pin value
+ *
+ * Signature: "(i)i"
+ *
+ * @param pin GPIO pin number to read
+ * @return 1 if high, 0 if low, negative error code on failure
+ *
+ * Requires: AKIRA_CAP_GPIO_READ capability
+ *
+ * Example in WASM:
+ * @code
+ * int value = gpio_read(4);
+ * if (value == 1) {
+ *     // Pin is high
+ * }
+ * @endcode
+ */
+int gpio_read(int pin);
+
+/**
+ * @brief Write a GPIO pin value
+ *
+ * Signature: "(ii)i"
+ *
+ * @param pin GPIO pin number to write
+ * @param value Output value (0 for low, non-zero for high)
+ * @return 0 on success, negative error code on failure
+ *
+ * Requires: AKIRA_CAP_GPIO_WRITE capability
+ *
+ * Example in WASM:
+ * @code
+ * gpio_write(2, 1);  // Set GPIO 2 to high
+ * gpio_write(2, 0);  // Set GPIO 2 to low
+ * @endcode
+ */
+int gpio_write(int pin, int value);
+
 /* ===== Registration ===== */
 
 /**

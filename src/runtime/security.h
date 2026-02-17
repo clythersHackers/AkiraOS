@@ -28,6 +28,8 @@ extern "C" {
 #define AKIRA_CAP_STORAGE_READ (1U << 6)
 #define AKIRA_CAP_STORAGE_WRITE (1U << 7)
 #define AKIRA_CAP_NETWORK (1U << 8)
+#define AKIRA_CAP_GPIO_READ (1U << 9)
+#define AKIRA_CAP_GPIO_WRITE (1U << 10)
 
 /*
  * Capability check macro using security subsystem.

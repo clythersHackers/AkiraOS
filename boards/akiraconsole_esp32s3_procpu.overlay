@@ -110,6 +110,63 @@
     status = "okay";
 };
 
+// ============================================================================
+// Button Configuration - Game Controller Layout
+// ============================================================================
+/ {
+    gpio_keys {
+        compatible = "gpio-keys";
+        
+        button_y: button_y {
+            gpios = <&gpio1 9 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; // GPIO41
+            label = "Button Y";
+            zephyr,code = <9>; // AKIRA_BTN_Y
+        };
+        
+        button_x: button_x {
+            gpios = <&gpio0 17 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; // GPIO17
+            label = "Button X";
+            zephyr,code = <8>; // AKIRA_BTN_X
+        };
+        
+        button_b: button_b {
+            gpios = <&gpio0 16 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; // GPIO16
+            label = "Button B";
+            zephyr,code = <7>; // AKIRA_BTN_B
+        };
+        
+        button_a: button_a {
+            gpios = <&gpio0 15 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; // GPIO15
+            label = "Button A";
+            zephyr,code = <6>; // AKIRA_BTN_A
+        };
+        
+        button_right: button_right {
+            gpios = <&gpio0 7 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; // GPIO7
+            label = "Button Right";
+            zephyr,code = <5>; // AKIRA_BTN_RIGHT
+        };
+        
+        button_left: button_left {
+            gpios = <&gpio0 6 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; // GPIO6
+            label = "Button Left";
+            zephyr,code = <4>; // AKIRA_BTN_LEFT
+        };
+        
+        button_down: button_down {
+            gpios = <&gpio0 5 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; // GPIO5
+            label = "Button Down";
+            zephyr,code = <3>; // AKIRA_BTN_DOWN
+        };
+        
+        button_up: button_up {
+            gpios = <&gpio0 4 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>; // GPIO4
+            label = "Button Up";
+            zephyr,code = <2>; // AKIRA_BTN_UP
+        };
+    };
+};
+
 // WiFi configuration
 &wifi
 {

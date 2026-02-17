@@ -206,6 +206,7 @@ target_sources(app PRIVATE
 if(CONFIG_AKIRA_WASM_RUNTIME)
     target_sources(app PRIVATE
         src/api/akira_input_api.c
+        src/api/akira_gpio_api.c
         src/api/akira_rf_api.c
         src/api/akira_sensor_api.c
         src/api/akira_export_api.c

@@ -8,18 +8,47 @@
 #include <runtime/security.h>
 #include <drivers/platform_hal.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/input/input.h>
+#include <drivers/sim/akira_sim.h>
 
 LOG_MODULE_REGISTER(akira_input_api, LOG_LEVEL_INF);
 
 static akira_input_callback_t g_input_callback = NULL;
+
+/* Button state tracking */
+static uint32_t g_button_state = 0;
+
+#if !AKIRA_PLATFORM_NATIVE_SIM
+/* Hardware button reading using device tree gpio-keys */
+static void input_cb(struct input_event *evt)
+{
+    /* Convert zephyr,code from device tree to button bitmask */
+    if (evt->code >= 0 && evt->code < 32) {
+        if (evt->value) {
+            g_button_state |= (1U << evt->code);
+        } else {
+            g_button_state &= ~(1U << evt->code);
+        }
+        LOG_DBG("Button %d %s (state: 0x%08x)", 
+                evt->code, evt->value ? "pressed" : "released", g_button_state);
+        
+        /* Notify callback if registered */
+        if (g_input_callback) {
+            g_input_callback(g_button_state);
+        }
+    }
+}
+INPUT_CALLBACK_DEFINE(NULL, input_cb, NULL);
+#endif
 
 int akira_input_read_buttons(void)
 {
 #if AKIRA_PLATFORM_NATIVE_SIM
     return akira_sim_read_buttons();
 #else
-    /* TODO: Implement real GPIO-based reading */
-    return 0;
+    return g_button_state;
 #endif
 }
 
@@ -32,6 +61,7 @@ int akira_input_set_callback(akira_input_callback_t callback)
 {
     g_input_callback = callback;
     LOG_INF("Input callback registered: %p", callback);
+    return 0;
 }
 
 void akira_input_notify(uint32_t buttons)

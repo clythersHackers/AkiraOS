@@ -1,0 +1,13 @@
+{
+    "name": "button_test",
+    "version": "1.0.0",
+    "description": "Button and GPIO test application",
+    "author": "AkiraOS",
+    "capabilities": [
+        "input.read",
+        "gpio.read",
+        "gpio.write"
+    ],
+    "memory_quota": 65536,
+    "stack_size": 8192
+}
