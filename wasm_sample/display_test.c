@@ -32,7 +32,7 @@ static void delay(uint32_t count)
  */
 static void test_clear_screen(void)
 {
-    printk(LOG_LEVEL_INF, "Test 1: Clear screen with colors");
+    log(LOG_LEVEL_INF, "Test 1: Clear screen with colors");
     
     display_clear(COLOR_BLACK);
     display_text(10, 10, "BLACK", COLOR_WHITE);
@@ -60,7 +60,7 @@ static void test_clear_screen(void)
  */
 static void test_rectangles(void)
 {
-    printk(LOG_LEVEL_INF, "Test 2: Drawing rectangles");
+    log(LOG_LEVEL_INF, "Test 2: Drawing rectangles");
     
     display_clear(COLOR_BLACK);
     display_text(10, 5, "Rectangle Test", COLOR_WHITE);
@@ -99,7 +99,7 @@ static void test_rectangles(void)
  */
 static void test_pixels(void)
 {
-    printk(LOG_LEVEL_INF, "Test 3: Drawing pixels");
+    log(LOG_LEVEL_INF, "Test 3: Drawing pixels");
     
     display_clear(COLOR_BLACK);
     display_text(10, 5, "Pixel Test", COLOR_WHITE);
@@ -128,7 +128,7 @@ static void test_pixels(void)
  */
 static void test_text(void)
 {
-    printk(LOG_LEVEL_INF, "Test 4: Text rendering");
+    log(LOG_LEVEL_INF, "Test 4: Text rendering");
     
     display_clear(COLOR_BLACK);
     
@@ -162,7 +162,7 @@ static void test_text(void)
  */
 static void test_complex_graphics(void)
 {
-    printk(LOG_LEVEL_INF, "Test 5: Complex graphics");
+    log(LOG_LEVEL_INF, "Test 5: Complex graphics");
     
     display_clear(COLOR_BLACK);
     
@@ -194,10 +194,10 @@ static void test_complex_graphics(void)
  */
 int main(void)
 {
-    printk(LOG_LEVEL_INF, "=====================================");
-    printk(LOG_LEVEL_INF, "  AkiraOS Display Test Application  ");
-    printk(LOG_LEVEL_INF, "=====================================");
-    printk(LOG_LEVEL_INF, "");
+    log(LOG_LEVEL_INF, "=====================================");
+    log(LOG_LEVEL_INF, "  AkiraOS Display Test Application  ");
+    log(LOG_LEVEL_INF, "=====================================");
+    log(LOG_LEVEL_INF, "");
     
     // Run all tests
     test_clear_screen();
@@ -214,9 +214,9 @@ int main(void)
     
     display_text(60, 190, "All tests passed!", COLOR_YELLOW);
     
-    printk(LOG_LEVEL_INF, "");
-    printk(LOG_LEVEL_INF, "Display test completed successfully!");
-    printk(LOG_LEVEL_INF, "All graphics primitives tested");
+    log(LOG_LEVEL_INF, "");
+    log(LOG_LEVEL_INF, "Display test completed successfully!");
+    log(LOG_LEVEL_INF, "All graphics primitives tested");
     
     return 0;
 }
