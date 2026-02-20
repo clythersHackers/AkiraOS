@@ -19,7 +19,7 @@
     #include "akira_common_api.h"
 #endif
 
-#ifdef CONFIG_AKIRA_WASM_DISPLAY
+#ifdef CONFIG_DISPLAY
 #include "akira_display_api.h"
 #endif
 

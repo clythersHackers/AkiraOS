@@ -126,20 +126,22 @@ target_sources(app PRIVATE
     src/main.c
     
     # Core drivers and shell
-    src/drivers/display/display_ili9341.c
-    src/drivers/display/fonts.c
-    src/drivers/display/font_data.c
+
     src/drivers/platform_hal.c
     src/drivers/psram.c
     src/drivers/driver_registry.c
     src/shell/akira_shell.c
-    src/shell/shell_display.c
     src/settings/settings.c
 )
 
 # Display shell commands (only if display is available)
 if(CONFIG_DISPLAY)
-    target_sources(app PRIVATE src/shell/shell_display_cmds.c)
+    target_sources(app PRIVATE 
+    src/shell/shell_display_cmds.c
+    src/drivers/display/display_ili9341.c
+    src/drivers/display/fonts.c
+    src/drivers/display/font_data.c
+    src/shell/shell_display.c)
 endif()
 
 # ===== v2.0 Modular Architecture Files =====
@@ -201,10 +203,16 @@ target_sources(app PRIVATE
 
 # Core API wrappers (must be stateless, call akira_security_check first)
 target_sources(app PRIVATE
-    src/api/akira_display_api.c
     src/api/akira_memory_api.c
     src/api/akira_common_api.c
 )
+
+# Display API is only built if display support is enabled
+if(CONFIG_DISPLAY)
+    target_sources(app PRIVATE
+        src/api/akira_display_api.c
+    )
+endif()
 
 # WASM-dependent API wrappers (need wasm_export.h)
 if(CONFIG_AKIRA_WASM_RUNTIME)

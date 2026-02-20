@@ -962,16 +962,6 @@ config AKIRA_WASM_API
       Enable registration of native APIs for WASM applications.
       This allows WASM apps to call native platform functions.
 
-config AKIRA_WASM_DISPLAY
-    bool "Export Display API to WASM"
-    default y
-    depends on AKIRA_WASM_API 
-    help
-      Export display drawing functions to WASM applications.
-      Provides pixel, rectangle, text, and clear operations.
-      Requires AKIRA_CAP_DISPLAY_WRITE capability.
-
-
 config AKIRA_WASM_GPIO
     bool "Export GPIO API to WASM"
     default y

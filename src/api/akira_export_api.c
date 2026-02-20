@@ -14,7 +14,7 @@ bool akira_register_native_apis()
         {"delay", (void *)akira_native_delay, "(i)i", NULL},
         #endif
 
-        #ifdef CONFIG_AKIRA_WASM_DISPLAY
+        #ifdef CONFIG_DISPLAY
         {"display_rect", (void *)akira_native_display_rect, "(iiiii)i", NULL},
         {"display_text", (void *)akira_native_display_text, "(ii$i)i", NULL},
         {"display_text_large", (void *)akira_native_display_text_large, "(ii$i)i", NULL},

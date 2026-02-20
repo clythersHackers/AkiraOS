@@ -89,12 +89,13 @@ static void akira_shell_print_internal(const struct shell *sh, const char *text,
     {
         shell_fprintf(sh, SHELL_NORMAL, "%s\n", text);
     }
-
+#ifdef CONFIG_DISPLAY
     /* Also display on screen if enabled */
     if (shell_display_enabled && shell_display_is_enabled())
     {
         shell_display_print(text, is_error ? SHELL_TEXT_ERROR : SHELL_TEXT_NORMAL);
     }
+#endif 
 }
 
 /* Wrapper macros for intercepting shell output */
