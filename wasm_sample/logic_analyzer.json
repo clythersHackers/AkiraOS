@@ -1,0 +1,11 @@
+{
+  "name": "logic_analyzer",
+  "version": "1.0.0",
+  "description": "4-channel GPIO logic analyzer with real-time waveform display",
+  "capabilities": [
+    "gpio.read",
+    "display.write",
+    "input.read"
+  ],
+  "memory_quota": 131072
+}
