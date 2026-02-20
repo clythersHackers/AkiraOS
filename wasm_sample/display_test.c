@@ -15,44 +15,34 @@
 
 #include "akira_api.h"
 
-/**
- * @brief Simple delay function
- * 
- * @param count Number of iterations (approximate delay)
- */
-static void delay(uint32_t count)
-{
-    for (uint32_t i = 0; i < count; i++) {
-        __asm__ volatile ("" ::: "memory");
-    }
-}
+
 
 /**
  * @brief Test 1: Clear screen with different colors
  */
 static void test_clear_screen(void)
 {
-    log(LOG_LEVEL_INF, "Test 1: Clear screen with colors");
+    printf("Test 1: Clear screen with colors");
     
     display_clear(COLOR_BLACK);
     display_text(10, 10, "BLACK", COLOR_WHITE);
-    delay(5000000);
+    delay(500000);
     
     display_clear(COLOR_RED);
     display_text(10, 10, "RED", COLOR_WHITE);
-    delay(5000000);
+    delay(500000);
     
     display_clear(COLOR_GREEN);
     display_text(10, 10, "GREEN", COLOR_WHITE);
-    delay(5000000);
+    delay(500000);
     
     display_clear(COLOR_BLUE);
     display_text(10, 10, "BLUE", COLOR_WHITE);
-    delay(5000000);
+    delay(500000);
     
     display_clear(COLOR_WHITE);
     display_text(10, 10, "WHITE", COLOR_BLACK);
-    delay(5000000);
+    delay(500000);
 }
 
 /**
@@ -60,7 +50,7 @@ static void test_clear_screen(void)
  */
 static void test_rectangles(void)
 {
-    log(LOG_LEVEL_INF, "Test 2: Drawing rectangles");
+    printf("Test 2: Drawing rectangles");
     
     display_clear(COLOR_BLACK);
     display_text(10, 5, "Rectangle Test", COLOR_WHITE);
@@ -91,7 +81,7 @@ static void test_rectangles(void)
     display_rect(0, 0, 5, 240, COLOR_WHITE);     // Left
     display_rect(315, 0, 5, 240, COLOR_WHITE);   // Right
     
-    delay(10000000);
+    delay(1000000);
 }
 
 /**
@@ -99,7 +89,7 @@ static void test_rectangles(void)
  */
 static void test_pixels(void)
 {
-    log(LOG_LEVEL_INF, "Test 3: Drawing pixels");
+    printf("Test 3: Drawing pixels");
     
     display_clear(COLOR_BLACK);
     display_text(10, 5, "Pixel Test", COLOR_WHITE);
@@ -120,7 +110,7 @@ static void test_pixels(void)
         }
     }
     
-    delay(10000000);
+    delay(1000000);
 }
 
 /**
@@ -128,7 +118,7 @@ static void test_pixels(void)
  */
 static void test_text(void)
 {
-    log(LOG_LEVEL_INF, "Test 4: Text rendering");
+    printf("Test 4: Text rendering");
     
     display_clear(COLOR_BLACK);
     
@@ -154,7 +144,7 @@ static void test_text(void)
     display_text(10, 210, "WASM Graphics Demo v1.0", COLOR_LIGHT_GRAY);
     display_text(10, 225, "Press any key...", COLOR_DARK_GRAY);
     
-    delay(15000000);
+    delay(1500000);
 }
 
 /**
@@ -162,7 +152,7 @@ static void test_text(void)
  */
 static void test_complex_graphics(void)
 {
-    log(LOG_LEVEL_INF, "Test 5: Complex graphics");
+    printf("Test 5: Complex graphics");
     
     display_clear(COLOR_BLACK);
     
@@ -182,7 +172,7 @@ static void test_complex_graphics(void)
     // Draw baseline
     display_rect(10, 200, 290, 2, COLOR_WHITE);
     
-    delay(10000000);
+    delay(1000000);
 }
 
 /**
@@ -194,10 +184,10 @@ static void test_complex_graphics(void)
  */
 int main(void)
 {
-    log(LOG_LEVEL_INF, "=====================================");
-    log(LOG_LEVEL_INF, "  AkiraOS Display Test Application  ");
-    log(LOG_LEVEL_INF, "=====================================");
-    log(LOG_LEVEL_INF, "");
+    printf("=====================================");
+    printf( "  AkiraOS Display Test Application  ");
+    printf( "=====================================");
+
     
     // Run all tests
     test_clear_screen();
@@ -214,9 +204,9 @@ int main(void)
     
     display_text(60, 190, "All tests passed!", COLOR_YELLOW);
     
-    log(LOG_LEVEL_INF, "");
-    log(LOG_LEVEL_INF, "Display test completed successfully!");
-    log(LOG_LEVEL_INF, "All graphics primitives tested");
+
+    printf( "Display test completed successfully!");
+    printf( "All graphics primitives tested");
     
     return 0;
 }

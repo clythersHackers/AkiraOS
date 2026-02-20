@@ -79,6 +79,7 @@ __pycache__/
 akira-env/
 venv/
 env/
+bin/
 
 # IDEs
 .vscode/

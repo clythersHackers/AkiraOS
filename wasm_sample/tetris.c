@@ -37,11 +37,16 @@
 #define MAX_LEVEL           15
 #define MIN_DROP_DELAY      50000   // Fastest speed: 0.05 seconds
 
-// GPIO pin definitions for input
-#define GPIO_LEFT    15
-#define GPIO_RIGHT   40
-#define GPIO_ROTATE  16
-#define GPIO_DROP    17
+// DPAD button pins (active low with pull-up)
+#define BTN_UP       38  // Rotate
+#define BTN_DOWN     39  // Fast drop
+#define BTN_LEFT     37  // Move left
+#define BTN_RIGHT    36  // Move right
+
+// Button debouncing
+static unsigned char btn_prev_state[4] = {1, 1, 1, 1};
+static int move_repeat_counter = 0;
+#define MOVE_REPEAT_DELAY 5  // Frames before repeat
 
 // Tetromino shapes (4x4 grid, bit-packed)
 // Each tetromino has 4 rotation states
@@ -258,20 +263,41 @@ static void draw_block(int x, int y, uint16_t color)
 }
 
 /**
- * @brief Erase the piece at given position (draw with background)
+ * @brief Check if a block position is occupied by the current piece
  */
-static void erase_piece(int piece, int rotation, int x, int y)
+static int is_current_piece_at(int x, int y)
+{
+    uint16_t shape = SHAPES[game.current_piece][game.current_rotation];
+    
+    for (int py = 0; py < 4; py++) {
+        for (int px = 0; px < 4; px++) {
+            if (get_shape_cell(shape, px, py)) {
+                if (game.current_x + px == x && game.current_y + py == y) {
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+/**
+ * @brief Smart erase - only erase blocks from old position that aren't in new position
+ */
+static void smart_erase_piece(int piece, int rotation, int old_x, int old_y)
 {
     uint16_t shape = SHAPES[piece][rotation];
     
     for (int py = 0; py < 4; py++) {
         for (int px = 0; px < 4; px++) {
             if (get_shape_cell(shape, px, py)) {
-                int screen_y = y + py;
-                int screen_x = x + px;
+                int screen_x = old_x + px;
+                int screen_y = old_y + py;
                 
+                // Only erase if this block is NOT in the new position
                 if (screen_y >= 0 && screen_y < BOARD_HEIGHT && 
-                    screen_x >= 0 && screen_x < BOARD_WIDTH) {
+                    screen_x >= 0 && screen_x < BOARD_WIDTH &&
+                    !is_current_piece_at(screen_x, screen_y)) {
                     // Draw locked piece if there's one, otherwise black
                     if (game.board[screen_y][screen_x]) {
                         draw_block(screen_x, screen_y, COLORS[game.board[screen_y][screen_x] - 1]);
@@ -456,7 +482,7 @@ static void init_display(void)
 }
 
 /**
- * @brief Update only what changed on the display
+ * @brief Update only what changed on the display (OPTIMIZED - no flicker)
  */
 static void update_display(void)
 {
@@ -469,19 +495,23 @@ static void update_display(void)
     if (game.board_changed) {
         redraw_board();
         game.board_changed = 0;
+        game.piece_moved = 1; // Force redraw of current piece
     }
     
-    // Erase old piece position if it moved
-    if (game.piece_moved && game.prev_piece >= 0 && 
-        (game.prev_x != game.current_x || 
-         game.prev_y != game.current_y || 
-         game.prev_rotation != game.current_rotation)) {
-        erase_piece(game.prev_piece, game.prev_rotation, game.prev_x, game.prev_y);
-    }
-    
-    // Draw current piece in new position
+    // OPTIMIZED: Draw new piece FIRST, then erase old position
+    // This eliminates flickering!
     if (game.piece_moved) {
+        // Draw new position first
         draw_current_piece();
+        
+        // Then erase only the parts of old position that don't overlap
+        if (game.prev_piece >= 0 && 
+            (game.prev_x != game.current_x || 
+             game.prev_y != game.current_y || 
+             game.prev_rotation != game.current_rotation)) {
+            smart_erase_piece(game.prev_piece, game.prev_rotation, game.prev_x, game.prev_y);
+        }
+        
         game.piece_moved = 0;
     }
     
@@ -551,9 +581,111 @@ static void init_game(void)
 }
 
 /**
- * @brief Handle game input (simplified for auto-play demo)
+ * @brief Handle DPAD button inputs for player control
  */
-static int handle_input(void)
+static void handle_buttons(void)
+{
+    // Read button states (active low)
+    int btn_up = !gpio_read(BTN_UP);
+    int btn_down = !gpio_read(BTN_DOWN);
+    int btn_left = !gpio_read(BTN_LEFT);
+    int btn_right = !gpio_read(BTN_RIGHT);
+    
+    // UP button: Rotate piece
+    if (btn_up && btn_prev_state[0]) {
+        int new_rotation = (game.current_rotation + 1) % 4;
+        if (!check_collision(game.current_piece, new_rotation, 
+                            game.current_x, game.current_y)) {
+            game.current_rotation = new_rotation;
+            game.piece_moved = 1;
+        }
+        btn_prev_state[0] = 0;
+    } else if (!btn_up) {
+        btn_prev_state[0] = 1;
+    }
+    
+    // DOWN button: Fast drop
+    if (btn_down) {
+        if (btn_prev_state[1]) {
+            btn_prev_state[1] = 0;
+            move_repeat_counter = 0;
+        }
+        // Allow faster dropping when held
+        if (move_repeat_counter == 0) {
+            if (!check_collision(game.current_piece, game.current_rotation, 
+                                game.current_x, game.current_y + 1)) {
+                game.current_y++;
+                game.piece_moved = 1;
+                game.score += 1; // Bonus points for manual drop
+            }
+            move_repeat_counter = 2; // Repeat faster
+        } else {
+            move_repeat_counter--;
+        }
+    } else {
+        btn_prev_state[1] = 1;
+        move_repeat_counter = 0;
+    }
+    
+    // LEFT button: Move left
+    if (btn_left) {
+        if (btn_prev_state[2]) {
+            if (!check_collision(game.current_piece, game.current_rotation, 
+                                game.current_x - 1, game.current_y)) {
+                game.current_x--;
+                game.piece_moved = 1;
+            }
+            btn_prev_state[2] = 0;
+            move_repeat_counter = MOVE_REPEAT_DELAY;
+        } else {
+            // Allow repeat movement when held
+            if (move_repeat_counter == 0) {
+                if (!check_collision(game.current_piece, game.current_rotation, 
+                                    game.current_x - 1, game.current_y)) {
+                    game.current_x--;
+                    game.piece_moved = 1;
+                }
+                move_repeat_counter = MOVE_REPEAT_DELAY;
+            } else {
+                move_repeat_counter--;
+            }
+        }
+    } else {
+        btn_prev_state[2] = 1;
+    }
+    
+    // RIGHT button: Move right
+    if (btn_right) {
+        if (btn_prev_state[3]) {
+            if (!check_collision(game.current_piece, game.current_rotation, 
+                                game.current_x + 1, game.current_y)) {
+                game.current_x++;
+                game.piece_moved = 1;
+            }
+            btn_prev_state[3] = 0;
+            move_repeat_counter = MOVE_REPEAT_DELAY;
+        } else {
+            // Allow repeat movement when held
+            if (move_repeat_counter == 0) {
+                if (!check_collision(game.current_piece, game.current_rotation, 
+                                    game.current_x + 1, game.current_y)) {
+                    game.current_x++;
+                    game.piece_moved = 1;
+                }
+                move_repeat_counter = MOVE_REPEAT_DELAY;
+            } else {
+                move_repeat_counter--;
+            }
+        }
+    } else {
+        btn_prev_state[3] = 1;
+    }
+}
+
+/**
+ * @brief Auto drop piece (gravity)
+ */
+static int auto_drop_piece(void)
 {
     // Try to move piece down
     if (!check_collision(game.current_piece, game.current_rotation, 
@@ -593,65 +725,50 @@ static int handle_input(void)
 }
 
 /**
- * @brief Automatic piece movement (AI demonstration)
+ * @brief Initialize GPIO pins for button input
  */
-static void auto_move(void)
+static void init_buttons(void)
 {
-    int moved = 0;
-    
-    // Simple AI: try to move to center or avoid walls
-    int target_x = BOARD_WIDTH / 2 - 2;
-    
-    if (game.current_x < target_x && 
-        !check_collision(game.current_piece, game.current_rotation, 
-                        game.current_x + 1, game.current_y)) {
-        game.current_x++;
-        moved = 1;
-    } else if (game.current_x > target_x && 
-               !check_collision(game.current_piece, game.current_rotation, 
-                               game.current_x - 1, game.current_y)) {
-        game.current_x--;
-        moved = 1;
-    }
-    
-    // Occasionally rotate (less frequently)
-    if ((random_state % 15) == 0) {
-        int new_rotation = (game.current_rotation + 1) % 4;
-        if (!check_collision(game.current_piece, new_rotation, 
-                            game.current_x, game.current_y)) {
-            game.current_rotation = new_rotation;
-            moved = 1;
-        }
-    }
-    
-    if (moved) {
-        game.piece_moved = 1;
-    }
+    gpio_configure(BTN_UP, GPIO_INPUT );
+    gpio_configure(BTN_DOWN, GPIO_INPUT);
+    gpio_configure(BTN_LEFT, GPIO_INPUT);
+    gpio_configure(BTN_RIGHT, GPIO_INPUT);
 }
 
 /**
- * @brief Main game loop (optimized)
+ * @brief Main game loop (with player controls)
  */
 static void game_loop(void)
 {
     uint32_t frame_count = 0;
+    uint32_t drop_counter = 0;
     
-    while (!game.game_over && frame_count < 1000) {
-        // Auto-move piece less frequently (every 30 frames instead of 20)
-        if ((frame_count % 30) == 0) {
-            auto_move();
-        }
+    // Very short runtime to prevent hang (200 frames = ~4 seconds)
+    while (!game.game_over && frame_count < 200) {
+        // Handle button inputs every frame for responsive controls
+        handle_buttons();
         
-        // Move piece down
-        handle_input();
+        // Auto-drop piece at regular intervals (gravity)
+        drop_counter++;
+        if (drop_counter >= (game.drop_delay / 20000)) { // Convert delay to frame count (~20ms per frame)
+            auto_drop_piece();
+            drop_counter = 0;
+        }
         
         // Update display (only if something changed)
         update_display();
         
-        // Delay based on level
-        delay(game.drop_delay);
+        // Frame delay (~20ms = 50 FPS)
+        delay(20000);
         
         frame_count++;
+    }
+    
+    // printf why we exited
+    if (game.game_over) {
+        printf( "Game over - piece blocked");
+    } else {
+        printf("Demo time reached");
     }
 }
 
@@ -662,27 +779,32 @@ static void game_loop(void)
  */
 int main(void)
 {
-    log(LOG_LEVEL_INF, "=================================");
-    log(LOG_LEVEL_INF, "   AkiraOS Tetris Game v1.0     ");
-    log(LOG_LEVEL_INF, "=================================");
+    printf( "=================================");
+    printf( "   AkiraOS Tetris Game v1.2     ");
+    printf( "   DPAD: UP=Rotate, DOWN=Drop   ");
+    printf( "   LEFT/RIGHT=Move              ");
+    printf( "=================================");
+    
+    // Initialize button inputs (no delay)
+    init_buttons();
     
     // Initialize display
     display_clear(COLOR_BLACK);
     
-    // Show title screen
+    // Show title screen very briefly
     display_text_large(60, 80, "TETRIS", COLOR_CYAN);
-    display_text(70, 120, "Loading...", COLOR_WHITE);
-    delay(100000);
+    display_text(70, 120, "Starting...", COLOR_WHITE);
+    delay(100000);  // 100ms
     
     // Initialize game
-    log(LOG_LEVEL_INF, "Initializing game...");
+    printf( "Initializing game...");
     init_game();
     
     // Run game loop
-    log(LOG_LEVEL_INF, "Starting game loop...");
+    printf( "Starting game loop...");
     game_loop();
     
-    // Game over screen
+    // Game over screen (show briefly then exit)
     display_clear(COLOR_BLACK);
     display_text_large(30, 60, "GAME", COLOR_RED);
     display_text_large(30, 90, "OVER", COLOR_RED);
@@ -708,8 +830,10 @@ int main(void)
     score_str[i] = '\0';
     display_text(70, 160, score_str, COLOR_YELLOW);
     
-    log(LOG_LEVEL_INF, "Game completed!");
-    log(LOG_LEVEL_INF, "Thank you for playing!");
+    // Very brief delay, then exit
+    delay(1000000);  // 1 second
+    
+    printf( "Game completed!");
     
     return 0;
 }
