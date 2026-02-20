@@ -130,7 +130,7 @@ extern "C" {
  * @param message Null-terminated string message to log
  * @return 0 on success, negative error code on failure
  */
-extern int log(uint32_t level, const char *message);
+extern int printf(const char *message);
 
 /**
  * @brief Delay execution for a specified number of microseconds
