@@ -15,11 +15,21 @@ bool akira_register_native_apis()
         #endif
 
         #ifdef CONFIG_DISPLAY
-        {"display_rect", (void *)akira_native_display_rect, "(iiiii)i", NULL},
-        {"display_text", (void *)akira_native_display_text, "(ii$i)i", NULL},
-        {"display_text_large", (void *)akira_native_display_text_large, "(ii$i)i", NULL},
-        {"display_clear", (void *)akira_native_display_clear, "(i)i", NULL},
-        {"display_pixel", (void *)akira_native_display_pixel, "(iii)i", NULL},
+        {"display_rect",                (void *)akira_native_display_rect,                "(iiiii)i",  NULL},
+        {"display_text",                (void *)akira_native_display_text,                "(ii$i)i",   NULL},
+        {"display_text_large",          (void *)akira_native_display_text_large,          "(ii$i)i",   NULL},
+        {"display_clear",               (void *)akira_native_display_clear,               "(i)i",      NULL},
+        {"display_pixel",               (void *)akira_native_display_pixel,               "(iii)i",    NULL},
+        {"display_flush",               (void *)akira_native_display_flush,               "()i",       NULL},
+        {"display_get_size",            (void *)akira_native_display_get_size,            "(**)i",     NULL},
+        {"display_line",                (void *)akira_native_display_line,                "(iiiii)i",  NULL},
+        {"display_circle",              (void *)akira_native_display_circle,              "(iii)i",    NULL},
+        {"display_circle_fill",         (void *)akira_native_display_circle_fill,         "(iii)i",    NULL},
+        {"display_triangle",            (void *)akira_native_display_triangle,            "(iiiiiii)i",NULL},
+        {"display_triangle_fill",       (void *)akira_native_display_triangle_fill,       "(iiiiiii)i",NULL},
+        {"display_rect_outline",        (void *)akira_native_display_rect_outline,        "(iiiii)i",  NULL},
+        {"display_bitmap",              (void *)akira_native_display_bitmap,              "(iiii*~)i", NULL},
+        {"display_bitmap_transparent",  (void *)akira_native_display_bitmap_transparent,  "(iiii*~i)i",NULL},
         #endif
 
         #ifdef CONFIG_AKIRA_WASM_GPIO

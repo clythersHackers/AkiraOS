@@ -200,6 +200,112 @@ extern int display_text(int32_t x, int32_t y, const char *text, uint32_t color);
  */
 extern int display_text_large(int32_t x, int32_t y, const char *text, uint32_t color);
 
+/**
+ * @brief Flush the framebuffer to the display hardware.
+ *
+ * Draw calls (rect, pixel, text, …) write into a back-buffer.  Call
+ * display_flush() once you have finished composing a frame to push the
+ * result to the screen.  An automatic flush fires 50 ms after the last draw
+ * call, but calling this explicitly gives smoother animation.
+ *
+ * @return 0 on success, negative error code on failure
+ */
+extern int display_flush(void);
+
+/**
+ * @brief Get the display resolution.
+ *
+ * @param w_out  Pointer receives the display width  in pixels
+ * @param h_out  Pointer receives the display height in pixels
+ * @return 0 on success, negative error code on failure
+ */
+extern int display_get_size(int32_t *w_out, int32_t *h_out);
+
+/**
+ * @brief Draw a straight line between two points (Bresenham — no FPU).
+ *
+ * @param x0 Start X  @param y0 Start Y
+ * @param x1 End X    @param y1 End Y
+ * @param color RGB565 color
+ * @return 0 on success
+ */
+extern int display_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint32_t color);
+
+/**
+ * @brief Draw a circle outline (midpoint algorithm — no FPU).
+ *
+ * @param cx Centre X  @param cy Centre Y  @param r Radius (pixels)
+ * @param color RGB565 color
+ * @return 0 on success
+ */
+extern int display_circle(int32_t cx, int32_t cy, int32_t r, uint32_t color);
+
+/**
+ * @brief Draw a filled circle.
+ *
+ * @param cx Centre X  @param cy Centre Y  @param r Radius (pixels)
+ * @param color RGB565 fill color
+ * @return 0 on success
+ */
+extern int display_circle_fill(int32_t cx, int32_t cy, int32_t r, uint32_t color);
+
+/**
+ * @brief Draw a triangle outline (three lines).
+ *
+ * @param x0,y0  @param x1,y1  @param x2,y2  Vertices
+ * @param color RGB565 color
+ * @return 0 on success
+ */
+extern int display_triangle(int32_t x0, int32_t y0, int32_t x1, int32_t y1,
+                             int32_t x2, int32_t y2, uint32_t color);
+
+/**
+ * @brief Draw a filled triangle (scanline rasteriser).
+ *
+ * @param x0,y0  @param x1,y1  @param x2,y2  Vertices (any order)
+ * @param color RGB565 fill color
+ * @return 0 on success
+ */
+extern int display_triangle_fill(int32_t x0, int32_t y0, int32_t x1, int32_t y1,
+                                  int32_t x2, int32_t y2, uint32_t color);
+
+/**
+ * @brief Draw a rectangle outline (four lines).
+ *
+ * @param x,y   Top-left corner  @param w Width  @param h Height
+ * @param color RGB565 color
+ * @return 0 on success
+ */
+extern int display_rect_outline(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color);
+
+/**
+ * @brief Blit an RGB565 bitmap to the display.
+ *
+ * @param x,y        Top-left destination corner
+ * @param w,h        Width and height in pixels
+ * @param data       Pointer to RGB565 pixel data (row-major, w*h*2 bytes)
+ * @param data_size  Size of @p data in bytes (must be >= w*h*2)
+ * @return 0 on success, -EINVAL if data_size is too small
+ */
+extern int display_bitmap(int32_t x, int32_t y, int32_t w, int32_t h,
+                           const uint16_t *data, uint32_t data_size);
+
+/**
+ * @brief Blit an RGB565 bitmap with a transparent colour key.
+ *
+ * Pixels whose value equals @p key are not written to the framebuffer.
+ *
+ * @param x,y        Top-left destination corner
+ * @param w,h        Width and height in pixels
+ * @param data       Pointer to RGB565 pixel data (row-major, w*h*2 bytes)
+ * @param data_size  Size of @p data in bytes (must be >= w*h*2)
+ * @param key        RGB565 transparent colour value
+ * @return 0 on success
+ */
+extern int display_bitmap_transparent(int32_t x, int32_t y, int32_t w, int32_t h,
+                                       const uint16_t *data, uint32_t data_size,
+                                       uint32_t key);
+
 /*
  * =============================================================================
  * GPIO API

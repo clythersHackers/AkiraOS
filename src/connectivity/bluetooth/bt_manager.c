@@ -461,3 +461,11 @@ void bluetooth_manager_receive_shell_command(const char *cmd)
     LOG_WRN("BT Shell service not enabled (CONFIG_AKIRA_BT_SHELL)");
 #endif
 }
+
+#ifdef CONFIG_BT
+static int bt_manager_sys_init(void)
+{
+    return bt_manager_init(NULL);
+}
+SYS_INIT(bt_manager_sys_init, APPLICATION, CONFIG_AKIRA_BT_INIT_PRIORITY);
+#endif

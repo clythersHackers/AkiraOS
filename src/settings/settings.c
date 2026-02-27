@@ -1698,3 +1698,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(settings_cmds,
 
 
 SHELL_CMD_REGISTER(settings, &settings_cmds, "Akira persistent settings management", NULL);
+
+#ifdef CONFIG_AKIRA_SETTINGS
+SYS_INIT(akira_settings_init, APPLICATION, CONFIG_AKIRA_SETTINGS_INIT_PRIORITY);
+#endif

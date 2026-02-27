@@ -48,6 +48,9 @@ static module_cache_entry_t *cache_find_locked(const uint8_t *hash)
 
 /**
  * @brief Find LRU entry for eviction (must hold mutex)
+ *
+ * Prefers empty slots, then LRU entries with ref_count == 0.
+ * Never evicts an entry with active references — returns NULL instead.
  */
 static module_cache_entry_t *cache_find_lru_locked(void)
 {
@@ -61,7 +64,7 @@ static module_cache_entry_t *cache_find_lru_locked(void)
         }
     }
 
-    /* Second pass: find LRU with ref_count == 0 */
+    /* Second pass: find oldest entry with no active references */
     for (int i = 0; i < CONFIG_AKIRA_MODULE_CACHE_SIZE; i++) {
         if (g_cache.entries[i].ref_count == 0 &&
             g_cache.entries[i].last_used_ms < oldest) {
@@ -70,15 +73,10 @@ static module_cache_entry_t *cache_find_lru_locked(void)
         }
     }
 
-    /* Fallback: find any LRU */
+    /* If all slots have active refs, we cannot evict safely */
     if (!lru) {
-        oldest = INT64_MAX;
-        for (int i = 0; i < CONFIG_AKIRA_MODULE_CACHE_SIZE; i++) {
-            if (g_cache.entries[i].last_used_ms < oldest) {
-                oldest = g_cache.entries[i].last_used_ms;
-                lru = &g_cache.entries[i];
-            }
-        }
+        LOG_WRN("Module cache full \u2014 all %d slots have active refs",
+                CONFIG_AKIRA_MODULE_CACHE_SIZE);
     }
 
     return lru;
@@ -126,12 +124,13 @@ int module_cache_store(const uint8_t *hash, wasm_module_t module,
         return 0;
     }
 
-    /* Find slot (empty or LRU) */
+    /* Find slot (empty or LRU with no active refs) */
     module_cache_entry_t *slot = cache_find_lru_locked();
     if (!slot) {
         k_mutex_unlock(&g_cache_mutex);
-        LOG_ERR("Cannot find cache slot for eviction");
-        return -ENOMEM;
+        /* Not fatal — module works fine without being cached */
+        LOG_WRN("Module cache full, skipping cache store");
+        return 0;
     }
 
     /* Evict if occupied */

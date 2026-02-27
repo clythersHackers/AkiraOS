@@ -43,6 +43,22 @@ extern "C" {
 #endif
 #endif
 
+/**
+ * @brief WASM app lifecycle status
+ *
+ * CREATED  → RUNNING (thread spawned, sem_start posted)
+ * RUNNING  → EXITED  (thread returned from wasm_runtime_call_wasm)
+ * EXITED   → STOPPED (k_thread_join() completed, resources freed)
+ * Any      → ERROR   (instantiation failed, exception, or terminate timeout)
+ */
+typedef enum {
+    AKIRA_APP_STATUS_CREATED = 0, /**< Loaded, not yet started */
+    AKIRA_APP_STATUS_RUNNING = 1, /**< Thread is executing WASM */
+    AKIRA_APP_STATUS_EXITED  = 2, /**< WASM returned, thread finishing cleanup */
+    AKIRA_APP_STATUS_STOPPED = 3, /**< Thread joined, slot can be reused */
+    AKIRA_APP_STATUS_ERROR   = 4, /**< Fatal error during start or execution */
+} akira_app_status_t;
+
 /* Internal managed app structure */
 typedef struct {
     bool used;
@@ -50,10 +66,19 @@ typedef struct {
     wasm_module_t module;
     wasm_module_inst_t instance;
     wasm_exec_env_t exec_env;
-    bool running;
-    uint32_t cap_mask;        /* capability bitmask from manifest */
-    uint32_t memory_quota;    /* memory quota from manifest (0 = unlimited) */
-    uint32_t memory_used;     /* current memory usage (bytes) */
+
+    /* Lifecycle: status replaces old bool running */
+    uint8_t status;           /**< akira_app_status_t */
+    int8_t exit_code;         /**< Last exit code from WASM main() */
+
+    /* Thread synchronization */
+    k_tid_t tid;              /**< Thread ID (NULL if not running) */
+    struct k_sem sem_start;   /**< Posted when WAMR instance is ready */
+    struct k_condvar cond_exit; /**< Broadcast when thread exits */
+
+    uint32_t cap_mask;        /**< capability bitmask from manifest */
+    uint32_t memory_quota;    /**< memory quota from manifest (0 = unlimited) */
+    atomic_t memory_used;     /**< current memory usage (bytes) — updated atomically */
 
     /* Security: sandbox context for syscall filtering + rate limiting */
     sandbox_ctx_t sandbox;
@@ -66,6 +91,27 @@ typedef struct {
     uint8_t binary_hash[32];
     bool hash_valid;
 } akira_managed_app_t;
+
+/**
+ * @brief Callback invoked when a WASM app thread exits
+ *
+ * Called from the app thread just before it terminates.
+ * Safe to call akira_runtime_stop() from within this callback.
+ *
+ * @param slot      App slot index
+ * @param exit_code Return value from WASM main() (0 = success)
+ */
+typedef void (*akira_runtime_exit_cb_t)(int slot, int exit_code);
+
+/**
+ * @brief Register a global exit callback
+ *
+ * Only one callback is supported. Pass NULL to deregister.
+ * Typically called by app_manager during init.
+ *
+ * @param cb Callback function, or NULL
+ */
+void akira_runtime_set_exit_callback(akira_runtime_exit_cb_t cb);
 
 /* Initialize the unified runtime (WAMR + storage + native API registration).
  * Returns 0 on success.

@@ -945,3 +945,7 @@ int fs_manager_get_ram_file_count(void)
     k_mutex_unlock(&ram_mutex);
     return count;
 }
+
+#ifdef CONFIG_FILE_SYSTEM
+SYS_INIT(fs_manager_init, APPLICATION, CONFIG_AKIRA_FS_INIT_PRIORITY);
+#endif

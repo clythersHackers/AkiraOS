@@ -62,13 +62,13 @@
 #warning "Unknown platform - assuming generic"
 #endif
 
-/* Hardware capability flags */
-#define AKIRA_HAS_DISPLAY (AKIRA_PLATFORM_ESP32 || AKIRA_PLATFORM_ESP32S3 || AKIRA_PLATFORM_NATIVE_SIM)
-#define AKIRA_HAS_WIFI (AKIRA_PLATFORM_ESP32 || AKIRA_PLATFORM_ESP32S3)
-#define AKIRA_HAS_SPI (AKIRA_PLATFORM_ESP32 || AKIRA_PLATFORM_ESP32S3 || AKIRA_PLATFORM_STM32 || AKIRA_PLATFORM_NORDIC)
-#define AKIRA_HAS_REAL_GPIO (AKIRA_PLATFORM_ESP32 || AKIRA_PLATFORM_ESP32S3 || AKIRA_PLATFORM_STM32 || AKIRA_PLATFORM_NORDIC)
-#define AKIRA_HAS_SIMULATED_DISPLAY AKIRA_PLATFORM_NATIVE_SIM
-#define AKIRA_HAS_SIMULATED_BUTTONS AKIRA_PLATFORM_NATIVE_SIM
+/* Use Kconfig symbols for feature detection, not compile-time SOC macros.
+ * Boards enable features in their .conf file:
+ *   CONFIG_AKIRA_DISPLAY=y  — display HAL + WASM exports active
+ *   CONFIG_AKIRA_WIFI=y     — WiFi connectivity APIs active
+ * Code should guard on CONFIG_DISPLAY / CONFIG_AKIRA_DISPLAY, etc.
+ * The AKIRA_PLATFORM_* macros below remain available for the few places
+ * that genuinely need platform-specific code paths (e.g. sim vs HW flush). */
 
 /* Platform-specific device names */
 #if AKIRA_PLATFORM_NATIVE_SIM
@@ -84,30 +84,6 @@
  * @return 0 on success, negative errno on error
  */
 int akira_hal_init(void);
-
-/**
- * @brief Check if display hardware/simulation is available
- * @return true if display is available, false otherwise
- */
-bool akira_has_display(void);
-
-/**
- * @brief Check if WiFi hardware is available
- * @return true if WiFi is available, false otherwise
- */
-bool akira_has_wifi(void);
-
-/**
- * @brief Check if SPI hardware is available
- * @return true if SPI is available, false otherwise
- */
-bool akira_has_spi(void);
-
-/**
- * @brief Check if real GPIO hardware is available
- * @return true if real GPIO is available, false otherwise
- */
-bool akira_has_gpio(void);
 
 /**
  * @brief Get the platform name string

@@ -69,12 +69,34 @@ config AKIRA_RUNTIME_CUSTOM
       single native bridge for Display, Input, RF and Sensor APIs.
 
 config WAMR_HEAP_SIZE
-    int "WAMR global heap size (bytes)"
+    int "WAMR heap warning threshold (bytes)"
     default 262144
     help
-      Configure the default global heap size used by WAMR when
-      PSRAM is not available or not used. Boards may override this
-      via their board configuration (CONFIG_WAMR_HEAP_SIZE).
+      Soft quota warning threshold for WAMR dynamic allocations.
+      The runtime now uses Alloc_With_Allocator (PSRAM-first,
+      SRAM fallback) instead of a static pool, so this value no
+      longer reserves any RAM — it is only used for log warnings
+      when total WAMR-managed memory exceeds this limit.
+
+config AKIRA_WASM_APP_STACK_SIZE
+    int "WASM app Zephyr thread stack size (bytes)"
+    default 4096
+    depends on AKIRA_WASM_RUNTIME
+    help
+      Stack size for the Zephyr k_thread that hosts each WASM app.
+      This is the CALLING thread stack, not the WASM exec stack
+      (which lives inside the WAMR instance heap).
+      4096 is sufficient for the WAMR call frame on most targets.
+      Constrained boards (e.g. nRF54L15) can reduce to 2048.
+
+config AKIRA_WASM_APP_PRIORITY
+    int "WASM app thread scheduling priority"
+    default 10
+    depends on AKIRA_WASM_RUNTIME
+    help
+      Cooperative thread priority for WASM app threads.
+      Lower value = higher priority in Zephyr scheduling.
+      Default 10 places WASM apps below system threads but above idle.
 
 config MAX_CONTAINERS
     int "Maximum number of concurrently loaded WASM containers"
@@ -82,6 +104,19 @@ config MAX_CONTAINERS
     help
       Maximum number of WASM instances that can be loaded concurrently.
       Boards with more PSRAM can increase this value (CONFIG_MAX_CONTAINERS).
+
+config AKIRA_DISPLAY
+    bool "Enable Akira display support"
+    default y if DISPLAY
+    help
+      Enable Akira display primitives and native WASM display exports.
+      When disabled all display_* native calls return -ENOTSUP.
+
+config AKIRA_WIFI
+    bool "Enable Akira WiFi support"
+    default y if WIFI
+    help
+      Enable Akira WiFi connectivity APIs.
 
 config AKIRA_TERMINAL_MODE
     bool "Enable hacker terminal mode"  
@@ -1103,6 +1138,43 @@ config AKIRA_SETTINGS_ENCRYPTION_HW_ACCEL
       Hardware acceleration provides 5-10x speedup over software AES.
 
 endif # AKIRA_SETTINGS_ENCRYPTION
+
+endmenu
+
+# ---------------------------------------------------------------------------
+# SYS_INIT priorities — controls automatic subsystem startup order
+# Lower value = runs first; all at APPLICATION init level
+# ---------------------------------------------------------------------------
+menu "AkiraOS init priorities"
+
+config AKIRA_FS_INIT_PRIORITY
+	int "Filesystem manager SYS_INIT priority"
+	depends on FILE_SYSTEM
+	default 40
+	help
+	  Automatic init priority for fs_manager.  Lower values run earlier.
+
+config AKIRA_SETTINGS_INIT_PRIORITY
+	int "Settings subsystem SYS_INIT priority"
+	depends on AKIRA_SETTINGS
+	default 50
+	help
+	  Must be greater than AKIRA_FS_INIT_PRIORITY when settings are
+	  backed by the filesystem.
+
+config AKIRA_USB_INIT_PRIORITY
+	int "USB manager SYS_INIT priority"
+	depends on AKIRA_USB
+	default 60
+	help
+	  Automatic init priority for usb_manager.
+
+config AKIRA_BT_INIT_PRIORITY
+	int "Bluetooth manager SYS_INIT priority"
+	depends on BT
+	default 70
+	help
+	  Automatic init priority for bt_manager.
 
 endmenu
 

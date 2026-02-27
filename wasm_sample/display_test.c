@@ -26,22 +26,27 @@ static void test_clear_screen(void)
     
     display_clear(COLOR_BLACK);
     display_text(10, 10, "BLACK", COLOR_WHITE);
+    display_flush();
     delay(500000);
     
     display_clear(COLOR_RED);
     display_text(10, 10, "RED", COLOR_WHITE);
+    display_flush();
     delay(500000);
     
     display_clear(COLOR_GREEN);
     display_text(10, 10, "GREEN", COLOR_WHITE);
+    display_flush();
     delay(500000);
     
     display_clear(COLOR_BLUE);
     display_text(10, 10, "BLUE", COLOR_WHITE);
+    display_flush();
     delay(500000);
     
     display_clear(COLOR_WHITE);
     display_text(10, 10, "WHITE", COLOR_BLACK);
+    display_flush();
     delay(500000);
 }
 
@@ -80,7 +85,8 @@ static void test_rectangles(void)
     display_rect(0, 235, 320, 5, COLOR_WHITE);   // Bottom
     display_rect(0, 0, 5, 240, COLOR_WHITE);     // Left
     display_rect(315, 0, 5, 240, COLOR_WHITE);   // Right
-    
+
+    display_flush();
     delay(1000000);
 }
 
@@ -109,7 +115,8 @@ static void test_pixels(void)
             display_pixel(x + 1, y + 1, COLOR_CYAN);
         }
     }
-    
+
+    display_flush();
     delay(1000000);
 }
 
@@ -143,7 +150,8 @@ static void test_text(void)
     
     display_text(10, 210, "WASM Graphics Demo v1.0", COLOR_LIGHT_GRAY);
     display_text(10, 225, "Press any key...", COLOR_DARK_GRAY);
-    
+
+    display_flush();
     delay(1500000);
 }
 
@@ -171,7 +179,8 @@ static void test_complex_graphics(void)
     
     // Draw baseline
     display_rect(10, 200, 290, 2, COLOR_WHITE);
-    
+
+    display_flush();
     delay(1000000);
 }
 
@@ -201,11 +210,10 @@ int main(void)
     display_text_large(30, 80, "DISPLAY", COLOR_WHITE);
     display_text_large(30, 110, "TEST", COLOR_WHITE);
     display_text_large(30, 140, "COMPLETE", COLOR_WHITE);
-    
     display_text(60, 190, "All tests passed!", COLOR_YELLOW);
-    
+    display_flush();
 
-    printf( "Display test completed successfully!");
+    printf("Display test completed successfully!");
     printf( "All graphics primitives tested");
     
     return 0;

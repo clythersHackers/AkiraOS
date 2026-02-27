@@ -49,12 +49,12 @@ void *akira_wasm_malloc(wasm_exec_env_t exec_env, size_t size)
     /* Calculate total allocation size including header */
     size_t total_size = size + sizeof(akira_alloc_header_t);
 
-    /* Check quota before allocation (atomic-safe read) */
+    /* Check quota before allocation (atomic read) */
     uint32_t quota = app->memory_quota;
     if (quota > 0) {
-        uint32_t current = app->memory_used;
-        if (current + total_size > quota) {
-            LOG_WRN("wasm_malloc: quota exceeded for app %s (used=%u, req=%zu, quota=%u)",
+        atomic_val_t current = atomic_get(&app->memory_used);
+        if ((uint32_t)current + total_size > quota) {
+            LOG_WRN("wasm_malloc: quota exceeded for app %s (used=%ld, req=%zu, quota=%u)",
                     app->name, current, total_size, quota);
             return NULL;  /* Graceful failure - no crash */
         }
@@ -73,11 +73,11 @@ void *akira_wasm_malloc(wasm_exec_env_t exec_env, size_t size)
     hdr->size = (uint32_t)size;
     hdr->app_slot = slot;
 
-    /* Update quota tracking (simple increment - could use atomic for ISR safety) */
-    app->memory_used += total_size;
+    /* Update quota tracking */
+    atomic_add(&app->memory_used, (atomic_val_t)total_size);
 
-    LOG_DBG("wasm_malloc: app %s allocated %zu bytes (total used: %u)",
-            app->name, size, app->memory_used);
+    LOG_DBG("wasm_malloc: app %s allocated %zu bytes (total used: %ld)",
+            app->name, size, atomic_get(&app->memory_used));
 
     /* Return pointer past header */
     return (void *)(hdr + 1);
@@ -117,14 +117,14 @@ void akira_wasm_free(wasm_exec_env_t exec_env, void *ptr)
 
     /* Update quota tracking */
     if (slot >= 0 && slot < AKIRA_MAX_WASM_INSTANCES && g_apps[slot].used) {
-        if (g_apps[slot].memory_used >= total_size) {
-            g_apps[slot].memory_used -= total_size;
+        if (atomic_get(&g_apps[slot].memory_used) >= (atomic_val_t)total_size) {
+            atomic_sub(&g_apps[slot].memory_used, (atomic_val_t)total_size);
         } else {
             LOG_WRN("wasm_free: memory accounting underflow for app %s", g_apps[slot].name);
-            g_apps[slot].memory_used = 0;
+            atomic_set(&g_apps[slot].memory_used, 0);
         }
-        LOG_DBG("wasm_free: app %s freed %u bytes (remaining: %u)",
-                g_apps[slot].name, hdr->size, g_apps[slot].memory_used);
+        LOG_DBG("wasm_free: app %s freed %u bytes (remaining: %ld)",
+                g_apps[slot].name, hdr->size, atomic_get(&g_apps[slot].memory_used));
     }
 
     /* Clear magic to detect double-free */
@@ -178,7 +178,7 @@ uint32_t akira_native_mem_alloc(wasm_exec_env_t exec_env, uint32_t size)
 
     /* Check quota before WAMR allocation */
     uint32_t quota = app->memory_quota;
-    if (quota > 0 && app->memory_used + size > quota) {
+    if (quota > 0 && (uint32_t)atomic_get(&app->memory_used) + size > quota) {
         LOG_WRN("mem_alloc: quota exceeded for app %s", app->name);
         return 0;
     }
@@ -190,8 +190,8 @@ uint32_t akira_native_mem_alloc(wasm_exec_env_t exec_env, uint32_t size)
     }
 
     /* Track allocation in quota */
-    app->memory_used += size;
-    LOG_DBG("mem_alloc: app %s allocated %u bytes (used: %u)", app->name, size, app->memory_used);
+    atomic_add(&app->memory_used, (atomic_val_t)size);
+    LOG_DBG("mem_alloc: app %s allocated %u bytes (used: %ld)", app->name, size, atomic_get(&app->memory_used));
 
     return wasm_ptr;
 #else

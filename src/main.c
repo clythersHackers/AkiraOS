@@ -95,34 +95,16 @@ int main(void)
 
 #endif
 
-#ifdef CONFIG_BT
-    /* Initialize Bluetooth manager */
-    if (bt_manager_init(NULL) < 0) {
-        LOG_WRN("Bluetooth init failed - continuing without BT support");
-    }
-    else {
-        LOG_INF("Bluetooth initialized");
-    }
-#endif
-
 #ifdef CONFIG_AKIRA_BT_SHELL
     /* Initialize Bluetooth shell commands */
     if (bt_shell_init() < 0) {
         LOG_WRN("Bluetooth shell init failed");
-    }
-    else {
+    } else {
         LOG_INF("Bluetooth shell commands initialized");
     }
 #endif
 
-#ifdef CONFIG_AKIRA_USB
-    if(usb_manager_init() < 0){
-        LOG_WRN("USB manager init failed");
-    }
-    else{
-        LOG_INF("USB manager initialized successfully");
-    }
-#endif
+    /* USB manager auto-initialized via SYS_INIT (see usb_manager.c) */
 
 #ifdef CONFIG_AKIRA_HID
     if (hid_manager_init(NULL) < 0) {
@@ -153,12 +135,7 @@ int main(void)
     }
 #endif
 
-#ifdef CONFIG_FILE_SYSTEM
-    /* Ensure filesystem is initialized for storage/backing */
-    if (fs_manager_init() < 0) {
-        LOG_WRN("Filesystem init failed - continuing without persistent storage");
-    }
-#endif
+    /* Filesystem auto-initialized via SYS_INIT (see fs_manager.c) */
 
 #ifdef CONFIG_AKIRA_MODULE_RF
     /* RF module enabled - framework will auto-init on first API call */
@@ -183,16 +160,7 @@ int main(void)
     }
 #endif
 
-#ifdef CONFIG_AKIRA_SETTINGS
-    /* Initialize settings subsystem */
-    if (akira_settings_init() < 0) {
-        LOG_WRN("Settings init failed - continuing without settings support");
-    }
-    else{
-        LOG_INF("Settings subsystem initialized");
-    }
-    
-#endif
+    /* Settings auto-initialized via SYS_INIT (see settings.c) */
 
     /* Initialize runtime */
     if (akira_runtime_init() < 0) {

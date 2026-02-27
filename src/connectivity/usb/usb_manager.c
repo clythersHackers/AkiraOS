@@ -610,3 +610,7 @@ usb_manager_state_t usb_manager_get_state(void)
 {
     return usb_mgr_ctx.state;
 }
+
+#ifdef CONFIG_AKIRA_USB
+SYS_INIT(usb_manager_init, APPLICATION, CONFIG_AKIRA_USB_INIT_PRIORITY);
+#endif

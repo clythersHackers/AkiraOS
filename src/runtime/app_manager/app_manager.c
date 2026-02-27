@@ -7,6 +7,7 @@
 
 #include "app_manager.h"
 #include "akira_runtime.h"
+#include <lib/mem_helper.h>
 #include <lib/simple_json.h>
 #include "../storage/fs_manager.h"
 #include <zephyr/kernel.h>
@@ -81,6 +82,7 @@ static int delete_app_binary(const char *name);
 static void set_app_state(app_entry_t *app, app_state_t new_state);
 static void restart_work_handler(struct k_work *work);
 static int ensure_dirs_exist(void);
+static void app_manager_on_runtime_exit(int slot, int exit_code);
 
 /* ===== Initialization ===== */
 
@@ -129,6 +131,10 @@ int app_manager_init(void)
 
     /* Initialize restart work */
     k_work_init_delayable(&g_restart_work, restart_work_handler);
+
+    /* Register exit callback so the app manager learns when a WASM thread
+     * finishes and can transition its state to STOPPED automatically. */
+    akira_runtime_set_exit_callback(app_manager_on_runtime_exit);
 
     g_initialized = true;
     LOG_INF("App Manager initialized, %d/%d slots used",
@@ -497,7 +503,8 @@ int app_manager_start(const char *name)
         snprintf(path, sizeof(path), "%s/%03d_%s.wasm",
                  APPS_DIR, app->id, app->name);
 
-        uint8_t *buffer = k_malloc(app->size);
+        /* Use PSRAM-preferred allocator — app binaries can be 100+ KB */
+        uint8_t *buffer = akira_malloc_buffer(app->size);
         if (!buffer)
         {
             k_mutex_unlock(&g_registry_mutex);
@@ -507,7 +514,7 @@ int app_manager_start(const char *name)
         ssize_t bytes_read = fs_manager_read_file(path, buffer, app->size);
         if (bytes_read < 0)
         {
-            k_free(buffer);
+            akira_free_buffer(buffer);
             k_mutex_unlock(&g_registry_mutex);
             LOG_ERR("Failed to read app binary: %s (err %zd)", path, bytes_read);
             return (int)bytes_read;
@@ -515,7 +522,7 @@ int app_manager_start(const char *name)
 
         if (bytes_read != app->size)
         {
-            k_free(buffer);
+            akira_free_buffer(buffer);
             k_mutex_unlock(&g_registry_mutex);
             LOG_ERR("App binary size mismatch: expected %zu, got %zd", app->size, bytes_read);
             return -EIO;
@@ -523,7 +530,7 @@ int app_manager_start(const char *name)
 
         /* Install into Akira runtime (saves binary + creates container) */
         int load_ret = akira_runtime_install(name, buffer, app->size);
-        k_free(buffer);
+        akira_free_buffer(buffer);
 
         if (load_ret < 0)
         {
@@ -1298,4 +1305,40 @@ static void restart_work_handler(struct k_work *work)
     LOG_INF("Auto-restarting app: %s", g_restart_app_name);
     app_manager_start(g_restart_app_name);
     g_restart_app_name[0] = '\0';
+}
+
+/**
+ * @brief Runtime exit callback — called from WASM app thread when it exits.
+ *
+ * Transitions the registry entry for this slot from RUNNING to STOPPED (clean
+ * exit) or ERROR (exception / non-zero exit code).  set_app_state() then
+ * handles the auto-restart policy if configured.
+ *
+ * Called from the WASM app thread (not the shell thread), so the registry
+ * mutex is taken here to serialise access.
+ *
+ * @param slot      Runtime slot index matching app_entry_t::container_id
+ * @param exit_code 0 = clean exit, negative = runtime exception / error
+ */
+static void app_manager_on_runtime_exit(int slot, int exit_code)
+{
+    k_mutex_lock(&g_registry_mutex, K_FOREVER);
+
+    for (int i = 0; i < CONFIG_AKIRA_APP_MAX_INSTALLED; i++)
+    {
+        if (g_registry[i].state == APP_STATE_RUNNING &&
+            g_registry[i].container_id == slot)
+        {
+            app_state_t new_state = (exit_code == 0) ? APP_STATE_STOPPED
+                                                      : APP_STATE_ERROR;
+            /* container_id is no longer valid after exit */
+            g_registry[i].container_id = -1;
+
+            set_app_state(&g_registry[i], new_state);
+            registry_save();
+            break;
+        }
+    }
+
+    k_mutex_unlock(&g_registry_mutex);
 }

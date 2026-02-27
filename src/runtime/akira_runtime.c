@@ -42,10 +42,74 @@ LOG_MODULE_REGISTER(akira_runtime, CONFIG_AKIRA_LOG_LEVEL);
 
 akira_managed_app_t g_apps[AKIRA_MAX_WASM_INSTANCES];
 
+/* Zephyr thread pool — one stack + control block per slot.
+ * K_THREAD_STACK_ARRAY_DEFINE places stacks in .noinit so they only cost
+ * RAM when an app is alive, not as zeroed BSS at boot. */
+K_THREAD_STACK_ARRAY_DEFINE(g_app_stacks, AKIRA_MAX_WASM_INSTANCES,
+                             CONFIG_AKIRA_WASM_APP_STACK_SIZE);
+static struct k_thread g_app_threads[AKIRA_MAX_WASM_INSTANCES];
+
+/* One mutex shared across all slots for cond_exit waits.
+ * Per-slot mutexes add ~28B × MAX_CONTAINERS for zero benefit. */
+static K_MUTEX_DEFINE(g_exit_mutex);
+
+/* Optional exit callback registered by app_manager */
+static akira_runtime_exit_cb_t g_exit_cb = NULL;
+
 /* Use capability bits from security.h (AKIRA_CAP_*) */
 static bool g_runtime_initialized = false;
-static void *g_wamr_heap_buf = NULL;
-static size_t g_wamr_heap_size = 0;
+
+#ifdef CONFIG_AKIRA_WASM_RUNTIME
+/*
+ * WAMR allocator trampolines — Alloc_With_Allocator mode.
+ *
+ * Each allocation carries an 8-byte header storing the requested size.
+ * This lets wamr_realloc copy exactly the right number of bytes without
+ * storing allocation metadata outside the buffer. The 8-byte overhead
+ * beats the 256 KB static pool by a factor of ~32000.
+ */
+static void *wamr_malloc(unsigned int size)
+{
+    size_t *hdr = akira_malloc_buffer(sizeof(size_t) + size);
+
+    if (!hdr) {
+        return NULL;
+    }
+    *hdr = (size_t)size;
+    return hdr + 1;
+}
+
+static void wamr_free(void *ptr)
+{
+    if (!ptr) {
+        return;
+    }
+    akira_free_buffer((size_t *)ptr - 1);
+}
+
+static void *wamr_realloc(void *ptr, unsigned int new_size)
+{
+    if (!ptr) {
+        return wamr_malloc(new_size);
+    }
+    if (new_size == 0) {
+        wamr_free(ptr);
+        return NULL;
+    }
+
+    size_t old_size = *((size_t *)ptr - 1);
+    void *new_ptr = wamr_malloc(new_size);
+
+    if (!new_ptr) {
+        return NULL;
+    }
+
+    size_t copy_size = old_size < new_size ? old_size : new_size;
+    memcpy(new_ptr, ptr, copy_size);
+    wamr_free(ptr);
+    return new_ptr;
+}
+#endif /* CONFIG_AKIRA_WASM_RUNTIME */
 
 /* Capability checking is implemented in src/runtime/security.c */
 
@@ -66,12 +130,24 @@ static bool slot_valid(int id)
     return (id >= 0 && id < AKIRA_MAX_WASM_INSTANCES && g_apps[id].used);
 }
 
-/* Runtime helpers used by security.c */
+/* O(1) cap lookup — slot pointer is stored as WAMR custom data at instantiation */
 uint32_t akira_runtime_get_cap_mask_for_module_inst(wasm_module_inst_t inst)
 {
-    if (!inst) return 0;
-    for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++) {
-        if (g_apps[i].used && g_apps[i].instance == inst) return g_apps[i].cap_mask;
+    if (!inst) {
+        return 0;
+    }
+
+    /* Fast path: custom data set in wasm_app_thread_fn */
+    akira_managed_app_t *app =
+        (akira_managed_app_t *)wasm_runtime_get_custom_data(inst);
+    if (app) {
+        return app->cap_mask;
+    }
+
+    /* Fallback: instance map (shouldn't normally reach here) */
+    int slot = instance_map_get(inst);
+    if (slot >= 0) {
+        return g_apps[slot].cap_mask;
     }
     return 0;
 }
@@ -135,7 +211,7 @@ uint32_t akira_runtime_get_memory_used(int instance_id)
     if (!slot_valid(instance_id)) {
         return 0;
     }
-    return g_apps[instance_id].memory_used;
+    return (uint32_t)atomic_get(&g_apps[instance_id].memory_used);
 }
 
 /**
@@ -167,62 +243,20 @@ int akira_runtime_init(void)
     app_signing_init();
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
-    /* Prefer PSRAM for WAMR heap if available */
-#ifdef CONFIG_WAMR_HEAP_SIZE
-    g_wamr_heap_size = (size_t)CONFIG_WAMR_HEAP_SIZE;
-#else
-    g_wamr_heap_size = (256 * 1024); /* reasonable default */
-#endif
-
-    g_wamr_heap_buf = akira_malloc_buffer(g_wamr_heap_size);
-    if (g_wamr_heap_buf)
-    {
-        LOG_INF("Allocated WAMR heap in PSRAM: %zu bytes", g_wamr_heap_size);
-    }
-    else{
-        LOG_WRN("PSRAM allocation for WAMR heap failed, falling back to internal RAM");
-    }
-
-    if (!g_wamr_heap_buf)
-    {
-#ifndef CONFIG_AKIRA_PSRAM
-#ifndef CONFIG_WAMR_HEAP_SIZE
-#define AKIRA_WAMR_HEAP_DEFAULT (262144)
-#else
-#define AKIRA_WAMR_HEAP_DEFAULT (CONFIG_WAMR_HEAP_SIZE)
-#endif
-        static uint8_t internal_wamr_heap[AKIRA_WAMR_HEAP_DEFAULT];
-        g_wamr_heap_buf = internal_wamr_heap;
-        g_wamr_heap_size = sizeof(internal_wamr_heap);
-        LOG_INF("Using internal WAMR heap: %zu bytes", g_wamr_heap_size);
-#else
-        /* If AKIRA_PSRAM is enabled but allocation failed at runtime, try to allocate
-         * dynamically to avoid reserving large static buffers in DRAM. This keeps
-         * the binary small while still allowing large heaps when PSRAM is present.
-         */
-        g_wamr_heap_size = (32 * 1024); /* fallback smaller size */
-        g_wamr_heap_buf = k_malloc(g_wamr_heap_size);
-        if (g_wamr_heap_buf) {
-            LOG_INF("Allocated WAMR heap dynamically: %zu bytes", g_wamr_heap_size);
-        } else {
-            LOG_ERR("Failed to allocate WAMR heap dynamically");
-            return -ENOMEM;
-        }
-#endif
-    }
-
     /*
-     * WAMR runtime initialization with custom allocator hooks
+     * Initialize WAMR with Alloc_With_Allocator.
      *
-     * We use Alloc_With_Pool for the global WAMR heap (efficient for
-     * module loading), but provide native malloc/free APIs for WASM apps
-     * that need quota-enforced dynamic allocation.
-     *
+     * This replaces the old static Alloc_With_Pool approach which reserved
+     * CONFIG_WAMR_HEAP_SIZE (256 KB default) as BSS on RAM-only targets.
+     * With Alloc_With_Allocator, WAMR calls our trampolines which route to
+     * akira_malloc_buffer() — PSRAM-first on ESP32-S3, system heap on nRF54L15.
+     * Memory is only consumed when WASM apps actually allocate it.
      */
     RuntimeInitArgs init_args = {0};
-    init_args.mem_alloc_type = Alloc_With_Pool;
-    init_args.mem_alloc_option.pool.heap_buf = g_wamr_heap_buf;
-    init_args.mem_alloc_option.pool.heap_size = g_wamr_heap_size;
+    init_args.mem_alloc_type = Alloc_With_Allocator;
+    init_args.mem_alloc_option.allocator.malloc_func  = wamr_malloc;
+    init_args.mem_alloc_option.allocator.free_func    = wamr_free;
+    init_args.mem_alloc_option.allocator.realloc_func = wamr_realloc;
 
     if (!wasm_runtime_full_init(&init_args))
     {
@@ -381,10 +415,12 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
 
     g_apps[slot].used = true;
     g_apps[slot].module = module;
-    g_apps[slot].running = false;
+    g_apps[slot].status = AKIRA_APP_STATUS_CREATED;
+    g_apps[slot].exit_code = 0;
+    g_apps[slot].tid = NULL;
     g_apps[slot].cap_mask = manifest.valid ? manifest.cap_mask : 0;
     g_apps[slot].memory_quota = manifest.valid ? manifest.memory_quota : 0;
-    g_apps[slot].memory_used = 0;
+    atomic_set(&g_apps[slot].memory_used, 0);
     memcpy(g_apps[slot].binary_hash, binary_hash, 32);
     g_apps[slot].hash_valid = true;
     g_apps[slot].trust_level = TRUST_LEVEL_USER;
@@ -408,122 +444,246 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
 #endif
 }
 
-/* Instantiate and run a loaded WASM module */
-int akira_runtime_start(int instance_id)
-{
-    if (!slot_valid(instance_id))
-        return -EINVAL;
-
-    akira_managed_app_t *app = &g_apps[instance_id];
-    if (app->running)
-        return 0;
+/* ===== Thread-per-app implementation ===== */
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
+
+/**
+ * @brief WASM app thread entry point.
+ *
+ * Each WASM app runs in its own Zephyr thread so the shell and other
+ * subsystems remain responsive while apps execute.  Flow:
+ *   1. Instantiate WAMR module inside the thread (safe for all WAMR modes)
+ *   2. Post sem_start so akira_runtime_start() can return to the caller
+ *   3. Run wasm_runtime_call_wasm() — blocks until app exits or is terminated
+ *   4. Clean up WAMR resources and signal cond_exit for any waiters
+ */
+static void wasm_app_thread_fn(void *p1, void *p2, void *p3)
+{
+    int slot = (int)(intptr_t)p1;
+    (void)p2; (void)p3;
+
+    akira_managed_app_t *app = &g_apps[slot];
+
 #ifndef CONFIG_WAMR_INSTANCE_HEAP
 #define CONFIG_WAMR_INSTANCE_HEAP 65536
 #endif
 #ifndef CONFIG_WAMR_STACK_SIZE
 #define CONFIG_WAMR_STACK_SIZE 8192
 #endif
-    wasm_module_inst_t inst = wasm_runtime_instantiate(app->module, CONFIG_WAMR_INSTANCE_HEAP, CONFIG_WAMR_STACK_SIZE, NULL, 0);
-    if (!inst)
-    {
-        LOG_ERR("wasm_runtime_instantiate failed: %s", wasm_runtime_get_exception(NULL));
-        return -EIO;
+
+    /* ------ Step 1: Instantiate ------ */
+    char error_buf[128] = {0};
+    wasm_module_inst_t inst = wasm_runtime_instantiate(
+        app->module,
+        CONFIG_WAMR_INSTANCE_HEAP,
+        CONFIG_WAMR_STACK_SIZE,
+        error_buf, sizeof(error_buf));
+
+    if (!inst) {
+        LOG_ERR("wasm_runtime_instantiate failed (slot %d): %s", slot, error_buf);
+        app->exit_code = -EIO;
+        app->status = AKIRA_APP_STATUS_ERROR;
+        k_sem_give(&app->sem_start);
+        goto thread_exit;
     }
 
-    wasm_exec_env_t exec_env = wasm_runtime_create_exec_env(inst, CONFIG_WAMR_STACK_SIZE);
-    if (!exec_env)
-    {
-        LOG_ERR("Failed to create exec env");
+    wasm_exec_env_t exec_env = wasm_runtime_create_exec_env(inst,
+                                                             CONFIG_WAMR_STACK_SIZE);
+    if (!exec_env) {
+        LOG_ERR("Failed to create exec_env for slot %d", slot);
         wasm_runtime_deinstantiate(inst);
-        return -ENOMEM;
+        app->exit_code = -ENOMEM;
+        app->status = AKIRA_APP_STATUS_ERROR;
+        k_sem_give(&app->sem_start);
+        goto thread_exit;
     }
 
     app->instance = inst;
     app->exec_env = exec_env;
 
-    /* Register in instance map for O(1) lookups */
-    instance_map_put(inst, instance_id);
+    /* O(1) cap lookup: store slot pointer as WAMR custom data */
+    wasm_runtime_set_custom_data(inst, &g_apps[slot]);
+    instance_map_put(inst, slot);
 
-    /* Begin sandbox execution tracking */
+    wasm_runtime_clear_exception(inst);
+
+    /* ------ Step 2: Signal caller that instance is ready ------ */
+    k_sem_give(&app->sem_start);
+
+    /* ------ Step 3: Execute ------ */
     sandbox_exec_begin(&app->sandbox);
     perf_exec_begin(&app->perf);
 
-    /* Call _start or main if present */
     wasm_function_inst_t fn = wasm_runtime_lookup_function(inst, "_start");
-    if (!fn)
+    if (!fn) {
         fn = wasm_runtime_lookup_function(inst, "main");
-    if (fn)
-    {
-        /* Ask WAMR how many params the function actually expects */
+    }
+
+    int exit_code = 0;
+    if (fn) {
         uint32_t argc = wasm_func_get_param_count(fn, inst);
         uint32_t argv[2] = {0, 0};
-        if (!wasm_runtime_call_wasm(exec_env, fn, argc, argv))
-        {
-            const char *exception = wasm_runtime_get_exception(inst);
-            if (exception) {
-                LOG_ERR("WASM start exception: %s", exception);
+        if (!wasm_runtime_call_wasm(exec_env, fn, argc, argv)) {
+            const char *ex = wasm_runtime_get_exception(inst);
+            if (ex) {
+                LOG_ERR("WASM exception (slot %d): %s", slot, ex);
                 app->perf.trap_count++;
+                exit_code = -EIO;
             }
         }
-    }
-    else {
-        LOG_INF("No _start or main - reactive module (event-driven)");
+    } else {
+        LOG_INF("Slot %d: no _start/main — reactive module", slot);
     }
 
-    /* End execution tracking */
     perf_exec_end(&app->perf);
 
-    app->running = true;
+    /* ------ Step 4: Clean up WAMR resources ------ */
+    wasm_runtime_destroy_exec_env(exec_env);
+    app->exec_env = NULL;
+
+    instance_map_remove(inst);
+    wasm_runtime_deinstantiate(inst);
+    app->instance = NULL;
+
+    atomic_set(&app->memory_used, 0);
+    sandbox_exec_end(&app->sandbox);
+    sandbox_audit_log(AUDIT_EVENT_APP_STOPPED, app->name, (uint32_t)slot);
+
+    app->exit_code = (int8_t)exit_code;
+    LOG_INF("App thread done (slot %d, exit=%d, calls=%u, traps=%u)",
+            slot, exit_code, app->perf.call_count, app->perf.trap_count);
+
+thread_exit:
+    /* Notify any waiters (akira_runtime_stop or status query) */
+    k_mutex_lock(&g_exit_mutex, K_FOREVER);
+    if (app->status != AKIRA_APP_STATUS_ERROR) {
+        app->status = AKIRA_APP_STATUS_EXITED;
+    }
+    k_condvar_broadcast(&app->cond_exit);
+    k_mutex_unlock(&g_exit_mutex);
+
+    /* Invoke registered exit callback (e.g. app_manager state transition) */
+    if (g_exit_cb) {
+        g_exit_cb(slot, app->exit_code);
+    }
+}
+
+#endif /* CONFIG_AKIRA_WASM_RUNTIME */
+
+/* Instantiate and run a loaded WASM module in a dedicated thread */
+int akira_runtime_start(int instance_id)
+{
+    if (!slot_valid(instance_id)) {
+        return -EINVAL;
+    }
+
+    akira_managed_app_t *app = &g_apps[instance_id];
+
+    if (app->status == AKIRA_APP_STATUS_RUNNING) {
+        return 0; /* already running */
+    }
+
+#ifdef CONFIG_AKIRA_WASM_RUNTIME
+    /* Initialize per-slot sync primitives for this run */
+    k_sem_init(&app->sem_start, 0, 1);
+    k_condvar_init(&app->cond_exit);
+    app->exit_code = 0;
+
+    app->tid = k_thread_create(
+        &g_app_threads[instance_id],
+        g_app_stacks[instance_id],
+        K_THREAD_STACK_SIZEOF(g_app_stacks[instance_id]),
+        wasm_app_thread_fn,
+        (void *)(intptr_t)instance_id, NULL, NULL,
+        CONFIG_AKIRA_WASM_APP_PRIORITY,
+        0, K_NO_WAIT);
+
+    if (!app->tid) {
+        LOG_ERR("Failed to create app thread for slot %d", instance_id);
+        return -ENOMEM;
+    }
+
+    /* Block until WAMR instantiation succeeds or fails */
+    k_sem_take(&app->sem_start, K_FOREVER);
+
+    if (app->status == AKIRA_APP_STATUS_ERROR) {
+        LOG_ERR("App failed to start (slot %d)", instance_id);
+        k_thread_join(&g_app_threads[instance_id], K_MSEC(500));
+        app->tid = NULL;
+        return -EIO;
+    }
+
+    app->status = AKIRA_APP_STATUS_RUNNING;
     sandbox_audit_log(AUDIT_EVENT_APP_STARTED, app->name, (uint32_t)instance_id);
-    LOG_INF("Started instance %d (calls=%u, time=%lluus)",
-            instance_id, app->perf.call_count,
-            (unsigned long long)app->perf.total_exec_time_us);
+    LOG_INF("WASM module loaded into slot %d (cap=0x%08x, quota=%u)",
+            instance_id, app->cap_mask, app->memory_quota);
     return 0;
 #else
     (void)instance_id;
-    return -ENOTSUP; /* WASM runtime not available */
+    return -ENOTSUP;
 #endif
 }
 
-/* Stop and deinstantiate an instance */
+/* Stop a running WASM app: terminate its thread and wait for cleanup */
 int akira_runtime_stop(int instance_id)
 {
-    if (!slot_valid(instance_id))
+    if (!slot_valid(instance_id)) {
         return -EINVAL;
+    }
 
     akira_managed_app_t *app = &g_apps[instance_id];
-    if (!app->running && !app->instance)
-        return 0;
+
+    if (app->status == AKIRA_APP_STATUS_STOPPED ||
+        app->status == AKIRA_APP_STATUS_CREATED) {
+        return 0; /* nothing to stop */
+    }
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
-    /* End sandbox execution */
-    sandbox_exec_end(&app->sandbox);
-
-    /* Destroy exec_env BEFORE instance (exec_env references instance) */
-    if (app->exec_env)
-    {
-        wasm_runtime_destroy_exec_env(app->exec_env);
-        app->exec_env = NULL;
+    /* Ask WAMR to interrupt the running WASM execution.
+     * This causes wasm_runtime_call_wasm() to return with an exception. */
+    if (app->instance) {
+        wasm_runtime_terminate(app->instance);
     }
 
-    if (app->instance)
-    {
-        /* Remove from instance map before deinstantiation */
-        instance_map_remove(app->instance);
-        wasm_runtime_deinstantiate(app->instance);
-        app->instance = NULL;
+    /* Wait for the app thread to finish cleanup and signal cond_exit */
+    k_mutex_lock(&g_exit_mutex, K_FOREVER);
+    if (app->status == AKIRA_APP_STATUS_RUNNING) {
+        /* 5-second timeout; abort thread if it doesn't respond */
+        int wait_ret = k_condvar_wait(&app->cond_exit, &g_exit_mutex,
+                                      K_SECONDS(5));
+        if (wait_ret != 0) {
+            LOG_ERR("App thread (slot %d) timed out — aborting", instance_id);
+            k_thread_abort(app->tid);
+            /* Manual cleanup since thread was aborted */
+            if (app->exec_env) {
+                wasm_runtime_destroy_exec_env(app->exec_env);
+                app->exec_env = NULL;
+            }
+            if (app->instance) {
+                instance_map_remove(app->instance);
+                wasm_runtime_deinstantiate(app->instance);
+                app->instance = NULL;
+            }
+            atomic_set(&app->memory_used, 0);
+        }
+    }
+    app->status = AKIRA_APP_STATUS_STOPPED;
+    k_mutex_unlock(&g_exit_mutex);
+
+    /* Join to release Zephyr thread resources */
+    if (app->tid) {
+        k_thread_join(&g_app_threads[instance_id], K_MSEC(200));
+        app->tid = NULL;
     }
 
-    app->running = false;
     sandbox_audit_log(AUDIT_EVENT_APP_STOPPED, app->name, (uint32_t)instance_id);
-    LOG_INF("Stopped instance %d (total_calls=%u, traps=%u)",
+    LOG_INF("Stopped slot %d (calls=%u, traps=%u)",
             instance_id, app->perf.call_count, app->perf.trap_count);
     return 0;
 #else
     (void)instance_id;
-    return -ENOTSUP; /* WASM runtime not available */
+    return -ENOTSUP;
 #endif
 }
 
@@ -578,23 +738,29 @@ int akira_runtime_install(const char *name, const void *binary, size_t size)
     return akira_runtime_install_with_manifest(name, binary, size, NULL, 0);
 }
 
-/* Destroy: fully deinstantiate module and free its slot */
+/* Destroy: stop if running, then fully unload the module and free the slot */
 int akira_runtime_destroy(int instance_id)
 {
-    if (!slot_valid(instance_id)) return -EINVAL;
+    if (!slot_valid(instance_id)) {
+        return -EINVAL;
+    }
 
     akira_managed_app_t *app = &g_apps[instance_id];
 
+    /* Stop the thread first if it's still running */
+    if (app->status == AKIRA_APP_STATUS_RUNNING ||
+        app->status == AKIRA_APP_STATUS_EXITED) {
+        akira_runtime_stop(instance_id);
+    }
+
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
-    /* Destroy exec_env BEFORE instance (exec_env references instance) */
-    if (app->exec_env)
-    {
+    /* Safety: exec_env/instance should already be NULL after stop,
+     * but guard against the k_thread_abort path in stop() */
+    if (app->exec_env) {
         wasm_runtime_destroy_exec_env(app->exec_env);
         app->exec_env = NULL;
     }
-
-    if (app->instance)
-    {
+    if (app->instance) {
         instance_map_remove(app->instance);
         wasm_runtime_deinstantiate(app->instance);
         app->instance = NULL;
@@ -605,15 +771,16 @@ int akira_runtime_destroy(int instance_id)
         module_cache_release(app->binary_hash);
     }
 
-    if (app->module)
-    {
+    if (app->module) {
         wasm_runtime_unload(app->module);
         app->module = NULL;
     }
 #endif
 
     app->used = false;
-    app->running = false;
+    app->status = AKIRA_APP_STATUS_STOPPED;
+    app->exit_code = 0;
+    app->tid = NULL;
     app->cap_mask = 0;
     app->hash_valid = false;
     app->name[0] = '\0';
@@ -657,6 +824,11 @@ int akira_runtime_verify_binary(const uint8_t *binary, uint32_t size,
                                 uint8_t *hash_out)
 {
     return app_verify_wasm_integrity(binary, size, hash_out);
+}
+
+void akira_runtime_set_exit_callback(akira_runtime_exit_cb_t cb)
+{
+    g_exit_cb = cb;
 }
 
 void akira_runtime_get_cache_stats(module_cache_stats_t *stats)
