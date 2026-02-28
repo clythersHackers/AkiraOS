@@ -1,839 +1,581 @@
 /**
  * @file tetris.c
- * @brief Full-featured Tetris game WASM application for AkiraOS
- * 
- * A complete Tetris implementation featuring:
- * - Seven classic tetromino pieces (I, O, T, S, Z, J, L)
- * - Piece rotation and movement
- * - Line clearing and scoring
- * - Level progression with increasing speed
- * - Next piece preview
- * - Game over detection
- * - Colorful RGB565 graphics
- * 
- * Controls:
- * - GPIO 15: Move left (when LOW)
- * - GPIO 40: Move right (when LOW)
- * - GPIO 16: Rotate (when LOW)
- * - GPIO 17: Drop faster (when LOW)
- * 
+ * @brief Tetris game WASM application for AkiraOS
+ *
+ * Controls (akiraconsole DPAD):
+ *   UP=Rotate  DOWN=Soft-drop  LEFT=Move left  RIGHT=Move right
+ *
  * @copyright Copyright (c) 2026 AkiraOS Contributors
  * @license Apache-2.0
  */
 
 #include "akira_api.h"
 
-// Game board dimensions
-#define BOARD_WIDTH  10
-#define BOARD_HEIGHT 20
+/* ── Display layout ────────────────────────────────────────────────────────
+ * Landscape 320×240.
+ *   y:0-18   Header bar (title + level)
+ *   y:20-219 Game board (10×20 blocks @ 10px = 100×200) — centred at x=110
+ *   x:110-209 Board area  (centred: (320-100)/2 = 110)
+ *   x:218+   Sidebar     (next piece, score, lines, level)
+ * ─────────────────────────────────────────────────────────────────────── */
+#define BLOCK_SIZE     10
+#define BOARD_WIDTH    10
+#define BOARD_HEIGHT   20
+#define BOARD_X        110
+#define BOARD_Y        20
+#define SIDEBAR_X      218
+#define BOARD_PX_W     (BOARD_WIDTH  * BLOCK_SIZE)
+#define BOARD_PX_H     (BOARD_HEIGHT * BLOCK_SIZE)
 
-// Display dimensions and positioning
-#define BLOCK_SIZE   10
-#define BOARD_X      20
-#define BOARD_Y      10
+/* ── Game configuration ───────────────────────────────────────────────── */
+#define INITIAL_DROP_DELAY  300000   /* 0.3 s at level 1 — noticeably brisker */
+#define MIN_DROP_DELAY       50000
+#define MAX_LEVEL               15
+#define SOFT_DROP_DELAY       8000   /* µs per cell while DOWN held */
 
-// Game configuration
-#define INITIAL_DROP_DELAY  500000  // 0.5 seconds in microseconds
-#define MAX_LEVEL           15
-#define MIN_DROP_DELAY      50000   // Fastest speed: 0.05 seconds
+/* ── Button pins (akiraconsole, active-HIGH, pull-down) ──────────────── */
+#define BTN_UP       4
+#define BTN_DOWN     5
+#define BTN_LEFT     6
+#define BTN_RIGHT    7
+#define BTN_A        15   /* A button — also rotates */
+#define BTN_B        16   /* B button — also rotates */
+#define BTN_SETTINGS 2    /* Settings — pause/resume */
+#define BTN_X        17   /* X button — unused        */
+#define BTN_Y        41   /* Y button — unused        */
 
-// DPAD button pins (active low with pull-up)
-#define BTN_UP       38  // Rotate
-#define BTN_DOWN     39  // Fast drop
-#define BTN_LEFT     37  // Move left
-#define BTN_RIGHT    36  // Move right
+/* ── UI colour palette — logical & consistent ──────────────────────────
+ *  Only tetromino cells use per-piece colours.
+ *  All UI chrome uses this fixed set so it looks intentional.        */
+#define COL_BG          0x0000   /* black background                */
+#define COL_CELL_EMPTY  0x0641   /* very dark blue-grey — grid dot  */
+#define COL_BORDER      0x4A69   /* mid-grey board border           */
+#define COL_HEADER_BG   0x0045   /* deep green header bar            */
+#define COL_TITLE       0x07FF   /* cyan — "TETRIS" title           */
+#define COL_LABEL       0x8410   /* dim grey — NEXT/SCORE/LINES lbl */
+#define COL_VALUE       0xFFFF   /* white — stat numbers            */
+#define COL_HINT        0x4208   /* dark grey — controls hint text  */
+#define COL_GAMEOVER_T  0xF800   /* red — GAME OVER                 */
+#define COL_GAMEOVER_S  0xFFE0   /* yellow — final score            */
 
-// Button debouncing
-static unsigned char btn_prev_state[4] = {1, 1, 1, 1};
-static int move_repeat_counter = 0;
-#define MOVE_REPEAT_DELAY 5  // Frames before repeat
+/* Classic Tetris piece colours — vivid, matches standard Tetris palette */
+static const uint16_t PIECE_COLOR[7] = {
+    0x07FF,  /* I — cyan        */
+    0xFFE0,  /* O — yellow      */
+    0xA81F,  /* T — vivid purple */
+    0x0760,  /* S — bright green */
+    0xF800,  /* Z — red         */
+    0x211F,  /* J — bright blue */
+    0xFBA0,  /* L — orange      */
+};
 
-// Tetromino shapes (4x4 grid, bit-packed)
-// Each tetromino has 4 rotation states
+/* ── Tetromino shapes (4×4 bit-packed, 4 rotations) ─────────────────── */
 static const uint16_t SHAPES[7][4] = {
-    // I piece
-    {0x0F00, 0x2222, 0x00F0, 0x4444},
-    // O piece
-    {0x6600, 0x6600, 0x6600, 0x6600},
-    // T piece
-    {0x0E40, 0x4C40, 0x4E00, 0x4640},
-    // S piece
-    {0x06C0, 0x4620, 0x06C0, 0x4620},
-    // Z piece
-    {0x0C60, 0x2640, 0x0C60, 0x2640},
-    // J piece
-    {0x44C0, 0x8E00, 0x6440, 0x0E20},
-    // L piece
-    {0x4460, 0x0E80, 0xC440, 0x2E00}
+    {0x0F00, 0x2222, 0x00F0, 0x4444},  /* I */
+    {0x6600, 0x6600, 0x6600, 0x6600},  /* O */
+    {0x0E40, 0x4C40, 0x4E00, 0x4640},  /* T */
+    {0x06C0, 0x4620, 0x06C0, 0x4620},  /* S */
+    {0x0C60, 0x2640, 0x0C60, 0x2640},  /* Z */
+    {0x44C0, 0x8E00, 0x6440, 0x0E20},  /* J */
+    {0x4460, 0x0E80, 0xC440, 0x2E00},  /* L */
 };
 
-// Tetromino colors
-static const uint16_t COLORS[7] = {
-    COLOR_CYAN,    // I
-    COLOR_YELLOW,  // O
-    COLOR_PURPLE,  // T
-    COLOR_GREEN,   // S
-    COLOR_RED,     // Z
-    COLOR_BLUE,    // J
-    COLOR_ORANGE   // L
-};
-
-// Game state structure
+/* ── Game state ──────────────────────────────────────────────────────── */
 typedef struct {
-    uint8_t board[BOARD_HEIGHT][BOARD_WIDTH];
-    int current_piece;
-    int current_rotation;
-    int current_x;
-    int current_y;
-    int next_piece;
-    uint32_t score;
-    uint32_t lines_cleared;
-    uint32_t level;
-    uint32_t drop_delay;
-    int game_over;
-    
-    // Previous state for selective redrawing
-    int prev_piece;
-    int prev_rotation;
-    int prev_x;
-    int prev_y;
-    int prev_next_piece;
-    uint32_t prev_score;
-    uint32_t prev_lines_cleared;
-    uint32_t prev_level;
-    
-    // Dirty flags to minimize redraws
-    uint8_t piece_moved;
-    uint8_t board_changed;
-} game_state_t;
+    uint8_t  board[BOARD_HEIGHT][BOARD_WIDTH];
+    int      cur_piece, cur_rot, cur_x, cur_y;
+    int      next_piece;
+    uint32_t score, lines, level, drop_delay;
+    int      game_over;
+    /* prev-state for incremental redraws */
+    int      prev_piece, prev_rot, prev_x, prev_y;
+    int      prev_next;
+    uint32_t prev_score, prev_lines, prev_level;
+    uint8_t  piece_moved, board_changed;
+} game_t;
 
-static game_state_t game;
+static game_t g;
 
-// Forward declarations
-static void redraw_board(void);
-
-/**
- * @brief Simple pseudo-random number generator
- */
-static uint32_t random_state = 12345;
-
-static int rand_range(int max)
-{
-    random_state = (random_state * 1103515245 + 12345) & 0x7FFFFFFF;
-    return random_state % max;
+/* ── PRNG ────────────────────────────────────────────────────────────── */
+static uint32_t rng = 12345;
+static int rand7(void) {
+    rng = rng * 1103515245 + 12345;
+    return (int)((rng >> 16) & 0x7FFF) % 7;
+}
+/* Seed from an external value (e.g. frame counter from title screen wait) */
+static void rng_seed(uint32_t seed) {
+    rng = seed ^ 0xDEADBEEF;
+    /* Warm up — discard first few outputs so low seeds aren't correlated */
+    rand7(); rand7(); rand7();
 }
 
-
-
-/**
- * @brief Check if a cell in the tetromino shape is filled
- */
-static int get_shape_cell(uint16_t shape, int x, int y)
-{
-    return (shape >> ((3 - y) * 4 + (3 - x))) & 1;
+/* ── Shape helpers ───────────────────────────────────────────────────── */
+static int shape_cell(uint16_t s, int x, int y) {
+    return (s >> ((3 - y) * 4 + (3 - x))) & 1;
 }
 
-/**
- * @brief Check if piece can be placed at given position
- */
-static int check_collision(int piece, int rotation, int x, int y)
-{
-    uint16_t shape = SHAPES[piece][rotation];
-    
-    for (int py = 0; py < 4; py++) {
+static int collides(int piece, int rot, int x, int y) {
+    uint16_t s = SHAPES[piece][rot];
+    for (int py = 0; py < 4; py++)
         for (int px = 0; px < 4; px++) {
-            if (get_shape_cell(shape, px, py)) {
-                int board_x = x + px;
-                int board_y = y + py;
-                
-                // Check boundaries
-                if (board_x < 0 || board_x >= BOARD_WIDTH || 
-                    board_y >= BOARD_HEIGHT) {
-                    return 1; // Collision
-                }
-                
-                // Check board collision (only if within bounds)
-                if (board_y >= 0 && game.board[board_y][board_x]) {
-                    return 1; // Collision
-                }
-            }
+            if (!shape_cell(s, px, py)) continue;
+            int bx = x + px, by = y + py;
+            if (bx < 0 || bx >= BOARD_WIDTH || by >= BOARD_HEIGHT) return 1;
+            if (by >= 0 && g.board[by][bx]) return 1;
         }
-    }
-    
-    return 0; // No collision
-}
-
-/**
- * @brief Lock the current piece into the board
- */
-static void lock_piece(void)
-{
-    uint16_t shape = SHAPES[game.current_piece][game.current_rotation];
-    
-    for (int py = 0; py < 4; py++) {
-        for (int px = 0; px < 4; px++) {
-            if (get_shape_cell(shape, px, py)) {
-                int board_x = game.current_x + px;
-                int board_y = game.current_y + py;
-                
-                if (board_y >= 0 && board_y < BOARD_HEIGHT && 
-                    board_x >= 0 && board_x < BOARD_WIDTH) {
-                    game.board[board_y][board_x] = game.current_piece + 1;
-                }
-            }
-        }
-    }
-}
-
-/**
- * @brief Check and clear completed lines (optimized)
- */
-static int clear_lines(void)
-{
-    int lines = 0;
-    int cleared_rows[4]; // Track which rows were cleared
-    int cleared_count = 0;
-    
-    for (int y = BOARD_HEIGHT - 1; y >= 0; y--) {
-        int full = 1;
-        for (int x = 0; x < BOARD_WIDTH; x++) {
-            if (!game.board[y][x]) {
-                full = 0;
-                break;
-            }
-        }
-        
-        if (full) {
-            lines++;
-            cleared_rows[cleared_count++] = y;
-            
-            // Move all lines above down
-            for (int yy = y; yy > 0; yy--) {
-                for (int x = 0; x < BOARD_WIDTH; x++) {
-                    game.board[yy][x] = game.board[yy - 1][x];
-                }
-            }
-            
-            // Clear top line
-            for (int x = 0; x < BOARD_WIDTH; x++) {
-                game.board[0][x] = 0;
-            }
-            
-            y++; // Re-check this line
-        }
-    }
-    
-    if (lines > 0) {
-        game.board_changed = 1;
-    }
-    
-    return lines;
-}
-
-/**
- * @brief Spawn a new piece
- */
-static void spawn_piece(void)
-{
-    game.current_piece = game.next_piece;
-    game.next_piece = rand_range(7);
-    game.current_rotation = 0;
-    game.current_x = BOARD_WIDTH / 2 - 2;
-    game.current_y = -1;
-    game.piece_moved = 1; // Force redraw for new piece
-    
-    // Check if game over (piece can't spawn)
-    if (check_collision(game.current_piece, game.current_rotation, 
-                        game.current_x, game.current_y)) {
-        game.game_over = 1;
-    }
-}
-
-/**
- * @brief Draw a single block on the display (optimized)
- */
-static void draw_block(int x, int y, uint16_t color)
-{
-    // Use full block size for solid appearance, faster rendering
-    display_rect(BOARD_X + x * BLOCK_SIZE, 
-                 BOARD_Y + y * BLOCK_SIZE, 
-                 BLOCK_SIZE, 
-                 BLOCK_SIZE, 
-                 color);
-}
-
-/**
- * @brief Check if a block position is occupied by the current piece
- */
-static int is_current_piece_at(int x, int y)
-{
-    uint16_t shape = SHAPES[game.current_piece][game.current_rotation];
-    
-    for (int py = 0; py < 4; py++) {
-        for (int px = 0; px < 4; px++) {
-            if (get_shape_cell(shape, px, py)) {
-                if (game.current_x + px == x && game.current_y + py == y) {
-                    return 1;
-                }
-            }
-        }
-    }
     return 0;
 }
 
-/**
- * @brief Smart erase - only erase blocks from old position that aren't in new position
- */
-static void smart_erase_piece(int piece, int rotation, int old_x, int old_y)
-{
-    uint16_t shape = SHAPES[piece][rotation];
-    
-    for (int py = 0; py < 4; py++) {
+/* ── Draw primitives ─────────────────────────────────────────────────── */
+
+/* Solid block with bevel highlight/shadow */
+static void draw_block(int bx, int by, uint16_t col) {
+    int px = BOARD_X + bx * BLOCK_SIZE;
+    int py = BOARD_Y + by * BLOCK_SIZE;
+    int sz = BLOCK_SIZE - 1;  /* 1px gap between blocks */
+    display_rect(px, py, sz, sz, col);
+    /* bright top-left bevel */
+    display_rect(px, py, sz - 1, 1, 0xFFFF);
+    display_rect(px, py, 1, sz - 1, 0xFFFF);
+    /* dark bottom-right shadow */
+    display_rect(px + sz - 1, py + 1,      1, sz - 1, 0x0000);
+    display_rect(px + 1,      py + sz - 1, sz - 1, 1, 0x0000);
+}
+
+/* Empty cell */
+static void draw_empty_cell(int bx, int by) {
+    int px = BOARD_X + bx * BLOCK_SIZE;
+    int py = BOARD_Y + by * BLOCK_SIZE;
+    display_rect(px, py, BLOCK_SIZE - 1, BLOCK_SIZE - 1, COL_CELL_EMPTY);
+}
+
+/* ── Number to string helper (no libc printf in WASM) ───────────────── */
+static void itoa_pad(uint32_t v, char *buf, int width) {
+    buf[width] = '\0';
+    for (int i = width - 1; i >= 0; i--) {
+        buf[i] = '0' + (v % 10);
+        v /= 10;
+        if (!v && i > 0) {
+            for (int j = i - 1; j >= 0; j--) buf[j] = ' ';
+            break;
+        }
+    }
+}
+
+/* ── Board rendering ─────────────────────────────────────────────────── */
+static void redraw_board(void) {
+    for (int y = 0; y < BOARD_HEIGHT; y++)
+        for (int x = 0; x < BOARD_WIDTH; x++) {
+            if (g.board[y][x])
+                draw_block(x, y, PIECE_COLOR[g.board[y][x] - 1]);
+            else
+                draw_empty_cell(x, y);
+        }
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+static void draw_sidebar_static(void) {
+    int x = SIDEBAR_X;
+    display_text(x, 22,  "NEXT",  COL_LABEL);
+    display_text(x, 90,  "SCORE", COL_LABEL);
+    display_text(x, 130, "LINES", COL_LABEL);
+    display_text(x, 170, "LEVEL", COL_LABEL);
+    display_rect(x, 84,  100, 1, COL_BORDER);
+    display_rect(x, 124, 100, 1, COL_BORDER);
+    display_rect(x, 164, 100, 1, COL_BORDER);
+}
+
+static void draw_next(int force) {
+    if (!force && g.next_piece == g.prev_next) return;
+    int ox = SIDEBAR_X, oy = 36;
+    display_rect(ox, oy, 44, 40, COL_BG);
+    uint16_t s = SHAPES[g.next_piece][0];
+    uint16_t c = PIECE_COLOR[g.next_piece];
+    for (int py = 0; py < 4; py++)
+        for (int px = 0; px < 4; px++)
+            if (shape_cell(s, px, py)) {
+                int bx2 = ox + px * 10, by2 = oy + py * 10;
+                display_rect(bx2, by2, 9, 9, c);
+                display_rect(bx2, by2, 8, 1, 0xFFFF);
+                display_rect(bx2, by2, 1, 8, 0xFFFF);
+            }
+    g.prev_next = g.next_piece;
+}
+
+static void draw_stats(int force) {
+    int x = SIDEBAR_X;
+    char buf[8];
+    if (force || g.score != g.prev_score) {
+        display_rect(x, 104, 100, 14, COL_BG);
+        itoa_pad(g.score, buf, 6);
+        display_text(x, 104, buf, COL_VALUE);
+        g.prev_score = g.score;
+    }
+    if (force || g.lines != g.prev_lines) {
+        display_rect(x, 144, 100, 14, COL_BG);
+        itoa_pad(g.lines, buf, 4);
+        display_text(x, 144, buf, COL_VALUE);
+        g.prev_lines = g.lines;
+    }
+    if (force || g.level != g.prev_level) {
+        display_rect(x, 184, 100, 14, COL_BG);
+        itoa_pad(g.level, buf, 2);
+        display_text(x, 184, buf, COL_VALUE);
+        g.prev_level = g.level;
+    }
+}
+
+/* ── Header bar ──────────────────────────────────────────────────────── */
+static void draw_header(void) {
+    display_rect(0, 0, 320, 18, COL_HEADER_BG);
+    display_text_large(6, 1, "TETRIS", COL_TITLE);
+    display_text(275, 3, "LV:", COL_LABEL);
+    char buf[3];
+    itoa_pad(g.level, buf, 2);
+    display_text(298, 3, buf, COL_VALUE);
+    g.prev_level = g.level;
+}
+
+/* ── Current piece rendering ─────────────────────────────────────────── */
+static int is_cur_piece_at(int x, int y) {
+    uint16_t s = SHAPES[g.cur_piece][g.cur_rot];
+    for (int py = 0; py < 4; py++)
+        for (int px = 0; px < 4; px++)
+            if (shape_cell(s, px, py) &&
+                g.cur_x + px == x && g.cur_y + py == y) return 1;
+    return 0;
+}
+
+static void erase_piece_at(int piece, int rot, int ox, int oy) {
+    uint16_t s = SHAPES[piece][rot];
+    for (int py = 0; py < 4; py++)
         for (int px = 0; px < 4; px++) {
-            if (get_shape_cell(shape, px, py)) {
-                int screen_x = old_x + px;
-                int screen_y = old_y + py;
-                
-                // Only erase if this block is NOT in the new position
-                if (screen_y >= 0 && screen_y < BOARD_HEIGHT && 
-                    screen_x >= 0 && screen_x < BOARD_WIDTH &&
-                    !is_current_piece_at(screen_x, screen_y)) {
-                    // Draw locked piece if there's one, otherwise black
-                    if (game.board[screen_y][screen_x]) {
-                        draw_block(screen_x, screen_y, COLORS[game.board[screen_y][screen_x] - 1]);
-                    } else {
-                        draw_block(screen_x, screen_y, COLOR_BLACK);
-                    }
-                }
-            }
+            if (!shape_cell(s, px, py)) continue;
+            int bx = ox + px, by = oy + py;
+            if (by < 0 || by >= BOARD_HEIGHT || bx < 0 || bx >= BOARD_WIDTH) continue;
+            if (is_cur_piece_at(bx, by)) continue;
+            if (g.board[by][bx])
+                draw_block(bx, by, PIECE_COLOR[g.board[by][bx] - 1]);
+            else
+                draw_empty_cell(bx, by);
         }
-    }
 }
 
-/**
- * @brief Draw the current falling piece
- */
-static void draw_current_piece(void)
-{
-    uint16_t shape = SHAPES[game.current_piece][game.current_rotation];
-    uint16_t color = COLORS[game.current_piece];
-    
-    for (int py = 0; py < 4; py++) {
-        for (int px = 0; px < 4; px++) {
-            if (get_shape_cell(shape, px, py)) {
-                int screen_y = game.current_y + py;
-                if (screen_y >= 0) {
-                    draw_block(game.current_x + px, screen_y, color);
-                }
+static void draw_cur_piece(void) {
+    uint16_t s = SHAPES[g.cur_piece][g.cur_rot];
+    uint16_t c = PIECE_COLOR[g.cur_piece];
+    for (int py = 0; py < 4; py++)
+        for (int px = 0; px < 4; px++)
+            if (shape_cell(s, px, py)) {
+                int by = g.cur_y + py;
+                if (by >= 0) draw_block(g.cur_x + px, by, c);
             }
-        }
-    }
 }
 
-/**
- * @brief Draw the next piece preview (only if changed)
- */
-static void draw_next_piece(int force)
-{
-    if (!force && game.next_piece == game.prev_next_piece) {
-        return; // No change
+/* ── Incremental frame update ────────────────────────────────────────── */
+static void update_display(void) {
+    if (!g.piece_moved && !g.board_changed) return;
+
+    if (g.board_changed) {
+        redraw_board();
+        g.board_changed = 0;
+        g.piece_moved = 1;
     }
-    
-    int preview_x = 140;
-    int preview_y = 20;
-    
-    // Clear preview area
-    display_rect(preview_x, preview_y, 40, 40, COLOR_BLACK);
-    
-    uint16_t shape = SHAPES[game.next_piece][0];
-    uint16_t color = COLORS[game.next_piece];
-    
-    for (int py = 0; py < 4; py++) {
-        for (int px = 0; px < 4; px++) {
-            if (get_shape_cell(shape, px, py)) {
-                display_rect(preview_x + px * 8, preview_y + py * 8, 7, 7, color);
-            }
-        }
+
+    if (g.piece_moved) {
+        draw_cur_piece();
+        if (g.prev_piece >= 0)
+            erase_piece_at(g.prev_piece, g.prev_rot, g.prev_x, g.prev_y);
+        g.piece_moved = 0;
     }
-    
-    game.prev_next_piece = game.next_piece;
+
+    /* Update header level badge */
+    if (g.level != g.prev_level) {
+        display_rect(298, 3, 20, 12, COL_HEADER_BG);
+        char buf[3];
+        itoa_pad(g.level, buf, 2);
+        display_text(298, 3, buf, COL_VALUE);
+    }
+
+    draw_next(0);
+    draw_stats(0);
+
+    g.prev_piece = g.cur_piece;
+    g.prev_rot   = g.cur_rot;
+    g.prev_x     = g.cur_x;
+    g.prev_y     = g.cur_y;
 }
 
-/**
- * @brief Draw game statistics (only if changed)
- */
-static void draw_stats(int force)
-{
-    int stats_x = 140;
-    int stats_y = 80;
-    
-    // Only redraw if values changed
-    if (force || game.score != game.prev_score) {
-        // Clear score area
-        display_rect(stats_x, stats_y + 12, 80, 10, COLOR_BLACK);
-        
-        // Simple number to string conversion for score
-        char score_str[12];
-        uint32_t score = game.score;
-        int i = 0;
-        if (score == 0) {
-            score_str[i++] = '0';
-        } else {
-            char temp[12];
-            int j = 0;
-            while (score > 0) {
-                temp[j++] = '0' + (score % 10);
-                score /= 10;
+/* ── Piece logic ─────────────────────────────────────────────────────── */
+static void lock_piece(void) {
+    uint16_t s = SHAPES[g.cur_piece][g.cur_rot];
+    for (int py = 0; py < 4; py++)
+        for (int px = 0; px < 4; px++)
+            if (shape_cell(s, px, py)) {
+                int bx = g.cur_x + px, by = g.cur_y + py;
+                if (by >= 0 && by < BOARD_HEIGHT && bx >= 0 && bx < BOARD_WIDTH)
+                    g.board[by][bx] = g.cur_piece + 1;
             }
-            while (j > 0) {
-                score_str[i++] = temp[--j];
-            }
-        }
-        score_str[i] = '\0';
-        display_text(stats_x, stats_y + 12, score_str, COLOR_YELLOW);
-        game.prev_score = game.score;
-    }
-    
-    if (force || game.lines_cleared != game.prev_lines_cleared) {
-        // Clear lines area
-        display_rect(stats_x, stats_y + 42, 80, 10, COLOR_BLACK);
-        
-        // Lines cleared
-        char lines_str[12];
-        uint32_t lines = game.lines_cleared;
-        int i = 0;
-        if (lines == 0) {
-            lines_str[i++] = '0';
-        } else {
-            char temp[12];
-            int j = 0;
-            while (lines > 0) {
-                temp[j++] = '0' + (lines % 10);
-                lines /= 10;
-            }
-            while (j > 0) {
-                lines_str[i++] = temp[--j];
-            }
-        }
-        lines_str[i] = '\0';
-        display_text(stats_x, stats_y + 42, lines_str, COLOR_CYAN);
-        game.prev_lines_cleared = game.lines_cleared;
-    }
-    
-    if (force || game.level != game.prev_level) {
-        // Clear level area
-        display_rect(stats_x, stats_y + 72, 80, 10, COLOR_BLACK);
-        
-        // Level
-        char level_str[4];
-        level_str[0] = '0' + (game.level / 10);
-        level_str[1] = '0' + (game.level % 10);
-        level_str[2] = '\0';
-        display_text(stats_x, stats_y + 72, level_str, COLOR_GREEN);
-        game.prev_level = game.level;
-    }
 }
 
-/**
- * @brief Initialize the display (draw static elements once)
- */
-static void init_display(void)
-{
-    display_clear(COLOR_BLACK);
-    display_text(BOARD_X, 2, "TETRIS", COLOR_MAGENTA);
-    
-    // Draw static labels
-    int stats_x = 140;
-    int stats_y = 80;
-    display_text(stats_x, stats_y - 50, "NEXT:", COLOR_WHITE);
-    display_text(stats_x, stats_y, "SCORE:", COLOR_WHITE);
-    display_text(stats_x, stats_y + 30, "LINES:", COLOR_WHITE);
-    display_text(stats_x, stats_y + 60, "LEVEL:", COLOR_WHITE);
-    
-    // Draw border
-    display_rect(BOARD_X - 2, BOARD_Y - 2, 
-                 BOARD_WIDTH * BLOCK_SIZE + 4, 2, 
-                 COLOR_WHITE);
-    display_rect(BOARD_X - 2, BOARD_Y + BOARD_HEIGHT * BLOCK_SIZE, 
-                 BOARD_WIDTH * BLOCK_SIZE + 4, 2, 
-                 COLOR_WHITE);
-    display_rect(BOARD_X - 2, BOARD_Y - 2, 
-                 2, BOARD_HEIGHT * BLOCK_SIZE + 4, 
-                 COLOR_WHITE);
-    display_rect(BOARD_X + BOARD_WIDTH * BLOCK_SIZE, BOARD_Y - 2, 
-                 2, BOARD_HEIGHT * BLOCK_SIZE + 4, 
-                 COLOR_WHITE);
-    
-    // Clear play area (board is already zeroed from init_game)
-    display_rect(BOARD_X, BOARD_Y, 
-                 BOARD_WIDTH * BLOCK_SIZE, 
-                 BOARD_HEIGHT * BLOCK_SIZE, 
-                 COLOR_BLACK);
-    
-    // Initialize previous state
-    game.prev_piece = -1;
-    game.prev_rotation = -1;
-    game.prev_x = -1;
-    game.prev_y = -1;
-    game.prev_next_piece = -1;
-    game.prev_score = 0xFFFFFFFF;
-    game.prev_lines_cleared = 0xFFFFFFFF;
-    game.prev_level = 0xFFFFFFFF;
+static int clear_lines(void) {
+    int n = 0;
+    for (int y = BOARD_HEIGHT - 1; y >= 0; y--) {
+        int full = 1;
+        for (int x = 0; x < BOARD_WIDTH; x++) if (!g.board[y][x]) { full = 0; break; }
+        if (full) {
+            n++;
+            for (int yy = y; yy > 0; yy--)
+                for (int x = 0; x < BOARD_WIDTH; x++)
+                    g.board[yy][x] = g.board[yy-1][x];
+            for (int x = 0; x < BOARD_WIDTH; x++) g.board[0][x] = 0;
+            y++;
+        }
+    }
+    return n;
 }
 
-/**
- * @brief Update only what changed on the display (OPTIMIZED - no flicker)
- */
-static void update_display(void)
-{
-    // Only update if something actually changed
-    if (!game.piece_moved && !game.board_changed) {
+static void spawn_piece(void) {
+    g.cur_piece = g.next_piece;
+    g.next_piece = rand7();
+    g.cur_rot = 0;
+    g.cur_x = BOARD_WIDTH / 2 - 2;
+    g.cur_y = -1;
+    g.piece_moved = 1;
+    if (collides(g.cur_piece, g.cur_rot, g.cur_x, g.cur_y))
+        g.game_over = 1;
+}
+
+static void auto_drop(void) {
+    if (!collides(g.cur_piece, g.cur_rot, g.cur_x, g.cur_y + 1)) {
+        g.cur_y++;
+        g.piece_moved = 1;
         return;
     }
-    
-    // Redraw board if it changed (after line clear or piece lock)
-    if (game.board_changed) {
-        redraw_board();
-        game.board_changed = 0;
-        game.piece_moved = 1; // Force redraw of current piece
+    lock_piece();
+    g.board_changed = 1;
+    int n = clear_lines();
+    if (n > 0) {
+        static const uint32_t pts[5] = {0, 100, 300, 500, 800};
+        g.score += (n <= 4 ? pts[n] : 800) * g.level;
+        g.lines += n;
+        g.level = g.lines / 10 + 1;
+        if (g.level > MAX_LEVEL) g.level = MAX_LEVEL;
+        g.drop_delay = INITIAL_DROP_DELAY / g.level;
+        if (g.drop_delay < MIN_DROP_DELAY) g.drop_delay = MIN_DROP_DELAY;
     }
-    
-    // OPTIMIZED: Draw new piece FIRST, then erase old position
-    // This eliminates flickering!
-    if (game.piece_moved) {
-        // Draw new position first
-        draw_current_piece();
-        
-        // Then erase only the parts of old position that don't overlap
-        if (game.prev_piece >= 0 && 
-            (game.prev_x != game.current_x || 
-             game.prev_y != game.current_y || 
-             game.prev_rotation != game.current_rotation)) {
-            smart_erase_piece(game.prev_piece, game.prev_rotation, game.prev_x, game.prev_y);
-        }
-        
-        game.piece_moved = 0;
-    }
-    
-    // Update previews and stats (only if changed)
-    draw_next_piece(0);
-    draw_stats(0);
-    
-    // Save current state for next frame
-    game.prev_piece = game.current_piece;
-    game.prev_rotation = game.current_rotation;
-    game.prev_x = game.current_x;
-    game.prev_y = game.current_y;
-}
-
-/**
- * @brief Redraw the entire board (after line clears or piece lock)
- */
-static void redraw_board(void)
-{
-    // Clear play area
-    display_rect(BOARD_X, BOARD_Y, 
-                 BOARD_WIDTH * BLOCK_SIZE, 
-                 BOARD_HEIGHT * BLOCK_SIZE, 
-                 COLOR_BLACK);
-    
-    // Draw locked pieces
-    for (int y = 0; y < BOARD_HEIGHT; y++) {
-        for (int x = 0; x < BOARD_WIDTH; x++) {
-            if (game.board[y][x]) {
-                draw_block(x, y, COLORS[game.board[y][x] - 1]);
-            }
-        }
-    }
-}
-
-/**
- * @brief Initialize the game
- */
-static void init_game(void)
-{
-    // Clear board
-    for (int y = 0; y < BOARD_HEIGHT; y++) {
-        for (int x = 0; x < BOARD_WIDTH; x++) {
-            game.board[y][x] = 0;
-        }
-    }
-    
-    game.score = 0;
-    game.lines_cleared = 0;
-    game.level = 1;
-    game.drop_delay = INITIAL_DROP_DELAY;
-    game.game_over = 0;
-    
-    // Initialize dirty flags
-    game.piece_moved = 1;
-    game.board_changed = 0;
-    
-    game.next_piece = rand_range(7);
     spawn_piece();
-    
-    // Initialize display with static elements
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+static int btn_prev[4]      = {0, 0, 0, 0};
+static int btn_prev_a       = 0;
+static int btn_prev_b       = 0;
+static int btn_prev_settings = 0;
+static int lr_repeat        = 0;
+#define LR_INITIAL 8
+#define LR_HELD    3
+static int soft_drop_active = 0;
+static int pause_requested  = 0;
+
+static void handle_buttons(void) {
+    int up       = gpio_read(BTN_UP);
+    int down     = gpio_read(BTN_DOWN);
+    int left     = gpio_read(BTN_LEFT);
+    int right    = gpio_read(BTN_RIGHT);
+    int a        = gpio_read(BTN_A);
+    int b        = gpio_read(BTN_B);
+    int settings = gpio_read(BTN_SETTINGS);
+
+    /* SETTINGS — pause on press edge */
+    if (settings && !btn_prev_settings) pause_requested = 1;
+    btn_prev_settings = settings;
+
+    /* UP / A / B — rotate on press edge, with simple wall-kick */
+    if ((up && !btn_prev[0]) || (a && !btn_prev_a) || (b && !btn_prev_b)) {
+        int nr = (g.cur_rot + 1) % 4;
+        if      (!collides(g.cur_piece, nr, g.cur_x,     g.cur_y)) { g.cur_rot = nr;             g.piece_moved = 1; }
+        else if (!collides(g.cur_piece, nr, g.cur_x - 1, g.cur_y)) { g.cur_rot = nr; g.cur_x--;  g.piece_moved = 1; }
+        else if (!collides(g.cur_piece, nr, g.cur_x + 1, g.cur_y)) { g.cur_rot = nr; g.cur_x++;  g.piece_moved = 1; }
+    }
+    btn_prev[0] = up;
+    btn_prev_a  = a;
+    btn_prev_b  = b;
+
+    /* DOWN — soft drop (handled in game loop) */
+    soft_drop_active = down;
+    btn_prev[1] = down;
+
+    /* LEFT */
+    if (left) {
+        int move = 0;
+        if (!btn_prev[2])       { move = 1; lr_repeat = LR_INITIAL; }
+        else if (--lr_repeat <= 0) { move = 1; lr_repeat = LR_HELD;    }
+        if (move && !collides(g.cur_piece, g.cur_rot, g.cur_x - 1, g.cur_y)) {
+            g.cur_x--; g.piece_moved = 1;
+        }
+    } else { lr_repeat = 0; }
+    btn_prev[2] = left;
+
+    /* RIGHT */
+    if (right) {
+        int move = 0;
+        if (!btn_prev[3])       { move = 1; lr_repeat = LR_INITIAL; }
+        else if (--lr_repeat <= 0) { move = 1; lr_repeat = LR_HELD;    }
+        if (move && !collides(g.cur_piece, g.cur_rot, g.cur_x + 1, g.cur_y)) {
+            g.cur_x++; g.piece_moved = 1;
+        }
+    } else { lr_repeat = 0; }
+    btn_prev[3] = right;
+}
+
+/* ── Display / game init ─────────────────────────────────────────────── */
+static void init_display(void) {
+    display_clear(COL_BG);
+    draw_header();
+
+    /* Board border (2px) */
+    int bx = BOARD_X - 2, by = BOARD_Y - 2;
+    int bw = BOARD_PX_W + 4, bh = BOARD_PX_H + 4;
+    display_rect(bx,      by,      bw, 2,  COL_BORDER);
+    display_rect(bx,      by+bh-2, bw, 2,  COL_BORDER);
+    display_rect(bx,      by,      2,  bh, COL_BORDER);
+    display_rect(bx+bw-2, by,      2,  bh, COL_BORDER);
+
+    for (int y = 0; y < BOARD_HEIGHT; y++)
+        for (int x = 0; x < BOARD_WIDTH; x++)
+            draw_empty_cell(x, y);
+
+    draw_sidebar_static();
+
+    g.prev_piece = g.prev_rot = g.prev_x = g.prev_y = -1;
+    g.prev_next  = -1;
+    g.prev_score = g.prev_lines = g.prev_level = 0xFFFFFFFF;
+}
+
+static void init_game(void) {
+    for (int y = 0; y < BOARD_HEIGHT; y++)
+        for (int x = 0; x < BOARD_WIDTH; x++)
+            g.board[y][x] = 0;
+    g.score = 0; g.lines = 0; g.level = 1;
+    g.drop_delay = INITIAL_DROP_DELAY;
+    g.game_over  = 0;
+    g.piece_moved = 1; g.board_changed = 0;
+    g.next_piece = rand7();
+    spawn_piece();
     init_display();
-    
-    // Force initial draw of stats and next piece
-    draw_next_piece(1);
+    draw_next(1);
     draw_stats(1);
 }
 
-/**
- * @brief Handle DPAD button inputs for player control
- */
-static void handle_buttons(void)
-{
-    // Read button states (active low)
-    int btn_up = !gpio_read(BTN_UP);
-    int btn_down = !gpio_read(BTN_DOWN);
-    int btn_left = !gpio_read(BTN_LEFT);
-    int btn_right = !gpio_read(BTN_RIGHT);
-    
-    // UP button: Rotate piece
-    if (btn_up && btn_prev_state[0]) {
-        int new_rotation = (game.current_rotation + 1) % 4;
-        if (!check_collision(game.current_piece, new_rotation, 
-                            game.current_x, game.current_y)) {
-            game.current_rotation = new_rotation;
-            game.piece_moved = 1;
-        }
-        btn_prev_state[0] = 0;
-    } else if (!btn_up) {
-        btn_prev_state[0] = 1;
-    }
-    
-    // DOWN button: Fast drop
-    if (btn_down) {
-        if (btn_prev_state[1]) {
-            btn_prev_state[1] = 0;
-            move_repeat_counter = 0;
-        }
-        // Allow faster dropping when held
-        if (move_repeat_counter == 0) {
-            if (!check_collision(game.current_piece, game.current_rotation, 
-                                game.current_x, game.current_y + 1)) {
-                game.current_y++;
-                game.piece_moved = 1;
-                game.score += 1; // Bonus points for manual drop
-            }
-            move_repeat_counter = 2; // Repeat faster
-        } else {
-            move_repeat_counter--;
-        }
-    } else {
-        btn_prev_state[1] = 1;
-        move_repeat_counter = 0;
-    }
-    
-    // LEFT button: Move left
-    if (btn_left) {
-        if (btn_prev_state[2]) {
-            if (!check_collision(game.current_piece, game.current_rotation, 
-                                game.current_x - 1, game.current_y)) {
-                game.current_x--;
-                game.piece_moved = 1;
-            }
-            btn_prev_state[2] = 0;
-            move_repeat_counter = MOVE_REPEAT_DELAY;
-        } else {
-            // Allow repeat movement when held
-            if (move_repeat_counter == 0) {
-                if (!check_collision(game.current_piece, game.current_rotation, 
-                                    game.current_x - 1, game.current_y)) {
-                    game.current_x--;
-                    game.piece_moved = 1;
-                }
-                move_repeat_counter = MOVE_REPEAT_DELAY;
-            } else {
-                move_repeat_counter--;
-            }
-        }
-    } else {
-        btn_prev_state[2] = 1;
-    }
-    
-    // RIGHT button: Move right
-    if (btn_right) {
-        if (btn_prev_state[3]) {
-            if (!check_collision(game.current_piece, game.current_rotation, 
-                                game.current_x + 1, game.current_y)) {
-                game.current_x++;
-                game.piece_moved = 1;
-            }
-            btn_prev_state[3] = 0;
-            move_repeat_counter = MOVE_REPEAT_DELAY;
-        } else {
-            // Allow repeat movement when held
-            if (move_repeat_counter == 0) {
-                if (!check_collision(game.current_piece, game.current_rotation, 
-                                    game.current_x + 1, game.current_y)) {
-                    game.current_x++;
-                    game.piece_moved = 1;
-                }
-                move_repeat_counter = MOVE_REPEAT_DELAY;
-            } else {
-                move_repeat_counter--;
-            }
-        }
-    } else {
-        btn_prev_state[3] = 1;
-    }
-}
+/* ── Game loop ───────────────────────────────────────────────────────── */
+static void game_loop(void) {
+    uint32_t drop_acc = 0;
 
-/**
- * @brief Auto drop piece (gravity)
- */
-static int auto_drop_piece(void)
-{
-    // Try to move piece down
-    if (!check_collision(game.current_piece, game.current_rotation, 
-                        game.current_x, game.current_y + 1)) {
-        game.current_y++;
-        game.piece_moved = 1;
-        return 0;
-    }
-    
-    // Can't move down, lock piece
-    lock_piece();
-    game.board_changed = 1; // Board modified
-    
-    // Clear lines
-    int lines = clear_lines();
-    if (lines > 0) {
-        game.lines_cleared += lines;
-        game.score += lines * lines * 100; // Scoring: 1 line = 100, 2 lines = 400, etc.
-        
-        // Level up every 10 lines
-        game.level = (game.lines_cleared / 10) + 1;
-        if (game.level > MAX_LEVEL) {
-            game.level = MAX_LEVEL;
-        }
-        
-        // Increase speed with level (with minimum cap)
-        game.drop_delay = INITIAL_DROP_DELAY / game.level;
-        if (game.drop_delay < MIN_DROP_DELAY) {
-            game.drop_delay = MIN_DROP_DELAY;
-        }
-    }
-    
-    // Spawn next piece
-    spawn_piece();
-    
-    return 1; // Piece was locked
-}
-
-/**
- * @brief Initialize GPIO pins for button input
- */
-static void init_buttons(void)
-{
-    gpio_configure(BTN_UP, GPIO_INPUT );
-    gpio_configure(BTN_DOWN, GPIO_INPUT);
-    gpio_configure(BTN_LEFT, GPIO_INPUT);
-    gpio_configure(BTN_RIGHT, GPIO_INPUT);
-}
-
-/**
- * @brief Main game loop (with player controls)
- */
-static void game_loop(void)
-{
-    uint32_t frame_count = 0;
-    uint32_t drop_counter = 0;
-    
-    // Very short runtime to prevent hang (200 frames = ~4 seconds)
-    while (!game.game_over && frame_count < 200) {
-        // Handle button inputs every frame for responsive controls
+    while (!g.game_over) {
         handle_buttons();
-        
-        // Auto-drop piece at regular intervals (gravity)
-        drop_counter++;
-        if (drop_counter >= (game.drop_delay / 20000)) { // Convert delay to frame count (~20ms per frame)
-            auto_drop_piece();
-            drop_counter = 0;
+
+        /* SETTINGS pressed — enter pause */
+        if (pause_requested) {
+            pause_requested = 0;
+            /* Overlay "PAUSED" centred on the board */
+            int oy = BOARD_Y + (BOARD_PX_H - 14) / 2;
+            display_rect(BOARD_X, oy - 4, BOARD_PX_W, 22, COL_BG);
+            display_text(BOARD_X + (BOARD_PX_W - 42) / 2, oy, "PAUSED", COL_VALUE);
+            display_flush();
+            /* Wait for SETTINGS press again */
+            int sprev = 1;  /* still held from first press */
+            while (1) {
+                int s = gpio_read(BTN_SETTINGS);
+                if (s && !sprev) break;
+                sprev = s;
+                delay(20000);
+            }
+            delay(100000);
+            /* Force full redraw to wipe the overlay */
+            g.board_changed = 1;
+            g.piece_moved   = 1;
         }
-        
-        // Update display (only if something changed)
-        update_display();
-        
-        // Frame delay (~20ms = 50 FPS)
-        delay(20000);
-        
-        frame_count++;
-    }
-    
-    // printf why we exited
-    if (game.game_over) {
-        printf( "Game over - piece blocked");
-    } else {
-        printf("Demo time reached");
+
+        if (soft_drop_active) {
+            /* Soft-drop: move 1 cell per SOFT_DROP_DELAY µs, score 1 pt/cell */
+            if (!collides(g.cur_piece, g.cur_rot, g.cur_x, g.cur_y + 1)) {
+                g.cur_y++;
+                g.piece_moved = 1;
+                g.score++;
+            } else {
+                /* Hit bottom while soft-dropping — lock immediately */
+                auto_drop();
+            }
+            drop_acc = 0;
+            update_display();
+            display_flush();
+            delay(SOFT_DROP_DELAY);
+        } else {
+            drop_acc += 20000;
+            if (drop_acc >= g.drop_delay) {
+                auto_drop();
+                drop_acc = 0;
+            }
+            update_display();
+            display_flush();
+            delay(20000);
+        }
     }
 }
 
-/**
- * @brief Main entry point for the Tetris game
- * 
- * @return 0 on success
- */
+/* ── Entry point ─────────────────────────────────────────────────────── */
 int main(void)
 {
-    printf( "=================================");
-    printf( "   AkiraOS Tetris Game v1.2     ");
-    printf( "   DPAD: UP=Rotate, DOWN=Drop   ");
-    printf( "   LEFT/RIGHT=Move              ");
-    printf( "=================================");
-    
-    // Initialize button inputs (no delay)
-    init_buttons();
-    
-    // Initialize display
-    display_clear(COLOR_BLACK);
-    
-    // Show title screen very briefly
-    display_text_large(60, 80, "TETRIS", COLOR_CYAN);
-    display_text(70, 120, "Starting...", COLOR_WHITE);
-    delay(100000);  // 100ms
-    
-    // Initialize game
-    printf( "Initializing game...");
-    init_game();
-    
-    // Run game loop
-    printf( "Starting game loop...");
-    game_loop();
-    
-    // Game over screen (show briefly then exit)
-    display_clear(COLOR_BLACK);
-    display_text_large(30, 60, "GAME", COLOR_RED);
-    display_text_large(30, 90, "OVER", COLOR_RED);
-    
-    // Show final score
-    display_text(40, 140, "Final Score:", COLOR_WHITE);
-    char score_str[12];
-    uint32_t score = game.score;
-    int i = 0;
-    if (score == 0) {
-        score_str[i++] = '0';
-    } else {
-        char temp[12];
-        int j = 0;
-        while (score > 0) {
-            temp[j++] = '0' + (score % 10);
-            score /= 10;
-        }
-        while (j > 0) {
-            score_str[i++] = temp[--j];
-        }
+    printf("AkiraOS Tetris v2.0");
+
+    gpio_configure(BTN_UP,       GPIO_INPUT | GPIO_PULL_DOWN);
+    gpio_configure(BTN_DOWN,     GPIO_INPUT | GPIO_PULL_DOWN);
+    gpio_configure(BTN_LEFT,     GPIO_INPUT | GPIO_PULL_DOWN);
+    gpio_configure(BTN_RIGHT,    GPIO_INPUT | GPIO_PULL_DOWN);
+    gpio_configure(BTN_A,        GPIO_INPUT | GPIO_PULL_DOWN);
+    gpio_configure(BTN_B,        GPIO_INPUT | GPIO_PULL_DOWN);
+    gpio_configure(BTN_SETTINGS, GPIO_INPUT | GPIO_PULL_DOWN);
+    gpio_configure(BTN_X,        GPIO_INPUT | GPIO_PULL_DOWN);
+    gpio_configure(BTN_Y,        GPIO_INPUT | GPIO_PULL_DOWN);
+
+    /* Title screen — centred on 320×240 */
+    display_clear(COL_BG);
+    display_text_large(124,  80, "TETRIS",         COL_TITLE);
+    display_text_large(118, 115, "AkiraOS",        COL_LABEL);
+    display_text(112,  170, "Press any button",   COL_VALUE);
+    display_flush();
+
+    /* Wait for a button press — count frames for RNG seed (human reaction
+     * time is unpredictable, giving a different seed on every run)       */
+    uint32_t seed = 1;
+    while (!gpio_read(BTN_UP)   && !gpio_read(BTN_DOWN) &&
+           !gpio_read(BTN_LEFT) && !gpio_read(BTN_RIGHT) &&
+           !gpio_read(BTN_A)    && !gpio_read(BTN_B)) {
+        seed++;
+        delay(20000);
     }
-    score_str[i] = '\0';
-    display_text(70, 160, score_str, COLOR_YELLOW);
-    
-    // Very brief delay, then exit
-    delay(1000000);  // 1 second
-    
-    printf( "Game completed!");
-    
+    rng_seed(seed);
+    delay(100000);  /* debounce */
+
+    printf("Starting game...");
+    init_game();
+    game_loop();
+
+    /* Game over screen */
+    display_clear(COL_BG);
+    display_text_large(110,  60, "GAME",  COL_GAMEOVER_T);
+    display_text_large(110,  95, "OVER",  COL_GAMEOVER_T);
+    display_text(110,  145, "SCORE:",    COL_LABEL);
+    char buf[8];
+    itoa_pad(g.score, buf, 7);
+    display_text(110,  160, buf,         COL_GAMEOVER_S);
+    display_text(110,  185, "LINES:",    COL_LABEL);
+    itoa_pad(g.lines, buf, 4);
+    display_text(175,  185, buf,         COL_VALUE);
+    display_flush();
+    delay(5000000);
+
+    printf("Game over!");
     return 0;
 }
