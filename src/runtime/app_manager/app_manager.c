@@ -547,11 +547,17 @@ int app_manager_start(const char *name)
         char json_path[APP_PATH_MAX_LEN];
         snprintf(json_path, sizeof(json_path), "%s/%03d_%s.json",
                  APPS_DIR, app->id, app->name);
-        ssize_t json_len = fs_manager_read_file(json_path, manifest_json,
-                                               sizeof(manifest_json) - 1);
-        if (json_len > 0) {
-            manifest_json[json_len] = '\0';
-            LOG_INF("Using stored manifest JSON for %s (%zd bytes)", name, json_len);
+        /* Check existence first: fs_open() on a missing file triggers a
+         * kernel-level LOG_ERR in the Zephyr FS subsystem that we can't
+         * suppress from user code. */
+        ssize_t json_len = -1;
+        if (fs_manager_exists(json_path)) {
+            json_len = fs_manager_read_file(json_path, manifest_json,
+                                           sizeof(manifest_json) - 1);
+            if (json_len > 0) {
+                manifest_json[json_len] = '\0';
+                LOG_INF("Using stored manifest JSON for %s (%zd bytes)", name, json_len);
+            }
         }
 
         int load_ret = akira_runtime_install_with_manifest(
