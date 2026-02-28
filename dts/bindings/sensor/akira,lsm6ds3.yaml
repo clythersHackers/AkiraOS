@@ -1,0 +1,15 @@
+# Copyright (c) 2025 AkiraOS Contributors
+# SPDX-License-Identifier: GPL-3.0-only
+
+description: |
+  AkiraOS out-of-tree driver for the ST LSM6DS3 6-axis IMU.
+  Provides accelerometer (±2g, 104 Hz) and gyroscope (±245 dps, 104 Hz)
+  via the standard Zephyr sensor_driver_api.
+
+  Use this instead of "st,lsm6dsl" when the board carries the original
+  LSM6DS3 (WHO_AM_I = 0x69). The lsm6dsl upstream driver only accepts
+  WHO_AM_I = 0x6A (LSM6DSL / LSM6DS3TR-C).
+
+compatible: "akira,lsm6ds3"
+
+include: [sensor-device.yaml, i2c-device.yaml]

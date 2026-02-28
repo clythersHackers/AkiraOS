@@ -147,14 +147,6 @@ config AKIRA_NRF24L01
       Enable NRF24L01+ 2.4GHz wireless transceiver driver.
       Provides low-power wireless communication with up to 2Mbps data rate.
 
-config AKIRA_LSM6DS3
-    bool "Enable LSM6DS3 6-axis IMU"
-    default n
-    depends on I2C
-    help
-      Enable LSM6DS3 6-axis inertial measurement unit driver.
-      Provides 3-axis accelerometer and 3-axis gyroscope data.
-
 config AKIRA_INA219
     bool "Enable INA219 current/power monitor"
     default n
@@ -246,23 +238,6 @@ config AKIRA_CC1101
     help
       Enable TI CC1101 Sub-GHz transceiver driver.
       Supports 300-928MHz frequency range.
-
-endmenu
-
-menu "Sensor Drivers"
-
-config AKIRA_MODULE_SENSORS
-    bool "Enable Akira Sensor module"
-    default n
-    help
-      Enable sensor module (compile sensor abstractions and drivers).
-
-config AKIRA_BME280
-    bool "Enable BME280 environmental sensor"
-    default n
-    depends on I2C && AKIRA_MODULE_SENSORS
-    help
-      Enable Bosch BME280 temperature, humidity, and pressure sensor.
 
 endmenu
 
@@ -1015,13 +990,25 @@ config AKIRA_WASM_RF
       Provides send, receive, frequency, and power control.
       Requires AKIRA_CAP_RF_TRANSCEIVE capability.
 
+config AKIRA_LSM6DS3_DRIVER
+    bool "AkiraOS out-of-tree LSM6DS3 IMU driver"
+    depends on I2C && SENSOR
+    help
+      Enable the AkiraOS driver for the ST LSM6DS3 6-axis IMU
+      (accelerometer + gyroscope). Accepts WHO_AM_I = 0x69 — the
+      value reported by the original LSM6DS3, which is rejected by
+      Zephyr's upstream lsm6dsl driver (expects 0x6A).
+      Use compatible "akira,lsm6ds3" in your board DTS overlay.
+
 config AKIRA_WASM_SENSOR
     bool "Export Sensor API to WASM"
     default y
-    depends on AKIRA_WASM_API && AKIRA_MODULE_SENSORS
+    depends on AKIRA_WASM_API && SENSOR
     help
-      Export sensor reading functions to WASM applications.
-      Provides access to temperature, humidity, pressure, IMU, and power data.
+      Export sensor_read(channel) to WASM applications.
+      Any sensor driver enabled via CONFIG_<DRIVER>=y in a board .conf file
+      is automatically accessible — no chip-specific flags needed here.
+      Channel IDs are Zephyr enum sensor_channel integers.
       Requires AKIRA_CAP_SENSOR_READ capability.
 
 config AKIRA_WASM_MEMORY

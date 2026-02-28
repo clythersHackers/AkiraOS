@@ -219,9 +219,12 @@ if(CONFIG_AKIRA_WASM_RUNTIME)
     target_sources(app PRIVATE
         src/api/akira_gpio_api.c
         src/api/akira_rf_api.c
-        src/api/akira_sensor_api.c
         src/api/akira_export_api.c
     )
+endif()
+
+if(CONFIG_AKIRA_WASM_SENSOR)
+    target_sources(app PRIVATE src/api/akira_sensor_api.c)
 endif()
 
 if(CONFIG_AKIRA_WASM_TIMER)
@@ -287,19 +290,17 @@ if(CONFIG_AKIRA_MODULE_RF)
     endif()
 endif()
 
-# Sensor Drivers (conditional on sensors module)
-if(CONFIG_AKIRA_MODULE_SENSORS)
-    if(CONFIG_AKIRA_BME280)
-        target_sources(app PRIVATE src/drivers/sensors/bme280.c)
-    endif()
+# Custom drivers for peripherals not covered by Zephyr upstream drivers
+if(CONFIG_AKIRA_NRF24L01)
+    target_sources(app PRIVATE src/drivers/nrf24l01.c)
+endif()
 
-    if(CONFIG_AKIRA_NRF24L01)
-        target_sources(app PRIVATE src/drivers/nrf24l01.c)
-    endif()
+if(CONFIG_AKIRA_INA219)
+    target_sources(app PRIVATE src/drivers/sensors/ina219.c)
+endif()
 
-    if(CONFIG_AKIRA_INA219)
-        target_sources(app PRIVATE src/drivers/sensors/ina219.c)
-    endif()
+if(CONFIG_AKIRA_LSM6DS3_DRIVER)
+    target_sources(app PRIVATE src/drivers/akira_lsm6ds3.c)
 endif()
 
 # Conditional OTA manager based on flash availability

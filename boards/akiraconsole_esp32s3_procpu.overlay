@@ -201,10 +201,10 @@
     clock-frequency = <I2C_BITRATE_STANDARD>;
 
     // LSM6DS3 6-axis IMU (accel + gyro)
-    // SA0 pulled low → I2C address 0x6A (use 0x6B if SA0 is high)
-    lsm6ds3: lsm6ds3@6a {
-        compatible = "st,lsm6dsl";
-        reg = <0x6a>;
+    // SA0 pulled high → I2C address 0x6B  WHO_AM_I = 0x69
+    lsm6ds3: lsm6ds3@6b {
+        compatible = "akira,lsm6ds3";
+        reg = <0x6b>;
         status = "okay";
     };
 };

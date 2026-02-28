@@ -80,28 +80,44 @@ extern "C" {
 
 /*
  * =============================================================================
- * SENSOR TYPES
+ * SENSOR CHANNEL IDs
  * =============================================================================
+ * These values match Zephyr's enum sensor_channel exactly.
+ * Pass them directly to sensor_read().
  */
 
-/** @brief Temperature sensor */
-#define SENSOR_TYPE_TEMP      0
-/** @brief Humidity sensor */
-#define SENSOR_TYPE_HUMIDITY  1
-/** @brief Pressure sensor */
-#define SENSOR_TYPE_PRESSURE  2
-/** @brief Accelerometer X-axis */
-#define SENSOR_TYPE_ACCEL_X   3
-/** @brief Accelerometer Y-axis */
-#define SENSOR_TYPE_ACCEL_Y   4
-/** @brief Accelerometer Z-axis */
-#define SENSOR_TYPE_ACCEL_Z   5
-/** @brief Gyroscope X-axis */
-#define SENSOR_TYPE_GYRO_X    6
-/** @brief Gyroscope Y-axis */
-#define SENSOR_TYPE_GYRO_Y    7
-/** @brief Gyroscope Z-axis */
-#define SENSOR_TYPE_GYRO_Z    8
+/** @brief Accelerometer X-axis, m/s² */
+#define SENSOR_CHAN_ACCEL_X        0
+/** @brief Accelerometer Y-axis, m/s² */
+#define SENSOR_CHAN_ACCEL_Y        1
+/** @brief Accelerometer Z-axis, m/s² */
+#define SENSOR_CHAN_ACCEL_Z        2
+/** @brief Gyroscope X-axis, rad/s */
+#define SENSOR_CHAN_GYRO_X         4
+/** @brief Gyroscope Y-axis, rad/s */
+#define SENSOR_CHAN_GYRO_Y         5
+/** @brief Gyroscope Z-axis, rad/s */
+#define SENSOR_CHAN_GYRO_Z         6
+/** @brief Magnetometer X-axis, Gauss */
+#define SENSOR_CHAN_MAGN_X         8
+/** @brief Magnetometer Y-axis, Gauss */
+#define SENSOR_CHAN_MAGN_Y         9
+/** @brief Magnetometer Z-axis, Gauss */
+#define SENSOR_CHAN_MAGN_Z         10
+/** @brief Ambient temperature, °C */
+#define SENSOR_CHAN_AMBIENT_TEMP   13
+/** @brief Pressure, kPa */
+#define SENSOR_CHAN_PRESS          14
+/** @brief Relative humidity, % */
+#define SENSOR_CHAN_HUMIDITY       16
+/** @brief Altitude, m */
+#define SENSOR_CHAN_ALTITUDE       23
+/** @brief Voltage, V */
+#define SENSOR_CHAN_VOLTAGE        33
+/** @brief Current, A */
+#define SENSOR_CHAN_CURRENT        35
+/** @brief Power, W */
+#define SENSOR_CHAN_POWER          36
 
 /*
  * =============================================================================
@@ -353,12 +369,31 @@ extern int gpio_write(uint32_t pin, uint32_t value);
  */
 
 /**
- * @brief Read a sensor value
- * 
- * @param type Sensor type (SENSOR_TYPE_TEMP, SENSOR_TYPE_HUMIDITY, etc.)
- * @return Sensor reading (scaled integer), negative error code on failure
+ * @brief Error sentinel returned by sensor_read() when the sensor is
+ * unavailable or an I/O error occurred.
+ *
+ * Compare the return value against this constant rather than testing for
+ * arbitrary negative numbers, because valid near-zero readings (e.g.
+ * -0.001 m/s² = -1) are also small negative integers.
+ *
+ * Example:
+ *   int ax = sensor_read(SENSOR_CHAN_ACCEL_X);
+ *   if (ax == AKIRA_SENSOR_ERROR) { ... handle error ... }
  */
-extern int sensor_read(int32_t type);
+#define AKIRA_SENSOR_ERROR  (-2147483647 - 1)   /* INT32_MIN */
+
+/**
+ * @brief Read a sensor channel value.
+ *
+ * Iterates all DT-enabled sensor devices and returns the first that answers
+ * the requested channel. On success, returns the reading scaled by 1000
+ * (divide by 1000.0 to recover the physical value). On failure, returns
+ * AKIRA_SENSOR_ERROR.
+ *
+ * @param channel  Sensor channel ID (SENSOR_CHAN_* constant).
+ * @return Reading x1000 on success, AKIRA_SENSOR_ERROR on failure.
+ */
+extern int sensor_read(int32_t channel);
 
 /*
  * =============================================================================

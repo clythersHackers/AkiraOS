@@ -51,7 +51,7 @@ int main(void)
     int last_state = -1;
     
     // Main loop: just read the input - reduced to 100 iterations, no delay
-    for (int i = 0; i < 100; i++) {
+    while(1) {
         // Read the input pin state
         int input_state = gpio_read(GPIO_INPUT_PIN);
         if (input_state < 0) {

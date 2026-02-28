@@ -1,6 +1,10 @@
 /**
  * @file imu_timer_test.c
- * @brief WASM sample: read LSM6DS3 IMU + measure loop time with a timer
+ * @brief WASM sample: read IMU channels + measure loop time with a timer
+ *
+ * Uses SENSOR_CHAN_ACCEL_* and SENSOR_CHAN_GYRO_* channel IDs with the generic
+ * sensor_read() API. Any Zephyr sensor driver that supports those channels
+ * (LSM6DSL, ICM42688P, MPU6050, etc.) is automatically used.
  *
  * Capabilities required: sensor.read, timer
  *
@@ -72,7 +76,7 @@ static char *write_axis(char *p, int raw)
 
 int main(void)
 {
-    printf("[imu_timer_test] starting — reading LSM6DS3 over sensor API");
+    printf("[imu_timer_test] starting — reading IMU via generic sensor API");
 
     int th = timer_create();
     if (th < 0) {
@@ -87,14 +91,18 @@ int main(void)
     timer_start(th);
 
     for (int i = 0; i < SAMPLES_PER_REPORT; i++) {
-        int ax = sensor_read(SENSOR_TYPE_ACCEL_X);
-        int ay = sensor_read(SENSOR_TYPE_ACCEL_Y);
-        int az = sensor_read(SENSOR_TYPE_ACCEL_Z);
-        int gx = sensor_read(SENSOR_TYPE_GYRO_X);
-        int gy = sensor_read(SENSOR_TYPE_GYRO_Y);
-        int gz = sensor_read(SENSOR_TYPE_GYRO_Z);
+        int ax = sensor_read(SENSOR_CHAN_ACCEL_X);
+        int ay = sensor_read(SENSOR_CHAN_ACCEL_Y);
+        int az = sensor_read(SENSOR_CHAN_ACCEL_Z);
+        int gx = sensor_read(SENSOR_CHAN_GYRO_X);
+        int gy = sensor_read(SENSOR_CHAN_GYRO_Y);
+        int gz = sensor_read(SENSOR_CHAN_GYRO_Z);
 
-        if (ax < -10000 || ay < -10000 || az < -10000) {
+        if (ax == AKIRA_SENSOR_ERROR || ay == AKIRA_SENSOR_ERROR || az == AKIRA_SENSOR_ERROR) {
+            printf("[imu] ERROR: sensor not available (device not ready)");
+        } else if (gx == AKIRA_SENSOR_ERROR || gy == AKIRA_SENSOR_ERROR || gz == AKIRA_SENSOR_ERROR) {
+            printf("[imu] ERROR: gyro not available (device not ready)");
+        } else if (ax < -10000 || ay < -10000 || az < -10000) {
             char buf[72];
             char *p = write_str(buf, "[imu] ERROR reading accel: ax=");
             p = write_int(p, ax);

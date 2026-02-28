@@ -362,8 +362,11 @@ int gpio_write(uint32_t pin, uint32_t value);
 #### Sensors
 
 ```c
-int sensor_read(int32_t type);
-// Types: SENSOR_TYPE_TEMP, SENSOR_TYPE_HUMIDITY, SENSOR_TYPE_ACCEL_X, etc.
+int sensor_read(int32_t channel);
+// Channels: SENSOR_CHAN_ACCEL_X/Y/Z, SENSOR_CHAN_GYRO_X/Y/Z,
+//           SENSOR_CHAN_AMBIENT_TEMP, SENSOR_CHAN_HUMIDITY, SENSOR_CHAN_PRESS,
+//           SENSOR_CHAN_VOLTAGE, SENSOR_CHAN_CURRENT, ... (Zephyr channel IDs)
+// Returns value x1000 on success, AKIRA_SENSOR_ERROR on failure
 ```
 
 #### Memory

@@ -8,24 +8,10 @@ LOG_MODULE_REGISTER(akira_common_api, CONFIG_LOG_DEFAULT_LEVEL);
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
 int akira_native_printf(wasm_exec_env_t exec_env, char *message)
 {
-    wasm_module_inst_t module_inst = wasm_runtime_get_module_inst(exec_env);
-    if (!module_inst) {
-        LOG_ERR("Failed to get module instance");
-        return -EINVAL;
-    }
-
     if (!message) {
-        LOG_ERR("Message pointer is NULL");
         return -EINVAL;
     }
 
-    /* Validate string is within module memory bounds */
-    if (!wasm_runtime_validate_app_str_addr(module_inst, (uint32_t)(uintptr_t)message)) {
-        LOG_ERR("Message pointer outside module memory");
-        return -EACCES;
-    }
-
-    /* Note: printf() does not require capability checks - basic debugging should always be allowed */
     LOG_INF("%s", message);
     return 0;
 }
