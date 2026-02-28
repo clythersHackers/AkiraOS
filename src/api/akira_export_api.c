@@ -23,13 +23,20 @@ bool akira_register_native_apis()
         {"display_flush",               (void *)akira_native_display_flush,               "()i",       NULL},
         {"display_get_size",            (void *)akira_native_display_get_size,            "(**)i",     NULL},
         {"display_line",                (void *)akira_native_display_line,                "(iiiii)i",  NULL},
-        {"display_circle",              (void *)akira_native_display_circle,              "(iii)i",    NULL},
-        {"display_circle_fill",         (void *)akira_native_display_circle_fill,         "(iii)i",    NULL},
+        {"display_circle",              (void *)akira_native_display_circle,              "(iiii)i",   NULL},
+        {"display_circle_fill",         (void *)akira_native_display_circle_fill,         "(iiii)i",   NULL},
         {"display_triangle",            (void *)akira_native_display_triangle,            "(iiiiiii)i",NULL},
         {"display_triangle_fill",       (void *)akira_native_display_triangle_fill,       "(iiiiiii)i",NULL},
         {"display_rect_outline",        (void *)akira_native_display_rect_outline,        "(iiiii)i",  NULL},
         {"display_bitmap",              (void *)akira_native_display_bitmap,              "(iiii*~)i", NULL},
         {"display_bitmap_transparent",  (void *)akira_native_display_bitmap_transparent,  "(iiii*~i)i",NULL},
+        /* Phase 4 — UI helper primitives */
+        {"display_hline",               (void *)akira_native_display_hline,               "(iiii)i",   NULL},
+        {"display_vline",               (void *)akira_native_display_vline,               "(iiii)i",   NULL},
+        {"display_number",              (void *)akira_native_display_number,              "(iiii)i",   NULL},
+        {"display_progress_bar",        (void *)akira_native_display_progress_bar,        "(iiiiiiii)i",NULL},
+        {"display_rounded_rect",        (void *)akira_native_display_rounded_rect,        "(iiiiii)i", NULL},
+        {"display_rounded_rect_fill",   (void *)akira_native_display_rounded_rect_fill,   "(iiiiii)i", NULL},
         #endif
 
         #ifdef CONFIG_AKIRA_WASM_GPIO

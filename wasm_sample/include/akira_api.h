@@ -322,6 +322,76 @@ extern int display_bitmap_transparent(int32_t x, int32_t y, int32_t w, int32_t h
                                        const uint16_t *data, uint32_t data_size,
                                        uint32_t key);
 
+/**
+ * @brief Draw a horizontal line (optimised run).
+ * @param x,y  Start coordinate  @param len  Length in pixels
+ * @param color  RGB565 color
+ * @return 0 on success
+ */
+extern int display_hline(int32_t x, int32_t y, int32_t len, uint32_t color);
+
+/**
+ * @brief Draw a vertical line (optimised run).
+ * @param x,y  Start coordinate  @param len  Length in pixels
+ * @param color  RGB565 color
+ * @return 0 on success
+ */
+extern int display_vline(int32_t x, int32_t y, int32_t len, uint32_t color);
+
+/**
+ * @brief Render an integer as decimal text using the small font.
+ *
+ * No stdlib required — the conversion is done natively.
+ *
+ * @param x,y    Top-left of the first digit
+ * @param value  Value to display (positive or negative)
+ * @param color  RGB565 color
+ * @return 0 on success
+ */
+extern int display_number(int32_t x, int32_t y, int32_t value, uint32_t color);
+
+/**
+ * @brief Draw a horizontal progress bar.
+ *
+ * Draws a @p bg filled rectangle, then a @p fg rectangle proportional to
+ * @p value / @p max_val, then an outline in @p fg.
+ *
+ * @param x,y      Top-left corner
+ * @param w,h      Width and height in pixels
+ * @param value    Current fill value (clamped to [0, max_val])
+ * @param max_val  Maximum value (bar is full when value == max_val)
+ * @param fg       Foreground / fill RGB565 color
+ * @param bg       Background RGB565 color
+ * @return 0 on success
+ */
+extern int display_progress_bar(int32_t x, int32_t y, int32_t w, int32_t h,
+                                 int32_t value, int32_t max_val,
+                                 uint32_t fg, uint32_t bg);
+
+/**
+ * @brief Draw a rounded rectangle outline.
+ *
+ * @param x,y    Top-left corner
+ * @param w,h    Width and height in pixels
+ * @param radius Corner arc radius in pixels (clamped to min(w,h)/2)
+ * @param color  RGB565 color
+ * @return 0 on success
+ */
+extern int display_rounded_rect(int32_t x, int32_t y, int32_t w, int32_t h,
+                                 int32_t radius, uint32_t color);
+
+/**
+ * @brief Draw a filled rounded rectangle.
+ *
+ * @param x,y    Top-left corner
+ * @param w,h    Width and height in pixels
+ * @param radius Corner arc radius in pixels (clamped to min(w,h)/2)
+ * @param color  RGB565 fill color
+ * @return 0 on success
+ */
+extern int display_rounded_rect_fill(int32_t x, int32_t y, int32_t w, int32_t h,
+                                      int32_t radius, uint32_t color);
+
 /*
  * =============================================================================
  * GPIO API

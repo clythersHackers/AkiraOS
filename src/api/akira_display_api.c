@@ -243,6 +243,150 @@ void akira_display_rect_outline(int x, int y, int w, int h, uint16_t color)
     akira_display_line(x,         y + h - 1, x,         y,         color);
 }
 
+/* ---------------------------------------------------------------------------
+ * Phase 4 — UI helper primitives
+ * -------------------------------------------------------------------------*/
+
+void akira_display_hline(int x, int y, int len, uint16_t color)
+{
+    /* Horizontal pixel run — thin wrapper over rect for clarity */
+    if (len <= 0) return;
+    akira_display_rect(x, y, len, 1, color);
+}
+
+void akira_display_vline(int x, int y, int len, uint16_t color)
+{
+    /* Vertical pixel run — implemented as individual pixels stepping by row */
+    if (len <= 0) return;
+    akira_display_rect(x, y, 1, len, color);
+}
+
+void akira_display_number(int x, int y, int32_t value, uint16_t color)
+{
+    /* Convert integer to decimal string, then render with the small font.
+     * Buffer: sign + 10 digits + NUL → 12 bytes is enough for int32_t. */
+    char buf[13];
+    int  i = 12;
+    buf[i] = '\0';
+
+    int32_t v = value;
+    int negative = (v < 0);
+    if (v == 0) {
+        buf[--i] = '0';
+    } else {
+        /* Work with positive magnitude; handle INT32_MIN edge case */
+        uint32_t uv = negative ? (uint32_t)(-(v + 1)) + 1U : (uint32_t)v;
+        while (uv) {
+            buf[--i] = '0' + (int)(uv % 10);
+            uv /= 10;
+        }
+    }
+    if (negative)
+        buf[--i] = '-';
+
+    akira_display_text(x, y, &buf[i], color);
+}
+
+void akira_display_progress_bar(int x, int y, int w, int h,
+                                 int32_t value, int32_t max_val,
+                                 uint16_t fg, uint16_t bg)
+{
+    if (w <= 0 || h <= 0 || max_val <= 0) return;
+
+    /* Background */
+    akira_display_rect(x, y, w, h, bg);
+
+    /* Foreground fill proportional to value/max_val */
+    int32_t clamped = value < 0 ? 0 : (value > max_val ? max_val : value);
+    int fill_w = (int)((int64_t)clamped * w / max_val);
+    if (fill_w > 0)
+        akira_display_rect(x, y, fill_w, h, fg);
+
+    /* Border outline */
+    akira_display_rect_outline(x, y, w, h, fg);
+}
+
+void akira_display_rounded_rect(int x, int y, int w, int h,
+                                 int radius, uint16_t color)
+{
+    if (w <= 0 || h <= 0) return;
+    if (radius < 0) radius = 0;
+
+    /* Clamp radius so the arcs fit */
+    int max_r = (w < h ? w : h) / 2;
+    if (radius > max_r) radius = max_r;
+
+    if (radius == 0) {
+        akira_display_rect_outline(x, y, w, h, color);
+        return;
+    }
+
+    /* Four straight edge segments */
+    akira_display_hline(x + radius,     y,             w - 2 * radius, color); /* top    */
+    akira_display_hline(x + radius,     y + h - 1,     w - 2 * radius, color); /* bottom */
+    akira_display_vline(x,             y + radius,     h - 2 * radius, color); /* left   */
+    akira_display_vline(x + w - 1,     y + radius,     h - 2 * radius, color); /* right  */
+
+    /* Four corner arcs via midpoint algorithm, each restricted to its quadrant.
+     * Corner centres: TL=(x+r, y+r), TR=(x+w-1-r, y+r),
+     *                 BL=(x+r, y+h-1-r), BR=(x+w-1-r, y+h-1-r) */
+    int cx_l = x + radius;
+    int cx_r = x + w - 1 - radius;
+    int cy_t = y + radius;
+    int cy_b = y + h - 1 - radius;
+
+    int px = radius, py = 0, d = 1 - radius;
+    while (px >= py) {
+        /* TL */ akira_display_pixel(cx_l - px, cy_t - py, color);
+                akira_display_pixel(cx_l - py, cy_t - px, color);
+        /* TR */ akira_display_pixel(cx_r + px, cy_t - py, color);
+                akira_display_pixel(cx_r + py, cy_t - px, color);
+        /* BL */ akira_display_pixel(cx_l - px, cy_b + py, color);
+                akira_display_pixel(cx_l - py, cy_b + px, color);
+        /* BR */ akira_display_pixel(cx_r + px, cy_b + py, color);
+                akira_display_pixel(cx_r + py, cy_b + px, color);
+        py++;
+        d += (d < 0) ? 2 * py + 1 : (px--, 2 * (py - px) + 1);
+    }
+}
+
+void akira_display_rounded_rect_fill(int x, int y, int w, int h,
+                                      int radius, uint16_t color)
+{
+    if (w <= 0 || h <= 0) return;
+    if (radius < 0) radius = 0;
+
+    int max_r = (w < h ? w : h) / 2;
+    if (radius > max_r) radius = max_r;
+
+    if (radius == 0) {
+        akira_display_rect(x, y, w, h, color);
+        return;
+    }
+
+    /* Central cross: horizontal middle band + vertical side strips */
+    akira_display_rect(x,            y + radius, w,            h - 2 * radius, color);
+
+    /* Filled corner quarter-discs using midpoint scanline fill */
+    int cx_l = x + radius;
+    int cx_r = x + w - 1 - radius;
+    int cy_t = y + radius;
+    int cy_b = y + h - 1 - radius;
+
+    int px = radius, py = 0, d = 1 - radius;
+    while (px >= py) {
+        /* Fill horizontal spans for top and bottom rounded caps */
+        akira_display_hline(cx_l - px, cy_t - py, cx_r - cx_l + 2 * px + 1, color);
+        akira_display_hline(cx_l - px, cy_b + py, cx_r - cx_l + 2 * px + 1, color);
+        if (py != 0) {
+            akira_display_hline(cx_l - py, cy_t - px, cx_r - cx_l + 2 * py + 1, color);
+            akira_display_hline(cx_l - py, cy_b + px, cx_r - cx_l + 2 * py + 1, color);
+        }
+        py++;
+        d += (d < 0) ? 2 * py + 1 : (px--, 2 * (py - px) + 1);
+    }
+}
+
 void akira_display_bitmap(int x, int y, int w, int h, const uint16_t *data)
 {
     if (!data || w <= 0 || h <= 0) return;
@@ -473,6 +617,64 @@ int akira_native_display_bitmap_transparent(wasm_exec_env_t exec_env,
         return -EINVAL;
     }
     akira_display_bitmap_transparent(x, y, w, h, (const uint16_t *)data, (uint16_t)key);
+    schedule_auto_flush();
+    return 0;
+}
+
+/* Phase 4 native wrappers */
+
+int akira_native_display_hline(wasm_exec_env_t exec_env,
+    int32_t x, int32_t y, int32_t len, uint32_t color)
+{
+    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EACCES);
+    akira_display_hline(x, y, len, (uint16_t)color);
+    schedule_auto_flush();
+    return 0;
+}
+
+int akira_native_display_vline(wasm_exec_env_t exec_env,
+    int32_t x, int32_t y, int32_t len, uint32_t color)
+{
+    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EACCES);
+    akira_display_vline(x, y, len, (uint16_t)color);
+    schedule_auto_flush();
+    return 0;
+}
+
+int akira_native_display_number(wasm_exec_env_t exec_env,
+    int32_t x, int32_t y, int32_t value, uint32_t color)
+{
+    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EACCES);
+    akira_display_number(x, y, value, (uint16_t)color);
+    schedule_auto_flush();
+    return 0;
+}
+
+int akira_native_display_progress_bar(wasm_exec_env_t exec_env,
+    int32_t x, int32_t y, int32_t w, int32_t h,
+    int32_t value, int32_t max_val, uint32_t fg, uint32_t bg)
+{
+    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EACCES);
+    akira_display_progress_bar(x, y, w, h, value, max_val,
+                               (uint16_t)fg, (uint16_t)bg);
+    schedule_auto_flush();
+    return 0;
+}
+
+int akira_native_display_rounded_rect(wasm_exec_env_t exec_env,
+    int32_t x, int32_t y, int32_t w, int32_t h, int32_t radius, uint32_t color)
+{
+    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EACCES);
+    akira_display_rounded_rect(x, y, w, h, radius, (uint16_t)color);
+    schedule_auto_flush();
+    return 0;
+}
+
+int akira_native_display_rounded_rect_fill(wasm_exec_env_t exec_env,
+    int32_t x, int32_t y, int32_t w, int32_t h, int32_t radius, uint32_t color)
+{
+    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_DISPLAY_WRITE, -EACCES);
+    akira_display_rounded_rect_fill(x, y, w, h, radius, (uint16_t)color);
     schedule_auto_flush();
     return 0;
 }

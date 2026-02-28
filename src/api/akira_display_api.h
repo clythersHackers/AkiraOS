@@ -38,6 +38,18 @@ void akira_display_bitmap(int x, int y, int w, int h, const uint16_t *data);
 void akira_display_bitmap_transparent(int x, int y, int w, int h,
                                        const uint16_t *data, uint16_t key);
 
+/* Phase 4 — UI helper primitives */
+void akira_display_hline(int x, int y, int len, uint16_t color);
+void akira_display_vline(int x, int y, int len, uint16_t color);
+void akira_display_number(int x, int y, int32_t value, uint16_t color);
+void akira_display_progress_bar(int x, int y, int w, int h,
+                                 int32_t value, int32_t max_val,
+                                 uint16_t fg, uint16_t bg);
+void akira_display_rounded_rect(int x, int y, int w, int h,
+                                 int radius, uint16_t color);
+void akira_display_rounded_rect_fill(int x, int y, int w, int h,
+                                      int radius, uint16_t color);
+
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
 /* ---------------------------------------------------------------------------
  * WASM native export wrappers (with capability checks)
@@ -60,6 +72,18 @@ int akira_native_display_triangle_fill(wasm_exec_env_t exec_env, int32_t x0, int
 int akira_native_display_rect_outline(wasm_exec_env_t exec_env, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color);
 int akira_native_display_bitmap(wasm_exec_env_t exec_env, int32_t x, int32_t y, int32_t w, int32_t h, const uint8_t *data, uint32_t data_size);
 int akira_native_display_bitmap_transparent(wasm_exec_env_t exec_env, int32_t x, int32_t y, int32_t w, int32_t h, const uint8_t *data, uint32_t data_size, uint32_t key);
+
+/* Phase 4 native wrappers */
+int akira_native_display_hline(wasm_exec_env_t exec_env, int32_t x, int32_t y, int32_t len, uint32_t color);
+int akira_native_display_vline(wasm_exec_env_t exec_env, int32_t x, int32_t y, int32_t len, uint32_t color);
+int akira_native_display_number(wasm_exec_env_t exec_env, int32_t x, int32_t y, int32_t value, uint32_t color);
+int akira_native_display_progress_bar(wasm_exec_env_t exec_env,
+    int32_t x, int32_t y, int32_t w, int32_t h,
+    int32_t value, int32_t max_val, uint32_t fg, uint32_t bg);
+int akira_native_display_rounded_rect(wasm_exec_env_t exec_env,
+    int32_t x, int32_t y, int32_t w, int32_t h, int32_t radius, uint32_t color);
+int akira_native_display_rounded_rect_fill(wasm_exec_env_t exec_env,
+    int32_t x, int32_t y, int32_t w, int32_t h, int32_t radius, uint32_t color);
 #endif /* CONFIG_AKIRA_WASM_RUNTIME */
 
 #endif /* AKIRA_DISPLAY_API_H */
