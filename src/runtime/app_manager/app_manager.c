@@ -395,6 +395,15 @@ int app_manager_install_from_path(const char *path)
         {
             int ret = app_manager_install(name, buffer, size, &manifest, source);
             k_free(buffer);
+            if (ret > 0) {
+                /* Persist the manifest JSON alongside the saved binary so
+                 * app_manager_start() can pass it to akira_runtime_install_with_manifest()
+                 * even when the WASM has no embedded .akira.manifest section. */
+                char stored_json_path[APP_PATH_MAX_LEN];
+                snprintf(stored_json_path, sizeof(stored_json_path),
+                         "%s/%03d_%s.json", APPS_DIR, (uint8_t)ret, name);
+                fs_manager_write_file(stored_json_path, json, (size_t)mf_size);
+            }
             return ret;
         }
     }
@@ -528,8 +537,27 @@ int app_manager_start(const char *name)
             return -EIO;
         }
 
-        /* Install into Akira runtime (saves binary + creates container) */
-        int load_ret = akira_runtime_install(name, buffer, app->size);
+        /* Install into Akira runtime (saves binary + creates container).
+         * If a manifest JSON was stored alongside the binary (e.g. from an
+         * SD-card or path-based install), pass it so cap_mask is applied
+         * even when the WASM binary itself has no embedded .akira.manifest
+         * custom section. For web-installed apps the JSON won't be there;
+         * in that case the runtime falls back to the embedded section. */
+        char manifest_json[512] = {0};
+        char json_path[APP_PATH_MAX_LEN];
+        snprintf(json_path, sizeof(json_path), "%s/%03d_%s.json",
+                 APPS_DIR, app->id, app->name);
+        ssize_t json_len = fs_manager_read_file(json_path, manifest_json,
+                                               sizeof(manifest_json) - 1);
+        if (json_len > 0) {
+            manifest_json[json_len] = '\0';
+            LOG_INF("Using stored manifest JSON for %s (%zd bytes)", name, json_len);
+        }
+
+        int load_ret = akira_runtime_install_with_manifest(
+            name, buffer, app->size,
+            json_len > 0 ? manifest_json : NULL,
+            json_len > 0 ? (size_t)json_len : 0);
         akira_free_buffer(buffer);
 
         if (load_ret < 0)

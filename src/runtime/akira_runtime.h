@@ -90,6 +90,11 @@ typedef struct {
     /* Cache: SHA-256 hash of loaded binary for module cache */
     uint8_t binary_hash[32];
     bool hash_valid;
+
+    /* WAMR string lifetime: WAMR stores raw pointers into the binary buffer
+     * for export/import name strings when wasm_binary_freeable=false (the
+     * default). This buffer MUST stay alive until wasm_runtime_unload(). */
+    uint8_t *wasm_binary;
 } akira_managed_app_t;
 
 /**

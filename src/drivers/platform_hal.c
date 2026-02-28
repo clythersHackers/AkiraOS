@@ -161,22 +161,23 @@ uint16_t *akira_framebuffer_get(void)
 
 bool akira_has_display(void)
 {
-    return AKIRA_HAS_DISPLAY;
+    return IS_ENABLED(CONFIG_DISPLAY);
 }
 
 bool akira_has_wifi(void)
 {
-    return AKIRA_HAS_WIFI;
+    return IS_ENABLED(CONFIG_WIFI);
 }
 
 bool akira_has_spi(void)
 {
-    return AKIRA_HAS_SPI;
+    return IS_ENABLED(CONFIG_SPI);
 }
 
 bool akira_has_gpio(void)
 {
-    return AKIRA_HAS_REAL_GPIO;
+    /* native_sim uses simulated GPIO, not real hardware pins */
+    return !AKIRA_PLATFORM_NATIVE_SIM;
 }
 
 const char *akira_get_platform_name(void)

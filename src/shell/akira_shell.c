@@ -1145,8 +1145,8 @@ static int cmd_shell_stats(const struct shell *sh, size_t argc, char **argv)
                 k_uptime_get() - shell_state.last_button_read);
     shell_print(sh, "Last stats update: %llu ms ago",
                 k_uptime_get() - shell_state.last_stats_update);
-    shell_print(sh, "Button cache: 0x%08x",
-                atomic_get(&shell_state.button_cache));
+    shell_print(sh, "Button cache: 0x%08lx",
+                (unsigned long)atomic_get(&shell_state.button_cache));
 
     /* Memory usage estimation */
     size_t memory_used = sizeof(shell_state);

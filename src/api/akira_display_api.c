@@ -22,6 +22,7 @@ LOG_MODULE_REGISTER(akira_display_api, CONFIG_AKIRA_LOG_LEVEL);
 #include "../drivers/display/fonts.h"
 #include <zephyr/drivers/display.h>
 #include <zephyr/kernel.h>
+#include <stdlib.h>  /* abs() */
 
 void akira_display_clear(uint16_t color)
 {

@@ -53,13 +53,9 @@ build_app() {
     # Export main via linker (not source attributes)
     local export_flags="-Wl,--export=main"
 
-    # Check for manifest file and prepare for embedding
-    local manifest_flags=""
-    local temp_manifest_obj=""
+    # Check for manifest file — will embed as custom section after compile
     if [ -f "$manifest_file" ]; then
         echo "  Found manifest: ${app_name}.json"
-        # We'll copy the manifest for external loading
-        # Embedding in WASM custom section would require wasm-tools post-processing
     fi
 
     # Compile with WASI SDK (using bare wasm32 target to avoid auto-exports)
@@ -72,7 +68,6 @@ build_app() {
         -Wl,--strip-all \
         -I"${WASM_APPS_DIR}/include" \
         $export_flags \
-        $manifest_flags \
         -O2 \
         -o "$output_file" \
         "$source_file"
@@ -80,15 +75,23 @@ build_app() {
     if [ $? -eq 0 ]; then
         local size=$(stat -c%s "$output_file" 2>/dev/null || stat -f%z "$output_file" 2>/dev/null)
         echo -e "${GREEN}✓ Built: ${app_name}.wasm (${size} bytes)${NC}"
-        
+
         # Show exported functions
         echo "  Exported symbols:"
         "${WASI_SDK}/bin/wasm-nm" "$output_file" | grep -v "^U " | sed 's/^/    /' || true
-        
-        # Copy manifest to output directory if present
+
+        # Embed manifest JSON as .akira.manifest WASM custom section.
+        # AkiraOS reads this section at runtime to set cap_mask/memory_quota;
+        # without it every security check fails (cap_mask = 0).
         if [ -f "$manifest_file" ]; then
+            python3 "${WASM_APPS_DIR}/embed_manifest.py" \
+                "$output_file" "$manifest_file" "$output_file"
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}  Warning: manifest embedding failed — app will have no capabilities${NC}"
+            fi
+            # Also copy the JSON for human-readable reference
             cp "$manifest_file" "${OUTPUT_DIR}/${app_name}.json"
-            echo -e "  ${GREEN}✓ Copied manifest${NC}"
+            echo -e "  ${GREEN}✓ Manifest embedded + copied${NC}"
         fi
         
         return 0

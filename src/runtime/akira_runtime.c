@@ -63,20 +63,22 @@ static bool g_runtime_initialized = false;
 /*
  * WAMR allocator trampolines — Alloc_With_Allocator mode.
  *
- * Each allocation carries an 8-byte header storing the requested size.
- * This lets wamr_realloc copy exactly the right number of bytes without
- * storing allocation metadata outside the buffer. The 8-byte overhead
- * beats the 256 KB static pool by a factor of ~32000.
+ * Each allocation carries a uint64_t header (8 bytes) storing the requested
+ * size.  Using uint64_t (not size_t which is 4 bytes on 32-bit Xtensa) keeps
+ * the returned user pointer 8-byte aligned when the underlying allocator
+ * returns an 8-byte-aligned block.  WAMR asserts 8-byte alignment on the
+ * instance heap buffer — misalignment produces the "heap init struct buf not
+ * 8-byte aligned" error.
  */
 static void *wamr_malloc(unsigned int size)
 {
-    size_t *hdr = akira_malloc_buffer(sizeof(size_t) + size);
+    uint64_t *hdr = akira_malloc_buffer(sizeof(uint64_t) + size);
 
     if (!hdr) {
         return NULL;
     }
-    *hdr = (size_t)size;
-    return hdr + 1;
+    *hdr = (uint64_t)size;
+    return hdr + 1;   /* +8 bytes — user ptr is 8-byte aligned */
 }
 
 static void wamr_free(void *ptr)
@@ -84,7 +86,7 @@ static void wamr_free(void *ptr)
     if (!ptr) {
         return;
     }
-    akira_free_buffer((size_t *)ptr - 1);
+    akira_free_buffer((uint64_t *)ptr - 1);
 }
 
 static void *wamr_realloc(void *ptr, unsigned int new_size)
@@ -97,14 +99,14 @@ static void *wamr_realloc(void *ptr, unsigned int new_size)
         return NULL;
     }
 
-    size_t old_size = *((size_t *)ptr - 1);
+    uint64_t old_size = *((uint64_t *)ptr - 1);
     void *new_ptr = wamr_malloc(new_size);
 
     if (!new_ptr) {
         return NULL;
     }
 
-    size_t copy_size = old_size < new_size ? old_size : new_size;
+    size_t copy_size = (size_t)(old_size < new_size ? old_size : new_size);
     memcpy(new_ptr, ptr, copy_size);
     wamr_free(ptr);
     return new_ptr;
@@ -390,22 +392,40 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
         }
     }
 
-    /* Load the WASM module */
-    module = wasm_runtime_load((uint8_t *)load_buffer, size, error_buf, sizeof(error_buf));
+    /* WAMR stores raw pointers into the binary buffer for export/import name
+     * strings when called via wasm_runtime_load() (which sets
+     * wasm_binary_freeable=false, causing reuse_const_strings=true in
+     * load_from_sections). The buffer MUST outlive wasm_runtime_unload() or
+     * every wasm_runtime_lookup_function() call will hit dangling pointers.
+     *
+     * Strategy: reuse staged_buffer if we already copied to PSRAM; otherwise
+     * allocate a fresh owned copy. The caller's `buffer` is never borrowed. */
+    uint8_t *owned_binary;
+    if (staged_buffer) {
+        /* Transfer ownership — staged_buffer is already a full PSRAM copy */
+        owned_binary = staged_buffer;
+        staged_buffer = NULL;
+    } else {
+        /* load_buffer == buffer (caller-owned) — make our own durable copy */
+        owned_binary = akira_malloc_buffer(size);
+        if (!owned_binary) {
+            akira_free_buffer(chunk_buffer);
+            LOG_ERR("OOM: cannot allocate owned WASM binary copy (%u bytes)", size);
+            return -ENOMEM;
+        }
+        memcpy(owned_binary, buffer, size);
+    }
 
-    /* Free chunk buffer immediately after load */
+    /* Load the WASM module — owned_binary is intentionally NOT freed here */
+    module = wasm_runtime_load(owned_binary, size, error_buf, sizeof(error_buf));
+
+    /* chunk_buffer is a scratch pad only — always free after load */
     akira_free_buffer(chunk_buffer);
     chunk_buffer = NULL;
 
-    /* Free staged buffer if we used one */
-    if (staged_buffer)
-    {
-        akira_free_buffer(staged_buffer);
-        staged_buffer = NULL;
-    }
-
     if (!module)
     {
+        akira_free_buffer(owned_binary);
         LOG_ERR("wasm_runtime_load failed: %s", error_buf);
         return -EIO;
     }
@@ -415,6 +435,7 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
 
     g_apps[slot].used = true;
     g_apps[slot].module = module;
+    g_apps[slot].wasm_binary = owned_binary;  /* kept alive until wasm_runtime_unload */
     g_apps[slot].status = AKIRA_APP_STATUS_CREATED;
     g_apps[slot].exit_code = 0;
     g_apps[slot].tid = NULL;
@@ -488,10 +509,14 @@ static void wasm_app_thread_fn(void *p1, void *p2, void *p3)
         goto thread_exit;
     }
 
-    wasm_exec_env_t exec_env = wasm_runtime_create_exec_env(inst,
-                                                             CONFIG_WAMR_STACK_SIZE);
+    /* Use the singleton exec_env — one exec_env per instance is the correct
+     * WAMR embedded model. Creating a second exec_env with
+     * wasm_runtime_create_exec_env() corrupts the instance's export_functions
+     * table in Alloc_With_Allocator mode, causing wasm_runtime_lookup_function
+     * to return NULL even when exports are present in the binary. */
+    wasm_exec_env_t exec_env = wasm_runtime_get_exec_env_singleton(inst);
     if (!exec_env) {
-        LOG_ERR("Failed to create exec_env for slot %d", slot);
+        LOG_ERR("Failed to get singleton exec_env for slot %d", slot);
         wasm_runtime_deinstantiate(inst);
         app->exit_code = -ENOMEM;
         app->status = AKIRA_APP_STATUS_ERROR;
@@ -500,7 +525,7 @@ static void wasm_app_thread_fn(void *p1, void *p2, void *p3)
     }
 
     app->instance = inst;
-    app->exec_env = exec_env;
+    app->exec_env = exec_env;  /* singleton — do NOT call destroy_exec_env on it */
 
     /* O(1) cap lookup: store slot pointer as WAMR custom data */
     wasm_runtime_set_custom_data(inst, &g_apps[slot]);
@@ -515,31 +540,30 @@ static void wasm_app_thread_fn(void *p1, void *p2, void *p3)
     sandbox_exec_begin(&app->sandbox);
     perf_exec_begin(&app->perf);
 
-    wasm_function_inst_t fn = wasm_runtime_lookup_function(inst, "_start");
-    if (!fn) {
-        fn = wasm_runtime_lookup_function(inst, "main");
-    }
-
+    /* wasm_application_execute_main() is WAMR's built-in entry-point runner.
+     * It tries "main", "__main_argc_argv", "_main", and "_start" (WASI) in
+     * order, handles argc/argv marshalling, and uses the singleton exec_env
+     * so all native API calls receive the right context for cap checking. */
     int exit_code = 0;
-    if (fn) {
-        uint32_t argc = wasm_func_get_param_count(fn, inst);
-        uint32_t argv[2] = {0, 0};
-        if (!wasm_runtime_call_wasm(exec_env, fn, argc, argv)) {
-            const char *ex = wasm_runtime_get_exception(inst);
-            if (ex) {
-                LOG_ERR("WASM exception (slot %d): %s", slot, ex);
-                app->perf.trap_count++;
-                exit_code = -EIO;
-            }
+    bool ran = wasm_application_execute_main(inst, 0, NULL);
+    if (!ran) {
+        const char *ex = wasm_runtime_get_exception(inst);
+        if (ex && strstr(ex, "lookup the entry point")) {
+            /* No main/start entry point — treat as a reactive (library) module */
+            LOG_INF("Slot %d: no entry point — reactive module", slot);
+            wasm_runtime_clear_exception(inst);
+        } else if (ex) {
+            LOG_ERR("WASM exception (slot %d): %s", slot, ex);
+            app->perf.trap_count++;
+            exit_code = -EIO;
         }
-    } else {
-        LOG_INF("Slot %d: no _start/main — reactive module", slot);
     }
 
     perf_exec_end(&app->perf);
 
     /* ------ Step 4: Clean up WAMR resources ------ */
-    wasm_runtime_destroy_exec_env(exec_env);
+    /* Singleton exec_env is automatically freed by wasm_runtime_deinstantiate;
+     * never call wasm_runtime_destroy_exec_env on it. */
     app->exec_env = NULL;
 
     instance_map_remove(inst);
@@ -563,7 +587,33 @@ thread_exit:
     k_condvar_broadcast(&app->cond_exit);
     k_mutex_unlock(&g_exit_mutex);
 
-    /* Invoke registered exit callback (e.g. app_manager state transition) */
+    /* -------- Release the WASM module and slot --------
+     * Done here (in the app thread itself) to avoid a k_thread_join deadlock
+     * if the exit callback tried to call akira_runtime_destroy().
+     * exec_env and instance are already NULL (cleaned up in Step 4 above).
+     * Only the module handle and the slot itself remain to free. */
+    if (app->module) {
+        wasm_runtime_unload(app->module);
+        app->module = NULL;
+    }
+    /* Free the owned binary copy now that the module is unloaded.
+     * Must come AFTER wasm_runtime_unload() — WAMR holds raw pointers
+     * into this buffer for export/import name strings. */
+    if (app->wasm_binary) {
+        akira_free_buffer(app->wasm_binary);
+        app->wasm_binary = NULL;
+    }
+    if (app->hash_valid) {
+        module_cache_release(app->binary_hash);
+        app->hash_valid = false;
+    }
+    app->name[0] = '\0';
+    app->tid    = NULL;
+    app->used   = false;   /* Slot now free — must be LAST write */
+
+    /* Invoke registered exit callback (e.g. app_manager state transition).
+     * Called AFTER slot is freed so a restart triggered by the callback
+     * immediately gets a clean slot. */
     if (g_exit_cb) {
         g_exit_cb(slot, app->exit_code);
     }
@@ -655,15 +705,23 @@ int akira_runtime_stop(int instance_id)
         if (wait_ret != 0) {
             LOG_ERR("App thread (slot %d) timed out — aborting", instance_id);
             k_thread_abort(app->tid);
-            /* Manual cleanup since thread was aborted */
-            if (app->exec_env) {
-                wasm_runtime_destroy_exec_env(app->exec_env);
-                app->exec_env = NULL;
-            }
+            app->tid = NULL;
+            /* Manual cleanup since thread was aborted before our cleanup code ran.
+             * exec_env is the singleton — do NOT call wasm_runtime_destroy_exec_env;
+             * it will be freed by wasm_runtime_deinstantiate below. */
+            app->exec_env = NULL;
             if (app->instance) {
                 instance_map_remove(app->instance);
                 wasm_runtime_deinstantiate(app->instance);
                 app->instance = NULL;
+            }
+            if (app->module) {
+                wasm_runtime_unload(app->module);
+                app->module = NULL;
+            }
+            if (app->hash_valid) {
+                module_cache_release(app->binary_hash);
+                app->hash_valid = false;
             }
             atomic_set(&app->memory_used, 0);
         }
@@ -754,12 +812,11 @@ int akira_runtime_destroy(int instance_id)
     }
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
-    /* Safety: exec_env/instance should already be NULL after stop,
-     * but guard against the k_thread_abort path in stop() */
-    if (app->exec_env) {
-        wasm_runtime_destroy_exec_env(app->exec_env);
-        app->exec_env = NULL;
-    }
+    /* Safety: instance should already be NULL after stop,
+     * but guard against the k_thread_abort path in stop().
+     * exec_env is the singleton — freed automatically by deinstantiate, never
+     * call wasm_runtime_destroy_exec_env on it. */
+    app->exec_env = NULL;
     if (app->instance) {
         instance_map_remove(app->instance);
         wasm_runtime_deinstantiate(app->instance);
@@ -774,6 +831,11 @@ int akira_runtime_destroy(int instance_id)
     if (app->module) {
         wasm_runtime_unload(app->module);
         app->module = NULL;
+    }
+    /* Free owned binary AFTER unload — WAMR keeps raw string pointers into it */
+    if (app->wasm_binary) {
+        akira_free_buffer(app->wasm_binary);
+        app->wasm_binary = NULL;
     }
 #endif
 

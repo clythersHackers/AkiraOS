@@ -68,7 +68,14 @@
  *   CONFIG_AKIRA_WIFI=y     — WiFi connectivity APIs active
  * Code should guard on CONFIG_DISPLAY / CONFIG_AKIRA_DISPLAY, etc.
  * The AKIRA_PLATFORM_* macros below remain available for the few places
- * that genuinely need platform-specific code paths (e.g. sim vs HW flush). */
+ * that genuinely need platform-specific code paths (e.g. sim vs HW flush).
+ *
+ * Runtime feature queries (used where compile-time guards are inconvenient):
+ */
+bool akira_has_display(void);
+bool akira_has_wifi(void);
+bool akira_has_spi(void);
+bool akira_has_gpio(void);
 
 /* Platform-specific device names */
 #if AKIRA_PLATFORM_NATIVE_SIM
