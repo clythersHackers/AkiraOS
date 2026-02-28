@@ -6,6 +6,7 @@
 #include "akira_api.h"
 #include "akira_bt_shell_api.h"
 #include <runtime/security.h>
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include "runtime/security.h"
 
@@ -58,6 +59,23 @@ int akira_bt_shell_is_ready(void)
 #endif
 }
 
+int akira_bt_shell_recv(uint8_t *buf, size_t len, int32_t timeout_ms)
+{
+    if (!buf || len == 0) {
+        return -EINVAL;
+    }
+
+#if defined(CONFIG_AKIRA_BT_SHELL)
+    k_timeout_t to = (timeout_ms < 0) ? K_FOREVER :
+                     (timeout_ms == 0)  ? K_NO_WAIT  :
+                                          K_MSEC(timeout_ms);
+    return bt_shell_recv(buf, len, to);
+#else
+    ARG_UNUSED(timeout_ms);
+    return -ENOSYS;
+#endif
+}
+
 /* WASM Native export API */
 
 int akira_native_bt_shell_send(wasm_exec_env_t exec_env, const char *message)
@@ -91,4 +109,27 @@ int akira_native_bt_shell_is_ready(wasm_exec_env_t exec_env)
     AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_BT_SHELL, -EPERM);
 
     return akira_bt_shell_is_ready();
+}
+
+int akira_native_bt_shell_recv(wasm_exec_env_t exec_env,
+                               uint32_t buf_ptr, uint32_t len,
+                               int32_t timeout_ms)
+{
+    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_BT_SHELL, -EPERM);
+
+    wasm_module_inst_t module_inst = wasm_runtime_get_module_inst(exec_env);
+    if (!module_inst) {
+        return -EINVAL;
+    }
+
+    if (len == 0) {
+        return -EINVAL;
+    }
+
+    uint8_t *ptr = (uint8_t *)wasm_runtime_addr_app_to_native(module_inst, buf_ptr);
+    if (!ptr) {
+        return -EFAULT;
+    }
+
+    return akira_bt_shell_recv(ptr, len, timeout_ms);
 }

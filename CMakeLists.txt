@@ -249,6 +249,21 @@ if(CONFIG_BT)
     )
 endif()
 
+if(CONFIG_AKIRA_WASM_HID)
+    target_sources(app PRIVATE src/api/akira_hid_api.c)
+endif()
+
+if(CONFIG_AKIRA_WASM_LIFECYCLE)
+    target_sources(app PRIVATE src/api/akira_lifecycle_api.c)
+endif()
+
+if(CONFIG_AKIRA_WASM_IPC)
+    target_sources(app PRIVATE
+        src/api/akira_ipc_api.c
+        src/runtime/akira_ipc.c
+    )
+endif()
+
 # Keep connectivity and drivers as before (use module gating further below)
 
 # Akira shell commands

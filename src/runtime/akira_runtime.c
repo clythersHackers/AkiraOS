@@ -25,6 +25,10 @@
 
 #include "akira_api.h"
 
+#ifdef CONFIG_AKIRA_WASM_IPC
+#include <runtime/akira_ipc.h>
+#endif
+
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
 #include <wasm_export.h>
 #endif
@@ -573,6 +577,11 @@ static void wasm_app_thread_fn(void *p1, void *p2, void *p3)
     atomic_set(&app->memory_used, 0);
     sandbox_exec_end(&app->sandbox);
     sandbox_audit_log(AUDIT_EVENT_APP_STOPPED, app->name, (uint32_t)slot);
+
+    /* Release IPC subscriptions before the name slot is cleared */
+#ifdef CONFIG_AKIRA_WASM_IPC
+    akira_ipc_cleanup_app(app->name);
+#endif
 
     app->exit_code = (int8_t)exit_code;
     LOG_INF("App thread done (slot %d, exit=%d, calls=%u, traps=%u)",

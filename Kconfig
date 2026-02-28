@@ -1029,6 +1029,89 @@ config AKIRA_WASM_BT_SHELL
       Allows apps to send shell commands via Bluetooth.
       Requires AKIRA_CAP_BT_SHELL capability.
 
+config AKIRA_BT_SHELL_RX_BUF_SIZE
+    int "BT Shell WASM RX ring buffer depth (messages)"
+    default 64
+    range 8 512
+    depends on AKIRA_WASM_BT_SHELL
+    help
+      Number of bytes the BT Shell RX ring buffer can hold.
+      Each slot is one byte; WASM apps drain it with bt_shell_recv().
+
+config AKIRA_WASM_HID
+    bool "Export HID API to WASM"
+    default n
+    depends on AKIRA_WASM_API && AKIRA_HID
+    help
+      Export HID keyboard, gamepad, mouse, consumer media key, raw report,
+      and named action hotkey functions to WASM applications.
+      Requires AKIRA_CAP_HID capability in the app manifest.
+      Do NOT enable on native_sim (no BT/USB HID transport).
+
+config AKIRA_HID_MAX_ACTIONS
+    int "Maximum named HID action bindings"
+    default 16
+    range 1 64
+    depends on AKIRA_WASM_HID
+    help
+      Size of the static named-action registry used by
+      hid_action_register() / hid_action_trigger().
+      Each entry uses ~34 bytes of SRAM.
+
+config AKIRA_WASM_LIFECYCLE
+    bool "Export App Lifecycle API to WASM"
+    default n
+    depends on AKIRA_WASM_API && AKIRA_APP_MANAGER
+    help
+      Export app_start / app_stop / app_restart / app_get_status /
+      app_list / app_get_self_name to WASM applications.
+      Requires AKIRA_CAP_APP_CONTROL — elevated privilege; must NOT be
+      granted to untrusted apps by default.
+
+config AKIRA_WASM_IPC
+    bool "Export Inter-App Messaging API to WASM"
+    default n
+    depends on AKIRA_WASM_API
+    help
+      Export named-topic pub/sub IPC to WASM applications.
+      Apps subscribe to topics, publish messages, and receive messages
+      from other apps.  Requires AKIRA_CAP_IPC capability.
+      msgq backing buffers are allocated from PSRAM when available.
+
+config AKIRA_IPC_MAX_TOPICS
+    int "Maximum number of IPC topics"
+    default 8
+    range 1 32
+    depends on AKIRA_WASM_IPC
+    help
+      Maximum number of simultaneously active named IPC topics.
+
+config AKIRA_IPC_MAX_SUBS_PER_TOPIC
+    int "Maximum subscribers per IPC topic"
+    default 4
+    range 1 16
+    depends on AKIRA_WASM_IPC
+    help
+      Maximum number of apps that can subscribe to one topic.
+
+config AKIRA_IPC_MSG_MAX_SIZE
+    int "Maximum IPC message payload size (bytes)"
+    default 256
+    range 16 1024
+    depends on AKIRA_WASM_IPC
+    help
+      Maximum size of a single IPC message payload in bytes.
+      Each subscriber queue slot uses this much PSRAM/SRAM.
+
+config AKIRA_IPC_QUEUE_DEPTH
+    int "IPC subscriber queue depth (messages)"
+    default 4
+    range 1 16
+    depends on AKIRA_WASM_IPC
+    help
+      Number of messages each subscriber queue can hold before
+      dropping new messages from publishers.
+
 config AKIRA_WASM_TIMER
     bool "Export Timer API to WASM"
     default y

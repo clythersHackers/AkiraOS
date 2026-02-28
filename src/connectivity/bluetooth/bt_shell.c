@@ -46,6 +46,16 @@ static struct bt_uuid_128 shell_rx_char_uuid = BT_UUID_INIT_128(
 /* Internal State                                                            */
 /*===========================================================================*/
 
+/*
+ * RX ring buffer — holds raw bytes written by the peer to the Shell RX
+ * GATT characteristic.  WASM apps drain this with bt_shell_recv().
+ */
+#define BT_SHELL_RX_MSG_SIZE  1U
+#define BT_SHELL_RX_MSG_COUNT CONFIG_AKIRA_BT_SHELL_RX_BUF_SIZE
+
+static uint8_t bt_shell_rx_msgq_buf[BT_SHELL_RX_MSG_COUNT * BT_SHELL_RX_MSG_SIZE];
+static struct k_msgq bt_shell_rx_msgq;
+
 static struct
 {
     bool initialized;
@@ -89,6 +99,14 @@ static ssize_t shell_rx_write(struct bt_conn *conn,
 
     /* Log received data */
     LOG_INF("Shell RX received (%d bytes)", len);
+
+    /* Push every byte into the msgq so WASM apps can poll bt_shell_recv() */
+    for (uint16_t i = 0; i < len; i++) {
+        /* Non-blocking put — drop oldest byte on overflow to keep ISR-safe */
+        if (k_msgq_put(&bt_shell_rx_msgq, &data[i], K_NO_WAIT) != 0) {
+            LOG_WRN("Shell RX msgq full, byte dropped");
+        }
+    }
 
     /* Call registered callback if any */
     if (shell_state.rx_callback)
@@ -138,6 +156,9 @@ int bt_shell_init(void)
     {
         return 0;
     }
+
+    k_msgq_init(&bt_shell_rx_msgq, bt_shell_rx_msgq_buf,
+                BT_SHELL_RX_MSG_SIZE, BT_SHELL_RX_MSG_COUNT);
 
     memset(&shell_state, 0, sizeof(shell_state));
     shell_state.initialized = true;
@@ -201,6 +222,29 @@ void bt_shell_register_rx_callback(bt_shell_rx_callback_t callback)
     shell_state.rx_callback = callback;
 }
 
+int bt_shell_recv(uint8_t *buf, size_t len, k_timeout_t timeout)
+{
+    if (!buf || len == 0) {
+        return -EINVAL;
+    }
+
+    size_t count = 0;
+
+    /* Read first byte — may block according to timeout */
+    if (k_msgq_get(&bt_shell_rx_msgq, &buf[count], timeout) != 0) {
+        return -EAGAIN;
+    }
+    count++;
+
+    /* Drain remaining bytes without blocking */
+    while (count < len &&
+           k_msgq_get(&bt_shell_rx_msgq, &buf[count], K_NO_WAIT) == 0) {
+        count++;
+    }
+
+    return (int)count;
+}
+
 #else /* !CONFIG_BT */
 
 int bt_shell_init(void)
@@ -230,6 +274,14 @@ bool bt_shell_notifications_enabled(void)
 void bt_shell_register_rx_callback(bt_shell_rx_callback_t callback)
 {
     ARG_UNUSED(callback);
+}
+
+int bt_shell_recv(uint8_t *buf, size_t len, k_timeout_t timeout)
+{
+    ARG_UNUSED(buf);
+    ARG_UNUSED(len);
+    ARG_UNUSED(timeout);
+    return -ENOTSUP;
 }
 
 #endif /* CONFIG_BT */

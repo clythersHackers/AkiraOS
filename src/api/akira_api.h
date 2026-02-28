@@ -60,4 +60,16 @@
 #include "akira_pwm_api.h"
 #endif
 
+#ifdef CONFIG_AKIRA_WASM_HID
+#include "akira_hid_api.h"
+#endif
+
+#ifdef CONFIG_AKIRA_WASM_LIFECYCLE
+#include "akira_lifecycle_api.h"
+#endif
+
+#ifdef CONFIG_AKIRA_WASM_IPC
+#include "akira_ipc_api.h"
+#endif
+
 #endif /* AKIRA_API_H */

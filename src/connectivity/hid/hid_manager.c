@@ -624,7 +624,240 @@ int hid_gamepad_reset(void)
 }
 
 /*===========================================================================*/
-/* Callback Registration                                                     */
+/* Mouse API                                                                 */
+/*===========================================================================*/
+
+static int send_mouse_report(void)
+{
+    if (!hid_mgr.active_transport || !hid_mgr.active_transport->send_mouse) {
+        return -ENOTSUP;
+    }
+
+    int ret = hid_mgr.active_transport->send_mouse(&hid_mgr.state.mouse);
+    if (ret == 0) {
+        hid_mgr.state.reports_sent++;
+    } else {
+        hid_mgr.state.errors++;
+    }
+
+    /* Clear deltas after send — buttons stay latched until explicitly released */
+    hid_mgr.state.mouse.dx    = 0;
+    hid_mgr.state.mouse.dy    = 0;
+    hid_mgr.state.mouse.wheel = 0;
+
+    return ret;
+}
+
+int hid_mouse_move(int8_t dx, int8_t dy)
+{
+    if (!hid_mgr.initialized) {
+        return -EINVAL;
+    }
+
+    k_mutex_lock(&hid_mgr.mutex, K_FOREVER);
+    hid_mgr.state.mouse.dx = dx;
+    hid_mgr.state.mouse.dy = dy;
+    int ret = send_mouse_report();
+    k_mutex_unlock(&hid_mgr.mutex);
+    return ret;
+}
+
+int hid_mouse_button_press(uint8_t button)
+{
+    if (!hid_mgr.initialized) {
+        return -EINVAL;
+    }
+
+    k_mutex_lock(&hid_mgr.mutex, K_FOREVER);
+    hid_mgr.state.mouse.buttons |= button;
+    int ret = send_mouse_report();
+    k_mutex_unlock(&hid_mgr.mutex);
+    return ret;
+}
+
+int hid_mouse_button_release(uint8_t button)
+{
+    if (!hid_mgr.initialized) {
+        return -EINVAL;
+    }
+
+    k_mutex_lock(&hid_mgr.mutex, K_FOREVER);
+    hid_mgr.state.mouse.buttons &= ~button;
+    int ret = send_mouse_report();
+    k_mutex_unlock(&hid_mgr.mutex);
+    return ret;
+}
+
+int hid_mouse_scroll(int8_t delta)
+{
+    if (!hid_mgr.initialized) {
+        return -EINVAL;
+    }
+
+    k_mutex_lock(&hid_mgr.mutex, K_FOREVER);
+    hid_mgr.state.mouse.wheel = delta;
+    int ret = send_mouse_report();
+    k_mutex_unlock(&hid_mgr.mutex);
+    return ret;
+}
+
+int hid_mouse_reset(void)
+{
+    if (!hid_mgr.initialized) {
+        return -EINVAL;
+    }
+
+    k_mutex_lock(&hid_mgr.mutex, K_FOREVER);
+    memset(&hid_mgr.state.mouse, 0, sizeof(hid_mouse_report_t));
+    int ret = send_mouse_report();
+    k_mutex_unlock(&hid_mgr.mutex);
+    return ret;
+}
+
+/*===========================================================================*/
+/* Consumer / Media Key API                                                  */
+/*===========================================================================*/
+
+int hid_consumer_send(uint16_t usage)
+{
+    if (!hid_mgr.initialized) {
+        return -EINVAL;
+    }
+
+    if (!hid_mgr.active_transport || !hid_mgr.active_transport->send_consumer) {
+        return -ENOTSUP;
+    }
+
+    k_mutex_lock(&hid_mgr.mutex, K_FOREVER);
+
+    /* Press */
+    hid_mgr.state.consumer.usage = usage;
+    int ret = hid_mgr.active_transport->send_consumer(&hid_mgr.state.consumer);
+    if (ret == 0) {
+        hid_mgr.state.reports_sent++;
+    } else {
+        hid_mgr.state.errors++;
+    }
+
+    /* Release — send usage=0 */
+    hid_mgr.state.consumer.usage = 0;
+    hid_mgr.active_transport->send_consumer(&hid_mgr.state.consumer);
+
+    k_mutex_unlock(&hid_mgr.mutex);
+    return ret;
+}
+
+/*===========================================================================*/
+/* Raw Report API                                                            */
+/*===========================================================================*/
+
+int hid_send_raw_report(uint8_t report_id, const uint8_t *data, size_t len)
+{
+    if (!hid_mgr.initialized || !data || len == 0) {
+        return -EINVAL;
+    }
+
+    if (!hid_mgr.active_transport || !hid_mgr.active_transport->send_raw) {
+        return -ENOTSUP;
+    }
+
+    k_mutex_lock(&hid_mgr.mutex, K_FOREVER);
+    int ret = hid_mgr.active_transport->send_raw(report_id, data, len);
+    if (ret == 0) {
+        hid_mgr.state.reports_sent++;
+    } else {
+        hid_mgr.state.errors++;
+    }
+    k_mutex_unlock(&hid_mgr.mutex);
+    return ret;
+}
+
+/*===========================================================================*/
+/* Named Action Registry                                                     */
+/*===========================================================================*/
+
+#ifndef CONFIG_AKIRA_HID_MAX_ACTIONS
+#define CONFIG_AKIRA_HID_MAX_ACTIONS 16
+#endif
+
+/** Named keyboard shortcut binding */
+typedef struct {
+    char     name[32];
+    uint8_t  modifier;
+    uint8_t  keycode;
+    bool     used;
+} hid_action_entry_t;
+
+static hid_action_entry_t g_hid_actions[CONFIG_AKIRA_HID_MAX_ACTIONS];
+static struct k_mutex g_hid_actions_mutex = Z_MUTEX_INITIALIZER(g_hid_actions_mutex);
+
+int hid_action_register(const char *name, uint8_t modifier, uint8_t keycode)
+{
+    if (!name || name[0] == '\0') {
+        return -EINVAL;
+    }
+
+    k_mutex_lock(&g_hid_actions_mutex, K_FOREVER);
+
+    /* Update existing entry if name matches */
+    for (int i = 0; i < CONFIG_AKIRA_HID_MAX_ACTIONS; i++) {
+        if (g_hid_actions[i].used &&
+            strncmp(g_hid_actions[i].name, name, sizeof(g_hid_actions[i].name) - 1) == 0) {
+            g_hid_actions[i].modifier = modifier;
+            g_hid_actions[i].keycode  = keycode;
+            k_mutex_unlock(&g_hid_actions_mutex);
+            return 0;
+        }
+    }
+
+    /* Find an empty slot */
+    for (int i = 0; i < CONFIG_AKIRA_HID_MAX_ACTIONS; i++) {
+        if (!g_hid_actions[i].used) {
+            strncpy(g_hid_actions[i].name, name, sizeof(g_hid_actions[i].name) - 1);
+            g_hid_actions[i].name[sizeof(g_hid_actions[i].name) - 1] = '\0';
+            g_hid_actions[i].modifier = modifier;
+            g_hid_actions[i].keycode  = keycode;
+            g_hid_actions[i].used     = true;
+            k_mutex_unlock(&g_hid_actions_mutex);
+            LOG_DBG("Action registered: '%s' mod=0x%02x key=0x%02x",
+                    name, modifier, keycode);
+            return 0;
+        }
+    }
+
+    k_mutex_unlock(&g_hid_actions_mutex);
+    LOG_WRN("Action table full (max %d)", CONFIG_AKIRA_HID_MAX_ACTIONS);
+    return -ENOMEM;
+}
+
+int hid_action_trigger(const char *name)
+{
+    if (!name || name[0] == '\0') {
+        return -EINVAL;
+    }
+
+    k_mutex_lock(&g_hid_actions_mutex, K_FOREVER);
+
+    for (int i = 0; i < CONFIG_AKIRA_HID_MAX_ACTIONS; i++) {
+        if (g_hid_actions[i].used &&
+            strncmp(g_hid_actions[i].name, name, sizeof(g_hid_actions[i].name)) == 0) {
+
+            uint8_t mod = g_hid_actions[i].modifier;
+            uint8_t key = g_hid_actions[i].keycode;
+            k_mutex_unlock(&g_hid_actions_mutex);
+
+            /* Press modifier + key, then release all */
+            hid_keyboard_set_modifiers(mod);
+            hid_keyboard_press(key);
+            hid_keyboard_release_all();
+            return 0;
+        }
+    }
+
+    k_mutex_unlock(&g_hid_actions_mutex);
+    LOG_WRN("Action not found: '%s'", name);
+    return -ENOENT;
+}
 /*===========================================================================*/
 
 int hid_manager_register_event_callback(hid_event_callback_t callback, void *user_data)

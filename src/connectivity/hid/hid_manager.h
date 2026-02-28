@@ -185,6 +185,106 @@ extern "C"
     int hid_gamepad_reset(void);
 
     /*===========================================================================*/
+    /* Mouse API                                                                 */
+    /*===========================================================================*/
+
+    /**
+     * @brief Move the mouse cursor relatively
+     * @param dx X delta (-127..127)
+     * @param dy Y delta (-127..127)
+     * @return 0 on success
+     */
+    int hid_mouse_move(int8_t dx, int8_t dy);
+
+    /**
+     * @brief Press a mouse button
+     * @param button Button bitmask (hid_mouse_btn_t)
+     * @return 0 on success
+     */
+    int hid_mouse_button_press(uint8_t button);
+
+    /**
+     * @brief Release a mouse button
+     * @param button Button bitmask (hid_mouse_btn_t)
+     * @return 0 on success
+     */
+    int hid_mouse_button_release(uint8_t button);
+
+    /**
+     * @brief Scroll the mouse wheel
+     * @param delta Scroll delta (-127..127, positive = up)
+     * @return 0 on success
+     */
+    int hid_mouse_scroll(int8_t delta);
+
+    /**
+     * @brief Release all mouse buttons and reset movement
+     * @return 0 on success
+     */
+    int hid_mouse_reset(void);
+
+    /*===========================================================================*/
+    /* Consumer / Media Key API                                                  */
+    /*===========================================================================*/
+
+    /**
+     * @brief Send a single HID Consumer key press + release
+     *
+     * Sends the usage code then immediately clears it so the host
+     * sees a complete key press/release cycle.
+     *
+     * @param usage  HID Consumer Page usage code (hid_consumer_usage_t or raw uint16)
+     * @return 0 on success
+     */
+    int hid_consumer_send(uint16_t usage);
+
+    /*===========================================================================*/
+    /* Raw Report API                                                            */
+    /*===========================================================================*/
+
+    /**
+     * @brief Send a raw HID report via the active transport
+     *
+     * The caller is responsible for constructing a valid HID report
+     * for the given report_id.  Returns -ENOTSUP if the active transport
+     * does not implement a raw send handler.
+     *
+     * @param report_id  HID report ID
+     * @param data       Report payload (excluding the report ID byte)
+     * @param len        Payload length in bytes
+     * @return 0 on success, -ENOTSUP if transport doesn\u2019t support raw sends
+     */
+    int hid_send_raw_report(uint8_t report_id, const uint8_t *data, size_t len);
+
+    /*===========================================================================*/
+    /* Named Action Registry                                                     */
+    /*===========================================================================*/
+
+    /**
+     * @brief Register a named keyboard shortcut action
+     *
+     * Stores a (name, modifier, keycode) binding in a static table.
+     * The table has CONFIG_AKIRA_HID_MAX_ACTIONS slots.
+     *
+     * @param name      Action name (null-terminated, max 31 chars)
+     * @param modifier  Keyboard modifier bitmask (hid_keyboard_mod_t)
+     * @param keycode   HID key code (hid_key_code_t)
+     * @return 0 on success, -ENOMEM if table is full, -EINVAL on bad args
+     */
+    int hid_action_register(const char *name, uint8_t modifier, uint8_t keycode);
+
+    /**
+     * @brief Trigger a previously registered named action
+     *
+     * Looks up the name in the action table, presses the modifier + key,
+     * then releases all keys.
+     *
+     * @param name  Action name
+     * @return 0 on success, -ENOENT if name not found
+     */
+    int hid_action_trigger(const char *name);
+
+    /*===========================================================================*/
     /* Callbacks                                                                 */
     /*===========================================================================*/
 

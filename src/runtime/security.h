@@ -34,6 +34,10 @@ extern "C" {
 #define AKIRA_CAP_UART      (1U << 12)
 #define AKIRA_CAP_I2C       (1U << 13)
 #define AKIRA_CAP_PWM       (1U << 14)
+/* Elevated privilege — must not be granted to untrusted apps by default */
+#define AKIRA_CAP_HID         (1U << 15)
+#define AKIRA_CAP_APP_CONTROL (1U << 16)
+#define AKIRA_CAP_IPC         (1U << 17)
 
 /*
  * Capability check macro using security subsystem.

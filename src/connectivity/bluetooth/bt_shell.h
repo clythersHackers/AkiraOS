@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <zephyr/kernel.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -67,6 +68,21 @@ extern "C"
      * @param callback Callback function (NULL to unregister)
      */
     void bt_shell_register_rx_callback(bt_shell_rx_callback_t callback);
+
+    /**
+     * @brief Receive data sent by the connected BLE peer (phone → device)
+     *
+     * Drains bytes from the internal RX ring buffer that is filled
+     * whenever the peer writes to the Shell RX GATT characteristic.
+     * Non-blocking when timeout == K_NO_WAIT; blocks until data arrives
+     * or timeout expires otherwise.
+     *
+     * @param buf    Buffer to receive into
+     * @param len    Maximum bytes to read
+     * @param timeout K_NO_WAIT, K_FOREVER, or K_MSEC(n)
+     * @return Number of bytes read (>= 0), -EAGAIN if timed out, negative on error
+     */
+    int bt_shell_recv(uint8_t *buf, size_t len, k_timeout_t timeout);
 
 #ifdef __cplusplus
 }

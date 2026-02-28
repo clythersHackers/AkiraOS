@@ -126,6 +126,61 @@ extern "C"
     } __attribute__((packed)) hid_gamepad_report_t;
 
     /*===========================================================================*/
+    /* Mouse HID Definitions                                                     */
+    /*===========================================================================*/
+
+    /** Mouse button bitmask (USB HID Boot Mouse) */
+    typedef enum
+    {
+        HID_MOUSE_BTN_LEFT   = 0x01,
+        HID_MOUSE_BTN_RIGHT  = 0x02,
+        HID_MOUSE_BTN_MIDDLE = 0x04,
+        HID_MOUSE_BTN_BACK   = 0x08,
+        HID_MOUSE_BTN_FWD    = 0x10,
+    } hid_mouse_btn_t;
+
+    /** Mouse report — matches USB HID Boot Mouse report descriptor */
+    typedef struct
+    {
+        uint8_t buttons; /**< Button bitmask (hid_mouse_btn_t) */
+        int8_t  dx;      /**< Relative X movement */
+        int8_t  dy;      /**< Relative Y movement */
+        int8_t  wheel;   /**< Scroll wheel delta */
+    } __attribute__((packed)) hid_mouse_report_t;
+
+    /*===========================================================================*/
+    /* Consumer / Media Key HID Definitions                                      */
+    /*===========================================================================*/
+
+    /**
+     * @brief HID Consumer Page (0x0C) usage codes for common media keys
+     *
+     * Send with hid_consumer_send(usage). Single-shot: the report is cleared
+     * automatically after one send cycle so the host sees a key press + release.
+     */
+    typedef enum
+    {
+        HID_CONSUMER_PLAY_PAUSE    = 0x00CD,
+        HID_CONSUMER_STOP          = 0x00B7,
+        HID_CONSUMER_NEXT_TRACK    = 0x00B5,
+        HID_CONSUMER_PREV_TRACK    = 0x00B6,
+        HID_CONSUMER_VOL_UP        = 0x00E9,
+        HID_CONSUMER_VOL_DOWN      = 0x00EA,
+        HID_CONSUMER_MUTE          = 0x00E2,
+        HID_CONSUMER_BRIGHTNESS_UP = 0x006F,
+        HID_CONSUMER_BRIGHTNESS_DN = 0x0070,
+        HID_CONSUMER_SCAN_NEXT     = 0x00B5,
+        HID_CONSUMER_SCAN_PREV     = 0x00B6,
+        HID_CONSUMER_EJECT         = 0x00B8,
+    } hid_consumer_usage_t;
+
+    /** Consumer report — carries one 16-bit HID Consumer usage code */
+    typedef struct
+    {
+        uint16_t usage; /**< HID Consumer Page usage code (0 = key released) */
+    } __attribute__((packed)) hid_consumer_report_t;
+
+    /*===========================================================================*/
     /* HID State Structure                                                       */
     /*===========================================================================*/
 
@@ -140,6 +195,8 @@ extern "C"
         /* Reports */
         hid_keyboard_report_t keyboard;
         hid_gamepad_report_t gamepad;
+        hid_mouse_report_t mouse;
+        hid_consumer_report_t consumer;
 
         /* Statistics */
         uint32_t reports_sent;
@@ -185,6 +242,15 @@ extern "C"
 
         /* Gamepad operations */
         int (*send_gamepad)(const hid_gamepad_report_t *report);
+
+        /* Mouse operations (optional — NULL if not supported by transport) */
+        int (*send_mouse)(const hid_mouse_report_t *report);
+
+        /* Consumer / Media key operations (optional) */
+        int (*send_consumer)(const hid_consumer_report_t *report);
+
+        /* Raw report (optional — transport-specific report ID must be valid) */
+        int (*send_raw)(uint8_t report_id, const uint8_t *data, size_t len);
 
         /* Callbacks */
         int (*register_event_cb)(hid_event_callback_t cb, void *user_data);

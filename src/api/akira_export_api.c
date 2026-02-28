@@ -62,9 +62,51 @@ bool akira_register_native_apis()
         #endif
 
         #ifdef CONFIG_AKIRA_WASM_BT_SHELL
-        {"bt_shell_print", (void *)akira_native_bt_shell_send, "(i$)i", NULL},
-        {"bt_shell_send_data", (void *)akira_native_bt_shell_send_data, "(i*i)i", NULL},
-        {"bt_shell_is_ready", (void *)akira_native_bt_shell_is_ready, "()i", NULL},
+        {"bt_shell_print",     (void *)akira_native_bt_shell_send,       "(i$)i",  NULL},
+        {"bt_shell_send_data", (void *)akira_native_bt_shell_send_data,  "(i*i)i", NULL},
+        {"bt_shell_is_ready",  (void *)akira_native_bt_shell_is_ready,   "()i",    NULL},
+        {"bt_shell_recv",      (void *)akira_native_bt_shell_recv,       "(*~i)i", NULL},
+        #endif
+
+        #ifdef CONFIG_AKIRA_WASM_HID
+        {"hid_enable",             (void *)akira_native_hid_enable,             "()i",    NULL},
+        {"hid_disable",            (void *)akira_native_hid_disable,            "()i",    NULL},
+        {"hid_is_connected",       (void *)akira_native_hid_is_connected,       "()i",    NULL},
+        {"hid_key_press",          (void *)akira_native_hid_key_press,          "(i)i",   NULL},
+        {"hid_key_release",        (void *)akira_native_hid_key_release,        "(i)i",   NULL},
+        {"hid_key_release_all",    (void *)akira_native_hid_key_release_all,    "()i",    NULL},
+        {"hid_type_string",        (void *)akira_native_hid_type_string,        "($)i",   NULL},
+        {"hid_gamepad_press",      (void *)akira_native_hid_gamepad_press,      "(i)i",   NULL},
+        {"hid_gamepad_release",    (void *)akira_native_hid_gamepad_release,    "(i)i",   NULL},
+        {"hid_gamepad_set_axis",   (void *)akira_native_hid_gamepad_set_axis,   "(ii)i",  NULL},
+        {"hid_gamepad_set_dpad",   (void *)akira_native_hid_gamepad_set_dpad,   "(i)i",   NULL},
+        {"hid_gamepad_reset",      (void *)akira_native_hid_gamepad_reset,      "()i",    NULL},
+        {"hid_mouse_move",         (void *)akira_native_hid_mouse_move,         "(ii)i",  NULL},
+        {"hid_mouse_btn_press",    (void *)akira_native_hid_mouse_btn_press,    "(i)i",   NULL},
+        {"hid_mouse_btn_release",  (void *)akira_native_hid_mouse_btn_release,  "(i)i",   NULL},
+        {"hid_mouse_scroll",       (void *)akira_native_hid_mouse_scroll,       "(i)i",   NULL},
+        {"hid_consumer_send",      (void *)akira_native_hid_consumer_send,      "(i)i",   NULL},
+        {"hid_send_raw_report",    (void *)akira_native_hid_send_raw_report,    "(i*~)i", NULL},
+        {"hid_action_register",    (void *)akira_native_hid_action_register,    "($ii)i", NULL},
+        {"hid_action_trigger",     (void *)akira_native_hid_action_trigger,     "($)i",   NULL},
+        #endif
+
+        #ifdef CONFIG_AKIRA_WASM_LIFECYCLE
+        {"app_start",         (void *)akira_native_app_start,         "($)i",   NULL},
+        {"app_stop",          (void *)akira_native_app_stop,          "($)i",   NULL},
+        {"app_restart",       (void *)akira_native_app_restart,       "($)i",   NULL},
+        {"app_get_status",    (void *)akira_native_app_get_status,    "($)i",   NULL},
+        {"app_list",          (void *)akira_native_app_list,          "(*~)i",  NULL},
+        {"app_get_self_name", (void *)akira_native_app_get_self_name, "(*~)i",  NULL},
+        #endif
+
+        #ifdef CONFIG_AKIRA_WASM_IPC
+        {"msg_subscribe",   (void *)akira_native_msg_subscribe,   "($)i",    NULL},
+        {"msg_unsubscribe", (void *)akira_native_msg_unsubscribe,  "($)i",    NULL},
+        {"msg_publish",     (void *)akira_native_msg_publish,     "($*~)i",  NULL},
+        {"msg_recv",        (void *)akira_native_msg_recv,        "($*~i)i", NULL},
+        {"msg_try_recv",    (void *)akira_native_msg_try_recv,    "($*~)i",  NULL},
+        {"msg_pending",     (void *)akira_native_msg_pending,     "($)i",    NULL},
         #endif
 
         #ifdef CONFIG_AKIRA_WASM_TIMER
