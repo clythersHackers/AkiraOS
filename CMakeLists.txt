@@ -248,8 +248,8 @@ if(CONFIG_AKIRA_WASM_PWM)
     target_sources(app PRIVATE src/api/akira_pwm_api.c)
 endif()
 
-if(CONFIG_AKIRA_WASM_API AND CONFIG_AKIRA_BT_SHELL)
-    target_sources(app PRIVATE src/api/akira_bt_shell_api.c)
+if(CONFIG_AKIRA_WASM_BLE)
+    target_sources(app PRIVATE src/api/akira_ble_api.c)
 endif()
 
 if(CONFIG_AKIRA_WASM_HID)
@@ -382,18 +382,20 @@ if(CONFIG_AKIRA_HTTP_SERVER)
     )
 endif()
 
-# Bluetooth HID (conditional - build when BT HID is enabled)
+# Bluetooth manager — needed by both HID mode and BLE app API mode
+if(CONFIG_AKIRA_BT_HID OR CONFIG_AKIRA_WASM_BLE)
+    target_sources(app PRIVATE src/connectivity/bluetooth/bt_manager.c)
+endif()
+
 if(CONFIG_AKIRA_BT_HID)
-    target_sources(app PRIVATE
-        src/connectivity/bluetooth/bt_manager.c
-        src/connectivity/bluetooth/bt_hid.c
-    )
+    target_sources(app PRIVATE src/connectivity/bluetooth/bt_hid.c)
     if(CONFIG_AKIRA_BT_ECHO)
         target_sources(app PRIVATE src/connectivity/bluetooth/bt_echo.c)
     endif()
-    if(CONFIG_AKIRA_BT_SHELL)
-        target_sources(app PRIVATE src/connectivity/bluetooth/bt_shell.c)
-    endif()
+endif()
+
+if(CONFIG_AKIRA_WASM_BLE)
+    target_sources(app PRIVATE src/connectivity/bluetooth/ble_app_service.c)
 endif()
 
 if(CONFIG_AKIRA_USB)

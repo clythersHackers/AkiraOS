@@ -491,65 +491,158 @@ extern void mem_free(uint32_t ptr);
 
 /*
  * =============================================================================
- * BLUETOOTH SHELL API
+ * BLE APP API
  * =============================================================================
- * Required capability: bt_shell
- * 
- * Functions for sending data over Bluetooth shell interface.
- */
-
-/**
- * @brief Send a text message over Bluetooth shell
- * 
- * @param message Null-terminated string to send
- * @return 0 on success, negative error code on failure
- */
-extern int bt_shell_print(const char *message);
-
-/**
- * @brief Send raw data over Bluetooth shell
- * 
- * @param data_ptr Pointer to data buffer
- * @param len Length of data in bytes
- * @return 0 on success, negative error code on failure
- */
-extern int bt_shell_send_data(uint32_t data_ptr, uint32_t len);
-
-/**
- * @brief Check if Bluetooth shell is ready (notifications enabled by peer)
- * 
- * @return 1 if ready, 0 if not ready, negative error code on failure
- */
-extern int bt_shell_is_ready(void);
-
-/**
- * @brief Receive data from the Bluetooth shell RX ring buffer.
+ * Required capability: "ble"
  *
- * Blocks for up to @p timeout_ms milliseconds waiting for incoming bytes.
- * Pass -1 to block indefinitely, 0 for a non-blocking poll.
+ * Arduino-style BLE API for creating custom GATT services.
  *
- * Required capability: bt.shell
+ * Typical usage:
  *
- * @param buf        Destination buffer
- * @param len        Buffer capacity in bytes
- * @param timeout_ms Wait limit in ms (0 = non-blocking, -1 = forever)
- * @return Bytes received on success, -EAGAIN if timed out with no data,
- *         negative error code on failure
+ *   int svc = ble_service_create("19B10000-E8F2-537E-4F6C-D104768A1214");
+ *   int ch  = ble_char_create("19B10001-E8F2-537E-4F6C-D104768A1214",
+ *                              BLE_PROP_READ | BLE_PROP_WRITE, 1);
+ *   ble_service_add_char(svc, ch);
+ *   ble_add_service(svc);
+ *   ble_set_local_name("AkiraOS_LED");
+ *   ble_set_advertised_service(svc);
+ *   ble_init();
+ *   ble_advertise();
+ *
+ *   while (1) {
+ *       uint8_t buf[64];
+ *       int evt = ble_event_pop(buf, sizeof(buf));
+ *       if (evt == BLE_EVT_CHAR_WRITTEN) {
+ *           int char_h = buf[1];
+ *           // buf[2..3] = data_len LE, buf[4..] = data
+ *       }
+ *   }
  */
-extern int bt_shell_recv(uint8_t *buf, uint32_t len, int32_t timeout_ms);
+
+/* BLE characteristic property flags */
+#define BLE_PROP_READ        0x02
+#define BLE_PROP_WRITE_WO_RSP 0x04
+#define BLE_PROP_WRITE       0x08
+#define BLE_PROP_NOTIFY      0x10
+#define BLE_PROP_INDICATE    0x20
+
+/* BLE event types returned by ble_event_pop() */
+#define BLE_EVT_NONE         0
+#define BLE_EVT_CONNECTED    1
+#define BLE_EVT_DISCONNECTED 2
+#define BLE_EVT_CHAR_WRITTEN 3
 
 /**
- * @brief Start BLE advertising so peers can connect.
- * Required capability: bt_shell or hid
- * @return 0 on success, negative error code on failure
+ * @brief Initialise BLE in app mode (lazy BT stack start).
+ * Must be called before advertising. Fails with -EBUSY if HID mode active.
+ * @return 0 on success, negative error code on failure.
  */
-extern int bt_adv_start(void);
+extern int ble_init(void);
+
+/**
+ * @brief Deinitialise BLE, unregister all services, release BLE lock.
+ * @return 0 on success.
+ */
+extern int ble_deinit(void);
+
+/**
+ * @brief Set the BLE device name visible to scanning peers.
+ * @param name  Null-terminated string (max 29 bytes).
+ * @return 0 on success, negative error code on failure.
+ */
+extern int ble_set_local_name(const char *name);
+
+/**
+ * @brief Create a GATT service with a 128-bit UUID.
+ * @param uuid128_str  UUID string "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx".
+ * @return Service handle (>=0) on success, negative error code on failure.
+ */
+extern int ble_service_create(const char *uuid128_str);
+
+/**
+ * @brief Create a GATT characteristic.
+ * @param uuid128_str  128-bit UUID string.
+ * @param props        OR of BLE_PROP_* flags.
+ * @param max_len      Maximum value length in bytes.
+ * @return Characteristic handle (>=0) on success, negative error code on failure.
+ */
+extern int ble_char_create(const char *uuid128_str, int32_t props,
+			   int32_t max_len);
+
+/**
+ * @brief Add a characteristic to a service (call before ble_add_service).
+ * @param svc_h   Service handle from ble_service_create().
+ * @param char_h  Characteristic handle from ble_char_create().
+ * @return 0 on success, negative error code on failure.
+ */
+extern int ble_service_add_char(int32_t svc_h, int32_t char_h);
+
+/**
+ * @brief Finalise and register a service with the GATT server.
+ * Call once after all characteristics are added.
+ * @param svc_h  Service handle.
+ * @return 0 on success, negative error code on failure.
+ */
+extern int ble_add_service(int32_t svc_h);
+
+/**
+ * @brief Choose which service UUID appears in the advertisement payload.
+ * @param svc_h  Service handle.
+ * @return 0 on success, negative error code on failure.
+ */
+extern int ble_set_advertised_service(int32_t svc_h);
+
+/**
+ * @brief Start BLE advertising.
+ * Call after ble_add_service() and ble_set_advertised_service().
+ * @return 0 on success, negative error code on failure.
+ */
+extern int ble_advertise(void);
 
 /**
  * @brief Stop BLE advertising.
- * Required capability: bt_shell or hid
+ * @return 0 on success.
  */
-extern int bt_adv_stop(void);
+extern int ble_stop_advertise(void);
+
+/**
+ * @brief Check if a BLE peer is connected.
+ * @return 1 if connected, 0 otherwise.
+ */
+extern int ble_is_connected(void);
+
+/**
+ * @brief Write (and optionally notify) a characteristic value.
+ * @param char_h   Characteristic handle.
+ * @param data     Pointer to data buffer.
+ * @param len      Number of bytes to write.
+ * @return 0 on success, negative error code on failure.
+ */
+extern int ble_char_write(int32_t char_h, const uint8_t *data, uint32_t len);
+
+/**
+ * @brief Read the current value of a characteristic (last write).
+ * @param char_h   Characteristic handle.
+ * @param buf      Destination buffer.
+ * @param len      Buffer capacity in bytes.
+ * @return Bytes copied on success, negative error code on failure.
+ */
+extern int ble_char_read(int32_t char_h, uint8_t *buf, uint32_t len);
+
+/**
+ * @brief Pop the next BLE event from the internal queue (non-blocking).
+ *
+ * Event serialisation in @p buf:
+ *   Byte 0        : event type (BLE_EVT_*)
+ *   Byte 1        : char_handle (only valid for BLE_EVT_CHAR_WRITTEN)
+ *   Bytes 2-3 LE  : data_len
+ *   Bytes 4+      : data payload
+ *
+ * @param buf  Destination buffer (at least 4 + expected data bytes).
+ * @param len  Buffer capacity.
+ * @return Event type (>0 = BLE_EVT_*) if available, 0 if queue empty.
+ */
+extern int ble_event_pop(uint8_t *buf, uint32_t len);
 
 /*
  * =============================================================================

@@ -61,13 +61,21 @@ bool akira_register_native_apis()
         {"mem_free", (void *)akira_native_mem_free, "(i)", NULL},
         #endif
 
-        #ifdef CONFIG_AKIRA_WASM_BT_SHELL
-        {"bt_shell_print",     (void *)akira_native_bt_shell_send,       "($)i",   NULL},
-        {"bt_shell_send_data", (void *)akira_native_bt_shell_send_data,  "(ii)i",  NULL},
-        {"bt_shell_is_ready",  (void *)akira_native_bt_shell_is_ready,   "()i",    NULL},
-        {"bt_shell_recv",      (void *)akira_native_bt_shell_recv,       "(iii)i", NULL},
-        {"bt_adv_start",       (void *)akira_native_bt_adv_start,        "()i",    NULL},
-        {"bt_adv_stop",        (void *)akira_native_bt_adv_stop,         "()i",    NULL},
+        #ifdef CONFIG_AKIRA_WASM_BLE
+        {"ble_init",                 (void *)akira_native_ble_init,                 "()i",     NULL},
+        {"ble_deinit",               (void *)akira_native_ble_deinit,               "()i",     NULL},
+        {"ble_set_local_name",       (void *)akira_native_ble_set_local_name,       "($)i",    NULL},
+        {"ble_service_create",       (void *)akira_native_ble_service_create,       "($)i",    NULL},
+        {"ble_char_create",          (void *)akira_native_ble_char_create,          "($ii)i",  NULL},
+        {"ble_service_add_char",     (void *)akira_native_ble_service_add_char,     "(ii)i",   NULL},
+        {"ble_add_service",          (void *)akira_native_ble_add_service,          "(i)i",    NULL},
+        {"ble_set_advertised_service",(void *)akira_native_ble_set_advertised_service,"(i)i", NULL},
+        {"ble_advertise",            (void *)akira_native_ble_advertise,            "()i",     NULL},
+        {"ble_stop_advertise",       (void *)akira_native_ble_stop_advertise,       "()i",     NULL},
+        {"ble_is_connected",         (void *)akira_native_ble_is_connected,         "()i",     NULL},
+        {"ble_char_write",           (void *)akira_native_ble_char_write,           "(i*~)i",  NULL},
+        {"ble_char_read",            (void *)akira_native_ble_char_read,            "(i*~)i",  NULL},
+        {"ble_event_pop",            (void *)akira_native_ble_event_pop,            "(*~)i",   NULL},
         #endif
 
         #ifdef CONFIG_AKIRA_WASM_HID

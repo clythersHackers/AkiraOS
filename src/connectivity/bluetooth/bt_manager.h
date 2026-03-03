@@ -39,9 +39,23 @@ extern "C"
     {
         BT_SERVICE_HID = 0x01,
         BT_SERVICE_OTA = 0x02,
-        BT_SERVICE_SHELL = 0x04,
-        BT_SERVICE_ALL = 0x07
+        BT_SERVICE_ALL = 0x03
     } bt_service_t;
+
+    /**
+     * @brief Bluetooth operating mode.
+     *
+     * Only one mode may be active at a time.  HID mode is activated by the
+     * SYS_INIT hook when CONFIG_AKIRA_BT_HID is set.  BLE_APP mode is
+     * activated by a WASM app calling ble_init() and is mutually exclusive
+     * with HID mode.
+     */
+    typedef enum
+    {
+        BT_MODE_NONE    = 0, /**< Stack enabled but no service active */
+        BT_MODE_HID     = 1, /**< BLE HID profile owns the radio */
+        BT_MODE_BLE_APP = 2, /**< WASM BLE app service owns the radio */
+    } bt_manager_mode_t;
 
     /** Bluetooth configuration */
     typedef struct
@@ -158,6 +172,35 @@ extern "C"
      * @return 0 on success
      */
     int bt_manager_get_address(char *buffer, size_t len);
+
+    /**
+     * @brief Set the current BT operating mode.
+     *
+     * Enforces mutual exclusion: returns -EBUSY if the stack is already
+     * locked by the other mode.  Calling with BT_MODE_NONE releases the
+     * lock so the other mode may start.
+     *
+     * @param mode Requested mode
+     * @return 0 on success, -EBUSY if another mode is active
+     */
+    int bt_manager_set_mode(bt_manager_mode_t mode);
+
+    /**
+     * @brief Get the current BT operating mode.
+     * @return Current mode
+     */
+    bt_manager_mode_t bt_manager_get_mode(void);
+
+    /**
+     * @brief Start advertising with a custom 128-bit service UUID.
+     *
+     * Used by BLE_APP mode — provides a generic connectable advertisement
+     * with the provided 128-bit service UUID, no HID-specific data.
+     *
+     * @param svc_uuid128 16-byte little-endian UUID (or NULL for generic adv)
+     * @return 0 on success, negative errno on failure
+     */
+    int bt_manager_start_advertising_custom(const uint8_t svc_uuid128[16]);
 
 #ifdef __cplusplus
 }

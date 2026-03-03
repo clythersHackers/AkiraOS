@@ -40,8 +40,8 @@
 #include "akira_memory_api.h"
 #endif
 
-#ifdef CONFIG_AKIRA_WASM_BT_SHELL
-#include "akira_bt_shell_api.h"
+#ifdef CONFIG_AKIRA_WASM_BLE
+#include "akira_ble_api.h"
 #endif
 
 #ifdef CONFIG_AKIRA_WASM_TIMER

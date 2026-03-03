@@ -21,7 +21,8 @@ uint32_t akira_capability_str_to_mask(const char *cap)
     if (strcmp(cap, "input.write") == 0)    return AKIRA_CAP_INPUT_WRITE;
     if (strcmp(cap, "sensor.read") == 0)    return AKIRA_CAP_SENSOR_READ;
     if (strcmp(cap, "rf.transceive") == 0)  return AKIRA_CAP_RF_TRANSCEIVE;
-    if (strcmp(cap, "bt.shell") == 0)       return AKIRA_CAP_BT_SHELL;
+    if (strcmp(cap, "ble") == 0)            return AKIRA_CAP_BLE;
+    if (strcmp(cap, "bt.shell") == 0)       return AKIRA_CAP_BLE; /* legacy alias */
     if (strcmp(cap, "storage.read") == 0)   return AKIRA_CAP_STORAGE_READ;
     if (strcmp(cap, "storage.write") == 0)  return AKIRA_CAP_STORAGE_WRITE;
     if (strcmp(cap, "gpio.read") == 0)      return AKIRA_CAP_GPIO_READ;
@@ -42,7 +43,7 @@ uint32_t akira_capability_str_to_mask(const char *cap)
     if (strcmp(cap, "input.*") == 0)        return AKIRA_CAP_INPUT_READ | AKIRA_CAP_INPUT_WRITE;
     if (strcmp(cap, "sensor.*") == 0)       return AKIRA_CAP_SENSOR_READ;
     if (strcmp(cap, "rf.*") == 0)           return AKIRA_CAP_RF_TRANSCEIVE;
-    if (strcmp(cap, "bt.*") == 0)           return AKIRA_CAP_BT_SHELL | AKIRA_CAP_HID;
+    if (strcmp(cap, "bt.*") == 0)           return AKIRA_CAP_BLE | AKIRA_CAP_HID;
     if (strcmp(cap, "storage.*") == 0)      return AKIRA_CAP_STORAGE_READ | AKIRA_CAP_STORAGE_WRITE;
     if (strcmp(cap, "gpio.*") == 0)         return AKIRA_CAP_GPIO_READ | AKIRA_CAP_GPIO_WRITE;
     if (strcmp(cap, "network.*") == 0)      return AKIRA_CAP_NETWORK;
@@ -58,7 +59,7 @@ char* akira_capability_mask_to_str(uint32_t cap)
     if (cap & AKIRA_CAP_INPUT_WRITE) return "input.write";
     if (cap & AKIRA_CAP_SENSOR_READ) return "sensor.read";
     if (cap & AKIRA_CAP_RF_TRANSCEIVE) return "rf.transceive";
-    if (cap & AKIRA_CAP_BT_SHELL) return "bt.shell";
+    if (cap & AKIRA_CAP_BLE) return "ble";
     if (cap & AKIRA_CAP_STORAGE_READ) return "storage.read";
     if (cap & AKIRA_CAP_STORAGE_WRITE) return "storage.write";
     if (cap & AKIRA_CAP_GPIO_READ) return "gpio.read";

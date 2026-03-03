@@ -24,7 +24,7 @@ extern "C" {
 #define AKIRA_CAP_INPUT_WRITE (1U << 2)
 #define AKIRA_CAP_SENSOR_READ (1U << 3)
 #define AKIRA_CAP_RF_TRANSCEIVE (1U << 4)
-#define AKIRA_CAP_BT_SHELL (1U << 5)
+#define AKIRA_CAP_BLE        (1U << 5)  /* BLE app service: init, advertise, GATT */
 #define AKIRA_CAP_STORAGE_READ (1U << 6)
 #define AKIRA_CAP_STORAGE_WRITE (1U << 7)
 #define AKIRA_CAP_NETWORK (1U << 8)

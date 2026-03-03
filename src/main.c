@@ -37,9 +37,6 @@
 #ifdef CONFIG_AKIRA_USB_HID
 #include <connectivity/usb/usb_hid.h>
 #endif
-#ifdef CONFIG_AKIRA_BT_SHELL
-#include <connectivity/bluetooth/bt_shell.h>
-#endif
 
 
 LOG_MODULE_REGISTER(akira_main, CONFIG_AKIRA_LOG_LEVEL);
@@ -93,15 +90,6 @@ int main(void)
     akira_display_flush();
     k_sleep(K_MSEC(CONFIG_AKIRA_BOOT_DELAY_MS));
 
-#endif
-
-#ifdef CONFIG_AKIRA_BT_SHELL
-    /* Initialize Bluetooth shell commands */
-    if (bt_shell_init() < 0) {
-        LOG_WRN("Bluetooth shell init failed");
-    } else {
-        LOG_INF("Bluetooth shell commands initialized");
-    }
 #endif
 
     /* USB manager auto-initialized via SYS_INIT (see usb_manager.c) */

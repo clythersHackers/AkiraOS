@@ -23,12 +23,12 @@
 #include "bt_echo.h"
 #endif
 
-#if defined(CONFIG_AKIRA_BT_SHELL)
-#include "bt_shell.h"
-
 #ifdef CONFIG_BT_BAS
 #include <zephyr/bluetooth/services/bas.h>
 #endif
+
+#if defined(CONFIG_AKIRA_WASM_BLE)
+#include "ble_app_service.h"
 #endif
 
 LOG_MODULE_REGISTER(bt_manager, CONFIG_AKIRA_LOG_LEVEL);
@@ -43,6 +43,7 @@ static struct
     bt_config_t config;
     bt_state_t state;
     bt_stats_t stats;
+    bt_manager_mode_t mode;
 
 #if BT_AVAILABLE
     struct bt_conn *current_conn;
@@ -103,6 +104,11 @@ static void connected_cb(struct bt_conn *conn, uint8_t err)
     LOG_INF("Connected: %s", addr);
 
     notify_event(BT_EVENT_CONNECTED, NULL);
+#if defined(CONFIG_AKIRA_WASM_BLE)
+    if (bt_mgr.mode == BT_MODE_BLE_APP) {
+        ble_app_push_conn_event(BLE_EVT_CONNECTED);
+    }
+#endif
 }
 
 static void disconnected_cb(struct bt_conn *conn, uint8_t reason)
@@ -122,6 +128,11 @@ static void disconnected_cb(struct bt_conn *conn, uint8_t reason)
     bt_mgr.stats.disconnections++;
 
     notify_event(BT_EVENT_DISCONNECTED, NULL);
+#if defined(CONFIG_AKIRA_WASM_BLE)
+    if (bt_mgr.mode == BT_MODE_BLE_APP) {
+        ble_app_push_conn_event(BLE_EVT_DISCONNECTED);
+    }
+#endif
 
     /* Cancel any pending reconnect work */
     k_work_cancel_delayable(&bt_mgr.reconnect_work);
@@ -484,47 +495,104 @@ int bt_manager_get_address(char *buffer, size_t len)
 }
 
 /*===========================================================================*/
-/* Shell Integration                                                         */
+/* Mode Switch                                                               */
 /*===========================================================================*/
 
-void bluetooth_manager_receive_shell_command(const char *cmd)
+int bt_manager_set_mode(bt_manager_mode_t mode)
 {
-    if (!cmd || !bt_mgr.initialized)
-    {
-        LOG_WRN("Shell command ignored: %s",
-                !cmd ? "null command" : "BT not initialized");
-        return;
+    k_mutex_lock(&bt_mgr.mutex, K_FOREVER);
+
+    if (mode != BT_MODE_NONE && bt_mgr.mode != BT_MODE_NONE && bt_mgr.mode != mode) {
+        k_mutex_unlock(&bt_mgr.mutex);
+        LOG_ERR("BT mode conflict: active=%d requested=%d", bt_mgr.mode, mode);
+        return -EBUSY;
     }
 
-    LOG_INF("Sending shell command via BLE: %s", cmd);
+    bt_mgr.mode = mode;
+    k_mutex_unlock(&bt_mgr.mutex);
 
-#if defined(CONFIG_AKIRA_BT_SHELL)
-    int ret = bt_shell_send_command(cmd);
-    if (ret == 0)
-    {
-        LOG_DBG("Shell command sent successfully");
-        bt_mgr.stats.bytes_tx += strlen(cmd);
+    /* Lazy init when transitioning out of NONE and not yet initialized */
+    if (mode != BT_MODE_NONE && !bt_mgr.initialized) {
+        bt_config_t lazy_cfg = {
+            .device_name    = "AkiraOS",
+            .auto_advertise = false,
+            .pairable       = true,
+        };
+        return bt_manager_init(&lazy_cfg);
     }
-    else if (ret == -ENOTCONN)
-    {
-        LOG_WRN("Shell command not sent: no BLE connection");
+
+    LOG_INF("BT mode set to %d", mode);
+    return 0;
+}
+
+bt_manager_mode_t bt_manager_get_mode(void)
+{
+    return bt_mgr.mode;
+}
+
+/*===========================================================================*/
+/* Custom Advertising (BLE_APP mode)                                        */
+/*===========================================================================*/
+
+int bt_manager_start_advertising_custom(const uint8_t svc_uuid128[16])
+{
+#if BT_AVAILABLE
+    if (!bt_mgr.initialized) {
+        return -EINVAL;
     }
-    else if (ret == -EACCES)
-    {
-        LOG_WRN("Shell command not sent: peer has not enabled notifications");
+    if (bt_mgr.state == BT_STATE_CONNECTED) {
+        return -EBUSY;
     }
-    else
-    {
-        LOG_ERR("Failed to send shell command: %d", ret);
+
+    struct bt_le_adv_param adv_param = BT_LE_ADV_PARAM_INIT(
+        BT_LE_ADV_OPT_CONN,
+        BT_GAP_ADV_FAST_INT_MIN_2,
+        BT_GAP_ADV_FAST_INT_MAX_2,
+        NULL);
+
+    /* Flags only in advert payload — keeps it minimal */
+    struct bt_data custom_ad[] = {
+        BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+    };
+
+    /* Scan response: name + optional 128-bit service UUID */
+    struct bt_data sd[2];
+    uint8_t sd_count = 0;
+
+    sd[sd_count++] = (struct bt_data)BT_DATA(
+        BT_DATA_NAME_COMPLETE,
+        bt_mgr.config.device_name,
+        strlen(bt_mgr.config.device_name));
+
+    if (svc_uuid128) {
+        sd[sd_count++] = (struct bt_data)BT_DATA(
+            BT_DATA_UUID128_ALL, svc_uuid128, 16);
     }
+
+    int err = bt_le_adv_start(&adv_param, custom_ad, ARRAY_SIZE(custom_ad),
+                               sd, sd_count);
+    if (err == -EALREADY) {
+        LOG_INF("BT already advertising");
+        return 0;
+    } else if (err) {
+        LOG_ERR("Custom advertising start failed: %d", err);
+        return err;
+    }
+
+    bt_mgr.state = BT_STATE_ADVERTISING;
+    LOG_INF("BLE app advertising started");
+    return 0;
 #else
-    LOG_WRN("BT Shell service not enabled (CONFIG_AKIRA_BT_SHELL)");
+    bt_mgr.state = BT_STATE_ADVERTISING;
+    return 0;
 #endif
 }
 
-#ifdef CONFIG_BT
+#ifdef CONFIG_AKIRA_BT_HID
+/* HID mode: eagerly initialise at boot so HID profile is ready immediately */
 static int bt_manager_sys_init(void)
 {
+    bt_mgr.mode = BT_MODE_HID;
     return bt_manager_init(NULL);
 }
 SYS_INIT(bt_manager_sys_init, APPLICATION, CONFIG_AKIRA_BT_INIT_PRIORITY);
