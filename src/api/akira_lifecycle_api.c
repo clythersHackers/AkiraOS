@@ -98,7 +98,11 @@ static void ensure_switch_wq_init(void)
 
 int akira_native_app_get_status(wasm_exec_env_t exec_env, const char *name)
 {
-    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_APP_CONTROL, -EPERM);
+    /* Read-only query: app.info is sufficient; app.control also accepted */
+    uint32_t mask = akira_security_get_cap_mask(exec_env);
+    if (!(mask & (AKIRA_CAP_APP_INFO | AKIRA_CAP_APP_CONTROL))) {
+        AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_APP_INFO, -EPERM);
+    }
 
     if (!name || name[0] == '\0') {
         return -EINVAL;
@@ -114,7 +118,11 @@ int akira_native_app_get_status(wasm_exec_env_t exec_env, const char *name)
 int akira_native_app_list(wasm_exec_env_t exec_env,
                           uint32_t buf_ptr, uint32_t buf_len)
 {
-    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_APP_CONTROL, -EPERM);
+    /* Read-only query: app.info is sufficient; app.control also accepted */
+    uint32_t mask = akira_security_get_cap_mask(exec_env);
+    if (!(mask & (AKIRA_CAP_APP_INFO | AKIRA_CAP_APP_CONTROL))) {
+        AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_APP_INFO, -EPERM);
+    }
 
     wasm_module_inst_t module_inst = wasm_runtime_get_module_inst(exec_env);
     if (!module_inst) {
@@ -161,7 +169,11 @@ int akira_native_app_list(wasm_exec_env_t exec_env,
 int akira_native_app_get_self_name(wasm_exec_env_t exec_env,
                                    uint32_t buf_ptr, uint32_t buf_len)
 {
-    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_APP_CONTROL, -EPERM);
+    /* Self-name is identity-only: app.info suffices; app.control also accepted */
+    uint32_t mask = akira_security_get_cap_mask(exec_env);
+    if (!(mask & (AKIRA_CAP_APP_INFO | AKIRA_CAP_APP_CONTROL))) {
+        AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_APP_INFO, -EPERM);
+    }
 
     wasm_module_inst_t module_inst = wasm_runtime_get_module_inst(exec_env);
     if (!module_inst) {

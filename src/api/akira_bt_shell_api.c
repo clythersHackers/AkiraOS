@@ -19,7 +19,7 @@
 #include "connectivity/bluetooth/bt_manager.h"
 #endif
 
-LOG_MODULE_REGISTER(akira_bt_shell_api, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(akira_bt_shell_api, CONFIG_AKIRA_LOG_LEVEL);
 
 /* Core BT Shell API functions (no security checks) */
 
@@ -140,10 +140,13 @@ int akira_native_bt_shell_recv(wasm_exec_env_t exec_env,
 
 int akira_native_bt_adv_start(wasm_exec_env_t exec_env)
 {
-    /* Allow both HID apps (need BLE for HID) and BT shell apps */
+    /* Allow both HID apps (need BLE for HID) and BT shell apps.
+     * Route through AKIRA_CHECK_CAP_OR_RETURN so denials are audited.
+     * BT_SHELL is the primary cap; HID is accepted as an alternative. */
     uint32_t caps = akira_security_get_cap_mask(exec_env);
-    if (!(caps & AKIRA_CAP_BT_SHELL) && !(caps & AKIRA_CAP_HID)) {
-        return -EPERM;
+    if (!(caps & (AKIRA_CAP_BT_SHELL | AKIRA_CAP_HID))) {
+        /* Re-use the macro path so the audit log is written */
+        AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_BT_SHELL, -EPERM);
     }
 #if defined(CONFIG_BT)
     return bt_manager_start_advertising();
@@ -155,8 +158,8 @@ int akira_native_bt_adv_start(wasm_exec_env_t exec_env)
 int akira_native_bt_adv_stop(wasm_exec_env_t exec_env)
 {
     uint32_t caps = akira_security_get_cap_mask(exec_env);
-    if (!(caps & AKIRA_CAP_BT_SHELL) && !(caps & AKIRA_CAP_HID)) {
-        return -EPERM;
+    if (!(caps & (AKIRA_CAP_BT_SHELL | AKIRA_CAP_HID))) {
+        AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_BT_SHELL, -EPERM);
     }
 #if defined(CONFIG_BT)
     return bt_manager_stop_advertising();

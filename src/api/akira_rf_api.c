@@ -9,8 +9,13 @@
 #include <zephyr/logging/log.h>
 #include "../drivers/rf/rf_framework.h"
 #include "../drivers/rf/lr1121.h"
+#include <lib/mem_helper.h>
 
-LOG_MODULE_REGISTER(akira_rf_api, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(akira_rf_api, CONFIG_AKIRA_LOG_LEVEL);
+
+/* Protects g_active_chip, g_active_driver, and rf_framework_initialized.
+ * RF ops may be called concurrently if two WASM apps both hold rf.transceive. */
+static K_MUTEX_DEFINE(s_rf_lock);
 
 static akira_rf_chip_t g_active_chip = AKIRA_RF_CHIP_NONE;
 static bool rf_framework_initialized = false;
@@ -19,6 +24,7 @@ static const struct akira_rf_driver *g_active_driver = NULL;
 /* Ensure RF framework is initialized */
 static int ensure_rf_framework(void)
 {
+    /* Called under s_rf_lock */
     if (rf_framework_initialized) {
         return 0;
     }
@@ -42,7 +48,9 @@ int akira_rf_init(akira_rf_chip_t chip)
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     int ret;
 
-    /* Ensure framework is initialized */
+    k_mutex_lock(&s_rf_lock, K_FOREVER);
+
+    /* Ensure framework is initialized (under lock) */
     ret = ensure_rf_framework();
     if (ret < 0) {
         return ret;
@@ -84,6 +92,7 @@ int akira_rf_init(akira_rf_chip_t chip)
     g_active_chip = chip;
     rf_framework_set_active_driver(rf_type);
 
+    k_mutex_unlock(&s_rf_lock);
     LOG_INF("RF driver '%s' initialized successfully", driver->name);
     return 0;
 #else
@@ -96,6 +105,7 @@ int akira_rf_deinit(void)
 {
     LOG_INF("RF deinit");
 
+    k_mutex_lock(&s_rf_lock, K_FOREVER);
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     if (g_active_driver && g_active_driver->deinit) {
         g_active_driver->deinit();
@@ -103,21 +113,24 @@ int akira_rf_deinit(void)
     g_active_driver = NULL;
     rf_framework_set_active_driver(RF_CHIP_NONE);
 #endif
-
     g_active_chip = AKIRA_RF_CHIP_NONE;
+    k_mutex_unlock(&s_rf_lock);
     return 0;
 }
 
 int akira_rf_send(const uint8_t *data, size_t len)
 {
+    k_mutex_lock(&s_rf_lock, K_FOREVER);
     if (g_active_chip == AKIRA_RF_CHIP_NONE || !g_active_driver)
     {
+        k_mutex_unlock(&s_rf_lock);
         LOG_ERR("RF not initialized");
         return -ENODEV;
     }
 
     if (!data || len == 0)
     {
+        k_mutex_unlock(&s_rf_lock);
         return -EINVAL;
     }
 
@@ -125,10 +138,14 @@ int akira_rf_send(const uint8_t *data, size_t len)
 
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     if (!g_active_driver->tx) {
+        k_mutex_unlock(&s_rf_lock);
         return -ENOSYS;
     }
-    return g_active_driver->tx(data, len);
+    int ret = g_active_driver->tx(data, len);
+    k_mutex_unlock(&s_rf_lock);
+    return ret;
 #else
+    k_mutex_unlock(&s_rf_lock);
     (void)data; (void)len;
     return -ENOSYS;
 #endif
@@ -136,14 +153,17 @@ int akira_rf_send(const uint8_t *data, size_t len)
 
 int akira_rf_receive(uint8_t *buffer, size_t max_len, uint32_t timeout_ms)
 {
+    k_mutex_lock(&s_rf_lock, K_FOREVER);
     if (g_active_chip == AKIRA_RF_CHIP_NONE || !g_active_driver)
     {
+        k_mutex_unlock(&s_rf_lock);
         LOG_ERR("RF not initialized");
         return -ENODEV;
     }
 
     if (!buffer || max_len == 0)
     {
+        k_mutex_unlock(&s_rf_lock);
         return -EINVAL;
     }
 
@@ -151,10 +171,14 @@ int akira_rf_receive(uint8_t *buffer, size_t max_len, uint32_t timeout_ms)
 
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     if (!g_active_driver->rx) {
+        k_mutex_unlock(&s_rf_lock);
         return -ENOSYS;
     }
-    return g_active_driver->rx(buffer, max_len, timeout_ms);
+    int ret = g_active_driver->rx(buffer, max_len, timeout_ms);
+    k_mutex_unlock(&s_rf_lock);
+    return ret;
 #else
+    k_mutex_unlock(&s_rf_lock);
     (void)buffer; (void)max_len; (void)timeout_ms;
     return -ENOSYS;
 #endif
@@ -164,13 +188,18 @@ int akira_rf_set_frequency(uint32_t freq_hz)
 {
     LOG_INF("RF set frequency: %u Hz", freq_hz);
 
+    k_mutex_lock(&s_rf_lock, K_FOREVER);
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     if (!g_active_driver || !g_active_driver->set_frequency) {
+        k_mutex_unlock(&s_rf_lock);
         return -ENOSYS;
     }
-    return g_active_driver->set_frequency(freq_hz);
+    int ret = g_active_driver->set_frequency(freq_hz);
+    k_mutex_unlock(&s_rf_lock);
+    return ret;
 #else
     (void)freq_hz;
+    k_mutex_unlock(&s_rf_lock);
     return -ENOSYS;
 #endif
 }
@@ -179,30 +208,41 @@ int akira_rf_set_power(int8_t dbm)
 {
     LOG_INF("RF set power: %d dBm", dbm);
 
+    k_mutex_lock(&s_rf_lock, K_FOREVER);
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     if (!g_active_driver || !g_active_driver->set_power) {
+        k_mutex_unlock(&s_rf_lock);
         return -ENOSYS;
     }
-    return g_active_driver->set_power(dbm);
+    int ret = g_active_driver->set_power(dbm);
+    k_mutex_unlock(&s_rf_lock);
+    return ret;
 #else
     (void)dbm;
+    k_mutex_unlock(&s_rf_lock);
     return -ENOSYS;
 #endif
 }
 
 int akira_rf_get_rssi(int16_t *rssi)
 {
-    if (!rssi)
+    if (!rssi) {
         return -EINVAL;
+    }
 
+    k_mutex_lock(&s_rf_lock, K_FOREVER);
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     if (!g_active_driver || !g_active_driver->get_rssi) {
         *rssi = -100;
+        k_mutex_unlock(&s_rf_lock);
         return -ENOSYS;
     }
-    return g_active_driver->get_rssi(rssi);
+    int ret = g_active_driver->get_rssi(rssi);
+    k_mutex_unlock(&s_rf_lock);
+    return ret;
 #else
     *rssi = -100;
+    k_mutex_unlock(&s_rf_lock);
     return -ENOSYS;
 #endif
 }

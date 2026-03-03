@@ -18,12 +18,16 @@
 #include <lib/mem_helper.h>
 #include "platform_hal.h"
 #include "storage/fs_manager.h"
-#include <lib/mem_helper.h>
 #include <runtime/security.h>
 #include <runtime/security/sandbox.h>
 #include <runtime/security/app_signing.h>
 
 #include "akira_api.h"
+
+#ifdef CONFIG_AKIRA_WASM_RUNTIME
+#include <modules/akira_log_module.h>
+#include <modules/akira_time_module.h>
+#endif
 
 #ifdef CONFIG_AKIRA_WASM_IPC
 #include <runtime/akira_ipc.h>
@@ -100,20 +104,20 @@ static void slot_cleanup_work_fn(struct k_work *work)
     }
 }
 
-/* One mutex shared across all slots for cond_exit waits.
- * Per-slot mutexes add ~28B × MAX_CONTAINERS for zero benefit. */
-static K_MUTEX_DEFINE(g_exit_mutex);
-
 /* Protects g_apps[] slot reservation in load_wasm() so concurrent calls
  * cannot grab the same free slot simultaneously. Held very briefly
- * (find + used=true), never held during blocking operations. */
+ * (find + used=true), never held during blocking operations.
+ * Also protects g_exit_cb registration and g_runtime_initialized. */
 static K_MUTEX_DEFINE(g_runtime_mutex);
 
-/* Optional exit callback registered by app_manager */
+/* Optional exit callback registered by app_manager.
+ * Write protected by g_runtime_mutex; reads on the exit path hold the
+ * per-slot app->exit_mutex so a concurrent set_exit_callback() cannot
+ * produce a torn read on 64-bit platforms (native_sim). */
 static akira_runtime_exit_cb_t g_exit_cb = NULL;
 
-/* Use capability bits from security.h (AKIRA_CAP_*) */
-static bool g_runtime_initialized = false;
+/* Atomic init flag: prevents double-init if two threads race at boot. */
+static atomic_t g_runtime_initialized = ATOMIC_INIT(0);
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
 /*
@@ -213,13 +217,17 @@ uint32_t akira_runtime_get_cap_mask_for_module_inst(wasm_module_inst_t inst)
 int akira_runtime_get_name_for_module_inst(wasm_module_inst_t inst, char *buf, size_t buflen)
 {
     if (!inst || !buf || buflen == 0) return -EINVAL;
+    /* Lock to protect against concurrent slot reuse modifying name/used/instance. */
+    k_mutex_lock(&g_runtime_mutex, K_FOREVER);
     for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++) {
         if (g_apps[i].used && g_apps[i].instance == inst) {
             strncpy(buf, g_apps[i].name, buflen-1);
             buf[buflen-1] = '\0';
+            k_mutex_unlock(&g_runtime_mutex);
             return 0;
         }
     }
+    k_mutex_unlock(&g_runtime_mutex);
     return -ENOENT;
 }
 
@@ -289,8 +297,10 @@ uint32_t akira_runtime_get_memory_quota(int instance_id)
 /* Initialize WAMR runtime with PSRAM-backed heap when available */
 int akira_runtime_init(void)
 {
-    if (g_runtime_initialized)
+    /* Atomic compare-and-swap: first caller wins, subsequent calls are no-ops. */
+    if (!atomic_cas(&g_runtime_initialized, 0, 1)) {
         return 0;
+    }
 
     LOG_INF("Initializing Akira unified runtime v2...");
 
@@ -341,6 +351,14 @@ int akira_runtime_init(void)
         LOG_ERR("Failed to register native APIs");
         return -EIO;
     }
+    /* Register modular namespace APIs ("akira_log", "akira_time") for
+     * WASM apps that use named imports instead of the flat "env" namespace. */
+    if (akira_register_log_module() < 0) {
+        LOG_WRN("Failed to register akira_log module — log native APIs unavailable");
+    }
+    if (akira_register_time_module() < 0) {
+        LOG_WRN("Failed to register akira_time module — time native APIs unavailable");
+    }
     #else
     LOG_WRN("Native API registration not included - no APIs enabled (CONFIG_AKIRA_WASM_API not set)");
     #endif /* CONFIG_AKIRA_WASM_API */
@@ -350,7 +368,7 @@ int akira_runtime_init(void)
         fs_manager_mkdir("/lfs/apps");
     }
 
-    g_runtime_initialized = true;
+    /* g_runtime_initialized already set to 1 by the atomic_cas above */
     LOG_INF("Akira runtime initialized (WAMR + native bridge)");
     return 0;
 #else
@@ -368,7 +386,7 @@ int akira_runtime_init(void)
  */
 int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
 {
-    if (!g_runtime_initialized)
+    if (!atomic_get(&g_runtime_initialized))
     {
         LOG_ERR("Runtime not initialized");
         return -ENODEV;
@@ -669,13 +687,15 @@ static void wasm_app_thread_fn(void *p1, void *p2, void *p3)
             slot, exit_code, app->perf.call_count, app->perf.trap_count);
 
 thread_exit:
-    /* Notify any waiters (akira_runtime_stop or status query) */
-    k_mutex_lock(&g_exit_mutex, K_FOREVER);
+    /* Notify any waiters (akira_runtime_stop or status query).
+     * Use the per-slot exit_mutex — fully isolates concurrent stop() calls
+     * on different slots (no false contention across unrelated apps). */
+    k_mutex_lock(&app->exit_mutex, K_FOREVER);
     if (app->status != AKIRA_APP_STATUS_ERROR) {
         app->status = AKIRA_APP_STATUS_EXITED;
     }
     k_condvar_broadcast(&app->cond_exit);
-    k_mutex_unlock(&g_exit_mutex);
+    k_mutex_unlock(&app->exit_mutex);
 
     /* -------- Release the WASM module and slot --------
      * Done here (in the app thread itself) to avoid a k_thread_join deadlock
@@ -702,10 +722,14 @@ thread_exit:
     app->used   = false;   /* Slot now free — must be LAST write */
 
     /* Invoke registered exit callback (e.g. app_manager state transition).
-     * Called AFTER slot is freed so a restart triggered by the callback
-     * immediately gets a clean slot. */
-    if (g_exit_cb) {
-        g_exit_cb(slot, app->exit_code);
+     * Read g_exit_cb under g_runtime_mutex to guard against a concurrent
+     * set_exit_callback() tearing the pointer on 64-bit targets (native_sim). */
+    akira_runtime_exit_cb_t cb;
+    k_mutex_lock(&g_runtime_mutex, K_FOREVER);
+    cb = g_exit_cb;
+    k_mutex_unlock(&g_runtime_mutex);
+    if (cb) {
+        cb(slot, app->exit_code);
     }
 
     /* Schedule deferred stack cleanup on the system work queue.
@@ -757,6 +781,7 @@ int akira_runtime_start(int instance_id)
 
     /* Initialize per-slot sync primitives for this run */
     k_sem_init(&app->sem_start, 0, 1);
+    k_mutex_init(&app->exit_mutex);
     k_condvar_init(&app->cond_exit);
     app->exit_code = 0;
 
@@ -775,8 +800,8 @@ int akira_runtime_start(int instance_id)
     }
 
     /* Block until WAMR instantiation succeeds or fails.
-     * 15-second hard timeout guards against WAMR deadlock or OOM. */
-    int sem_ret = k_sem_take(&app->sem_start, K_SECONDS(15));
+     * Hard timeout guards against WAMR deadlock or OOM. */
+    int sem_ret = k_sem_take(&app->sem_start, K_MSEC(CONFIG_AKIRA_WASM_START_TIMEOUT_MS));
     if (sem_ret < 0) {
         LOG_ERR("Timeout waiting for WASM instantiation (slot %d) — aborting", instance_id);
         k_thread_abort(app->tid);
@@ -829,12 +854,14 @@ int akira_runtime_stop(int instance_id)
         wasm_runtime_terminate(app->instance);
     }
 
-    /* Wait for the app thread to finish cleanup and signal cond_exit */
-    k_mutex_lock(&g_exit_mutex, K_FOREVER);
+    /* Wait for the app thread to finish cleanup and signal cond_exit.
+     * Use per-slot exit_mutex: stop() calls on different slots are fully
+     * independent and do not block each other. */
+    k_mutex_lock(&app->exit_mutex, K_FOREVER);
     if (app->status == AKIRA_APP_STATUS_RUNNING) {
         /* 5-second timeout; abort thread if it doesn't respond */
-        int wait_ret = k_condvar_wait(&app->cond_exit, &g_exit_mutex,
-                                      K_SECONDS(5));
+        int wait_ret = k_condvar_wait(&app->cond_exit, &app->exit_mutex,
+                                      K_MSEC(CONFIG_AKIRA_WASM_STOP_TIMEOUT_MS));
         if (wait_ret != 0) {
             LOG_ERR("App thread (slot %d) timed out — aborting", instance_id);
             k_thread_abort(app->tid);
@@ -860,7 +887,7 @@ int akira_runtime_stop(int instance_id)
         }
     }
     app->status = AKIRA_APP_STATUS_STOPPED;
-    k_mutex_unlock(&g_exit_mutex);
+    k_mutex_unlock(&app->exit_mutex);
 
     /* Join to release Zephyr thread resources and free the SRAM stack.
      * Timeout is 2 s: the join is now always called without the outer
@@ -1030,7 +1057,11 @@ int akira_runtime_verify_binary(const uint8_t *binary, uint32_t size,
 
 void akira_runtime_set_exit_callback(akira_runtime_exit_cb_t cb)
 {
+    /* Protect the pointer write so concurrent reads on the exit path see
+     * either the old or the new value atomically (no torn pointer). */
+    k_mutex_lock(&g_runtime_mutex, K_FOREVER);
     g_exit_cb = cb;
+    k_mutex_unlock(&g_runtime_mutex);
 }
 
 void akira_runtime_get_cache_stats(module_cache_stats_t *stats)

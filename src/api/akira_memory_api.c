@@ -143,6 +143,10 @@ void akira_wasm_free(wasm_exec_env_t exec_env, void *ptr)
 uint32_t akira_native_mem_alloc(wasm_exec_env_t exec_env, uint32_t size)
 {
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
+    /* Capability gate: only apps that declared "memory" in their manifest
+     * are allowed to call mem_alloc. Quota is still enforced on top of this. */
+    AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_MEMORY, 0);
+
     if (size == 0 || size > (16 * 1024 * 1024)) {  /* Sanity limit: 16MB */
         return 0;
     }
@@ -203,6 +207,13 @@ uint32_t akira_native_mem_alloc(wasm_exec_env_t exec_env, uint32_t size)
 void akira_native_mem_free(wasm_exec_env_t exec_env, uint32_t ptr)
 {
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
+    /* Capability gate: only apps that declared "memory" can call mem_free.
+     * This prevents a rogue app from freeing pointers obtained by other means. */
+    if (!akira_security_check_exec(exec_env, AKIRA_CAP_MEMORY)) {
+        LOG_WRN("mem_free: capability denied");
+        return;
+    }
+
     if (ptr == 0) {
         return;
     }

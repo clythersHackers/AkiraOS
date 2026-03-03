@@ -20,7 +20,7 @@
 #include <stdint.h>
 #include "runtime/security.h"
 
-LOG_MODULE_REGISTER(manifest_parser, CONFIG_LOG_DEFAULT_LEVEL);
+LOG_MODULE_REGISTER(manifest_parser, CONFIG_AKIRA_LOG_LEVEL);
 
 /* WASM section IDs */
 #define WASM_SECTION_CUSTOM     0

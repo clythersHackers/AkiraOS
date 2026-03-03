@@ -42,6 +42,14 @@ extern "C" {
  * arbitrary apps.  Games and utilities can use this without full supervisor
  * power.  Manifest string: "app.switch" */
 #define AKIRA_CAP_APP_SWITCH  (1U << 18)
+/* Quota-enforced heap allocation from WASM-accessible memory.
+ * Required to call mem_alloc / mem_free native APIs.
+ * Manifest string: "memory" */
+#define AKIRA_CAP_MEMORY      (1U << 19)
+/* Read-only app identity: get own name, list apps, query status.
+ * Does NOT grant start/stop authority — use app.control for that.
+ * Manifest string: "app.info" */
+#define AKIRA_CAP_APP_INFO    (1U << 20)
 
 /*
  * Capability check macro using security subsystem.

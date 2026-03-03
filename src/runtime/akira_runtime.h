@@ -74,6 +74,7 @@ typedef struct {
     /* Thread synchronization */
     k_tid_t tid;              /**< Thread ID (NULL if not running) */
     struct k_sem sem_start;   /**< Posted when WAMR instance is ready */
+    struct k_mutex exit_mutex;  /**< Per-slot mutex for cond_exit wait — isolates stop() calls across slots */
     struct k_condvar cond_exit; /**< Broadcast when thread exits */
 
     uint32_t cap_mask;        /**< capability bitmask from manifest */

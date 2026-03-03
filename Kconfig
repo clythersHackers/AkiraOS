@@ -864,6 +864,33 @@ config AKIRA_SANDBOX_EXEC_TIMEOUT_MS
       Maximum execution time for a single WASM function call before
       the watchdog kills the app. Set higher for compute-heavy apps.
 
+config AKIRA_WASM_START_TIMEOUT_MS
+    int "WASM instantiation timeout (ms)"
+    default 15000
+    range 2000 60000
+    depends on AKIRA_WASM_RUNTIME
+    help
+      Maximum time to wait for a WASM module to complete instantiation
+      and signal readiness. Increase if modules perform heavy init work.
+
+config AKIRA_WASM_STOP_TIMEOUT_MS
+    int "WASM stop/join timeout (ms)"
+    default 5000
+    range 1000 30000
+    depends on AKIRA_WASM_RUNTIME
+    help
+      Maximum time to wait for a WASM app thread to exit cleanly after
+      wasm_runtime_terminate() is called. Thread is aborted on timeout.
+
+config AKIRA_BOOT_DELAY_MS
+    int "Boot splash delay (ms)"
+    default 3000
+    range 0 10000
+    depends on AKIRA_DISPLAY
+    help
+      How long to show the boot splash screen before continuing
+      with system initialisation. Set to 0 to disable the delay.
+
 config AKIRA_SANDBOX_RATE_LIMITING
     bool "Enable syscall rate limiting"
     default y

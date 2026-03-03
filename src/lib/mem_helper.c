@@ -12,7 +12,7 @@
 #include <zephyr/logging/log.h>
 #include <string.h>
 
-LOG_MODULE_REGISTER(mem_helper, CONFIG_LOG_DEFAULT_LEVEL);
+LOG_MODULE_REGISTER(mem_helper, CONFIG_AKIRA_LOG_LEVEL);
 
 /* PSRAM detection via shared multi-heap */
 #ifdef CONFIG_AKIRA_PSRAM

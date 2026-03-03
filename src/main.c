@@ -91,7 +91,7 @@ int main(void)
     akira_display_text(5, y_pos, "====================================", text_color);
     
     akira_display_flush();
-    k_sleep(K_SECONDS(3));
+    k_sleep(K_MSEC(CONFIG_AKIRA_BOOT_DELAY_MS));
 
 #endif
 

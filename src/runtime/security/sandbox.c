@@ -37,8 +37,8 @@ static K_MUTEX_DEFINE(g_audit_mutex);
  */
 static void rate_bucket_refill(sandbox_rate_bucket_t *bucket)
 {
-    int64_t now = k_uptime_get();
-    int64_t elapsed_ms = now - bucket->last_refill_ms;
+    uint32_t now = k_uptime_get_32();
+    uint32_t elapsed_ms = now - bucket->last_refill_ms;
 
     if (elapsed_ms < 20) {
         return; /* Refill at most every 20ms to reduce overhead */
@@ -157,7 +157,7 @@ void sandbox_ctx_init(sandbox_ctx_t *ctx, akira_trust_level_t trust,
         SANDBOX_RATE_IPC_OPS,
     };
 
-    int64_t now = k_uptime_get();
+    uint32_t now = k_uptime_get_32();
     for (int i = 0; i < SANDBOX_NUM_RATE_BUCKETS; i++) {
         ctx->rate_buckets[i].max_tokens = bucket_rates[i];
         ctx->rate_buckets[i].refill_per_sec = bucket_rates[i];

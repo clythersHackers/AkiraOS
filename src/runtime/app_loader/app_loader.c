@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <runtime/akira_runtime.h>
 #include <connectivity/transport_interface.h>
+#include <lib/mem_helper.h>
 
 LOG_MODULE_REGISTER(app_loader, CONFIG_AKIRA_LOG_LEVEL);
 
@@ -50,13 +51,13 @@ static int wasm_data_callback(const uint8_t *data, size_t len,
 
         /* Clean up any previous incomplete transfer */
         if (wasm_transfer.buffer) {
-            k_free(wasm_transfer.buffer);
+            akira_free_buffer(wasm_transfer.buffer);
             wasm_transfer.buffer = NULL;
         }
 
-        /* Pre-allocate buffer if size is known */
+        /* Pre-allocate from PSRAM when available to avoid SRAM exhaustion */
         if (info->total_size > 0) {
-            wasm_transfer.buffer = k_malloc(info->total_size);
+            wasm_transfer.buffer = akira_malloc_buffer(info->total_size);
             if (!wasm_transfer.buffer) {
                 LOG_ERR("Failed to allocate WASM buffer (%u bytes)", info->total_size);
                 k_mutex_unlock(&app_loader_mutex);
@@ -87,7 +88,7 @@ static int wasm_data_callback(const uint8_t *data, size_t len,
     if (info->flags & TRANSPORT_FLAG_ABORT) {
         LOG_WRN("WASM transfer aborted");
         if (wasm_transfer.buffer) {
-            k_free(wasm_transfer.buffer);
+            akira_free_buffer(wasm_transfer.buffer);
             wasm_transfer.buffer = NULL;
         }
         wasm_transfer.buffer_size = 0;
@@ -116,7 +117,7 @@ static int wasm_data_callback(const uint8_t *data, size_t len,
         );
 
         /* Clean up */
-        k_free(wasm_transfer.buffer);
+        akira_free_buffer(wasm_transfer.buffer);
         wasm_transfer.buffer = NULL;
         wasm_transfer.buffer_size = 0;
         wasm_transfer.bytes_received = 0;
@@ -146,7 +147,7 @@ static int wasm_data_callback(const uint8_t *data, size_t len,
         if (needed > wasm_transfer.buffer_size) {
             /* Allocate with some headroom */
             size_t new_size = MAX(needed, wasm_transfer.buffer_size + 4096);
-            uint8_t *new_buf = k_malloc(new_size);
+            uint8_t *new_buf = akira_malloc_buffer(new_size);
             if (!new_buf) {
                 LOG_ERR("Failed to grow WASM buffer to %zu", new_size);
                 k_mutex_unlock(&app_loader_mutex);
@@ -155,7 +156,7 @@ static int wasm_data_callback(const uint8_t *data, size_t len,
 
             if (wasm_transfer.buffer && wasm_transfer.bytes_received > 0) {
                 memcpy(new_buf, wasm_transfer.buffer, wasm_transfer.bytes_received);
-                k_free(wasm_transfer.buffer);
+                akira_free_buffer(wasm_transfer.buffer);
             }
             wasm_transfer.buffer = new_buf;
             wasm_transfer.buffer_size = new_size;

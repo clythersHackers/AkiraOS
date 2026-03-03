@@ -60,7 +60,7 @@ typedef struct {
     atomic_t tokens;            /**< Current tokens */
     uint16_t max_tokens;        /**< Maximum tokens (burst capacity) */
     uint16_t refill_per_sec;    /**< Tokens refilled per second */
-    int64_t last_refill_ms;     /**< Last refill timestamp */
+    uint32_t last_refill_ms;    /**< Last refill timestamp (32-bit, natively atomic on Xtensa) */
 } sandbox_rate_bucket_t;
 
 /** Rate limit configuration */

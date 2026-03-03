@@ -354,7 +354,7 @@ int app_manager_install_from_path(const char *path)
     }
 
     /* Allocate buffer */
-    uint8_t *buffer = k_malloc(size);
+    uint8_t *buffer = akira_malloc_buffer(size);
     if (!buffer)
     {
         LOG_ERR("Failed to allocate %zd bytes", size);
@@ -366,7 +366,7 @@ int app_manager_install_from_path(const char *path)
     if (bytes_read != size)
     {
         LOG_ERR("Read failed: %zd != %zd", bytes_read, size);
-        k_free(buffer);
+        akira_free_buffer(buffer);
         return -EIO;
     }
 
@@ -410,7 +410,7 @@ int app_manager_install_from_path(const char *path)
         if (app_manifest_parse(json, mf_size, &manifest) == 0)
         {
             int ret = app_manager_install(name, buffer, size, &manifest, source);
-            k_free(buffer);
+            akira_free_buffer(buffer);
             if (ret > 0) {
                 /* Persist the manifest JSON alongside the saved binary so
                  * app_manager_start() can pass it to akira_runtime_install_with_manifest()
@@ -426,7 +426,7 @@ int app_manager_install_from_path(const char *path)
 
     /* Install without manifest */
     int ret = app_manager_install(name, buffer, size, NULL, source);
-    k_free(buffer);
+    akira_free_buffer(buffer);
     return ret;
 }
 
@@ -960,7 +960,7 @@ int app_manager_install_begin(const char *name, size_t total_size, app_source_t 
     }
 
     /* Allocate buffer */
-    g_sessions[session].buffer = k_malloc(total_size);
+    g_sessions[session].buffer = akira_malloc_buffer(total_size);
     if (!g_sessions[session].buffer)
     {
         LOG_ERR("Failed to allocate install buffer: %zu", total_size);
@@ -1031,7 +1031,7 @@ int app_manager_install_end(int session, const app_manifest_t *manifest)
         g_sessions[session].source);
 
     /* Clean up session */
-    k_free(g_sessions[session].buffer);
+    akira_free_buffer(g_sessions[session].buffer);
     g_sessions[session].buffer = NULL;
     g_sessions[session].active = false;
 
@@ -1047,7 +1047,7 @@ void app_manager_install_abort(int session)
 
     if (g_sessions[session].buffer)
     {
-        k_free(g_sessions[session].buffer);
+        akira_free_buffer(g_sessions[session].buffer);
         g_sessions[session].buffer = NULL;
     }
     g_sessions[session].active = false;

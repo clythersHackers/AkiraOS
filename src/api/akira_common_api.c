@@ -3,7 +3,7 @@
 #include <zephyr/logging/log.h>
 #include <runtime/security.h>
 
-LOG_MODULE_REGISTER(akira_common_api, CONFIG_LOG_DEFAULT_LEVEL);
+LOG_MODULE_REGISTER(akira_common_api, CONFIG_AKIRA_LOG_LEVEL);
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
 int akira_native_printf(wasm_exec_env_t exec_env, char *message)
