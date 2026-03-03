@@ -1017,24 +1017,6 @@ config AKIRA_WASM_API
       Enable registration of native APIs for WASM applications.
       This allows WASM apps to call native platform functions.
 
-config AKIRA_WASM_GPIO
-    bool "Export GPIO API to WASM"
-    default y
-    depends on AKIRA_WASM_API && GPIO
-    help
-      Export GPIO control functions to WASM applications.
-      Provides pin configuration, reading, and writing capabilities.
-      Requires AKIRA_CAP_GPIO_READ and AKIRA_CAP_GPIO_WRITE capabilities.
-
-config AKIRA_WASM_RF
-    bool "Export RF API to WASM"
-    default y
-    depends on AKIRA_WASM_API && AKIRA_MODULE_RF && AKIRA_RF_FRAMEWORK
-    help
-      Export RF transceiver functions to WASM applications.
-      Provides send, receive, frequency, and power control.
-      Requires AKIRA_CAP_RF_TRANSCEIVE capability.
-
 config AKIRA_LSM6DS3_DRIVER
     bool "AkiraOS out-of-tree LSM6DS3 IMU driver"
     depends on I2C && SENSOR
@@ -1044,17 +1026,6 @@ config AKIRA_LSM6DS3_DRIVER
       value reported by the original LSM6DS3, which is rejected by
       Zephyr's upstream lsm6dsl driver (expects 0x6A).
       Use compatible "akira,lsm6ds3" in your board DTS overlay.
-
-config AKIRA_WASM_SENSOR
-    bool "Export Sensor API to WASM"
-    default y
-    depends on AKIRA_WASM_API && SENSOR
-    help
-      Export sensor_read(channel) to WASM applications.
-      Any sensor driver enabled via CONFIG_<DRIVER>=y in a board .conf file
-      is automatically accessible — no chip-specific flags needed here.
-      Channel IDs are Zephyr enum sensor_channel integers.
-      Requires AKIRA_CAP_SENSOR_READ capability.
 
 config AKIRA_WASM_MEMORY
     bool "Export Memory API to WASM"

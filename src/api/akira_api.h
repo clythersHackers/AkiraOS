@@ -24,15 +24,15 @@
 #endif
 
 
-#ifdef CONFIG_AKIRA_WASM_GPIO
+#if defined(CONFIG_AKIRA_WASM_API) && defined(CONFIG_GPIO)
 #include "akira_gpio_api.h"
 #endif
 
-#ifdef CONFIG_AKIRA_WASM_RF
+#if defined(CONFIG_AKIRA_WASM_API) && defined(CONFIG_AKIRA_MODULE_RF) && defined(CONFIG_AKIRA_RF_FRAMEWORK)
 #include "akira_rf_api.h"
 #endif
 
-#ifdef CONFIG_AKIRA_WASM_SENSOR
+#if defined(CONFIG_AKIRA_WASM_API) && defined(CONFIG_SENSOR)
 #include "akira_sensor_api.h"
 #endif
 

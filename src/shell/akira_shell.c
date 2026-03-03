@@ -848,6 +848,7 @@ static int cmd_system_info(const struct shell *sh, size_t argc, char **argv)
     return 0;
 }
 
+#ifdef CONFIG_GPIO
 static int cmd_gpio_read(const struct shell *sh, size_t argc, char **argv)
 {
     if (argc < 2)
@@ -934,6 +935,7 @@ static int cmd_gpio_configure(const struct shell *sh, size_t argc, char **argv)
     shell_print(sh, "GPIO %u configured as %s", pin, argv[2]);
     return 0;
 }
+#endif /* CONFIG_GPIO */
 
 static int cmd_stress_test(const struct shell *sh, size_t argc, char **argv)
 {
@@ -1777,10 +1779,12 @@ SHELL_STATIC_SUBCMD_SET_CREATE(system_cmds,
                                SHELL_CMD(reboot, NULL, "Reboot system [delay_seconds]", cmd_reboot),
                                SHELL_SUBCMD_SET_END);
 
+#ifdef CONFIG_GPIO
 SHELL_STATIC_SUBCMD_SET_CREATE(gpio_cmds,
                                SHELL_CMD(read, NULL, "Read GPIO pin state", cmd_gpio_read),
                                SHELL_CMD(configure, NULL, "Configure GPIO pin", cmd_gpio_configure),
                                SHELL_SUBCMD_SET_END);
+#endif /* CONFIG_GPIO */
 
 SHELL_STATIC_SUBCMD_SET_CREATE(debug_cmds,
                                SHELL_CMD(memdump, NULL, "Dump memory contents", cmd_memory_dump),
@@ -1793,7 +1797,9 @@ SHELL_STATIC_SUBCMD_SET_CREATE(debug_cmds,
                                SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(sys, &system_cmds, "System management commands", NULL);
+#ifdef CONFIG_GPIO
 SHELL_CMD_REGISTER(gpio, &gpio_cmds, "GPIO control commands", NULL);
+#endif
 SHELL_CMD_REGISTER(debug, &debug_cmds, "Debug and diagnostic commands", NULL);
 #ifdef CONFIG_AKIRA_APP_MANAGER
 SHELL_CMD_REGISTER(app, &app_cmds, "App management commands", NULL);

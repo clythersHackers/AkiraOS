@@ -64,8 +64,8 @@ static int ieee802154_radio_init(radio_handle_t *handle)
         memcpy(data->hw_addr, link_addr->addr, 8);
     }
     
-    data->panid = IEEE802154_PANID_DEFAULT;
-    data->short_addr = IEEE802154_SHORT_ADDR_NOT_ASSOCIATED;
+    data->panid = IEEE802154_BROADCAST_PAN_ID;
+    data->short_addr = IEEE802154_SHORT_ADDRESS_NOT_ASSOCIATED;
     data->initialized = true;
     handle->state = RADIO_STATE_IDLE;
     

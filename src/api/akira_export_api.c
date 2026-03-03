@@ -39,20 +39,20 @@ bool akira_register_native_apis()
         {"display_rounded_rect_fill",   (void *)akira_native_display_rounded_rect_fill,   "(iiiiii)i", NULL},
         #endif
 
-        #ifdef CONFIG_AKIRA_WASM_GPIO
+        #if defined(CONFIG_AKIRA_WASM_API) && defined(CONFIG_GPIO)
         {"gpio_configure", (void *)akira_native_gpio_configure, "(ii)i", NULL},
         {"gpio_read", (void *)akira_native_gpio_read, "(i)i", NULL},
         {"gpio_write", (void *)akira_native_gpio_write, "(ii)i", NULL},
         #endif
 
-        #ifdef CONFIG_AKIRA_WASM_RF
+        #if defined(CONFIG_AKIRA_WASM_API) && defined(CONFIG_AKIRA_MODULE_RF) && defined(CONFIG_AKIRA_RF_FRAMEWORK)
         {"rf_set_frequency", (void *)akira_native_rf_set_frequency, "(i)i", NULL},
         {"rf_set_power", (void *)akira_native_rf_set_power, "(i)i", NULL},
         {"rf_get_rssi", (void *)akira_native_rf_get_rssi, "(i)i", NULL},
         {"rf_send", (void *)akira_native_rf_send, "(*i)i", NULL},
         #endif
 
-        #ifdef CONFIG_AKIRA_WASM_SENSOR
+        #if defined(CONFIG_AKIRA_WASM_API) && defined(CONFIG_SENSOR)
         {"sensor_read", (void *)akira_native_sensor_read, "(i)i", NULL},
         #endif
 

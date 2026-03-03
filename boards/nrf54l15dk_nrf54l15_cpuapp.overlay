@@ -33,3 +33,43 @@
 &wdt30 {
     status = "okay";
 };
+
+/* Remap the default storage_partition into AkiraOS-specific partitions.
+ * nRF54L15 cpuapp RRAM: 0x00000–0x164FFF (slots end at 0x15bFFF).
+ * Original storage_partition: 0x15c000 (36KB) — split into:
+ *   16KB NVS for settings, 20KB LittleFS for app storage.
+ */
+&cpuapp_rram {
+    partitions {
+        akira_settings_nvs_partition: partition@15c000 {
+            label = "akira_settings_nvs";
+            reg = <0x0015c000 DT_SIZE_K(16)>;
+        };
+
+        lfs1_partition: partition@160000 {
+            label = "lfs_storage";
+            reg = <0x00160000 DT_SIZE_K(20)>;
+        };
+    };
+};
+
+/ {
+    chosen {
+        zephyr,settings-partition = &akira_settings_nvs_partition;
+    };
+
+    fstab {
+        compatible = "zephyr,fstab";
+
+        lfs1: lfs1 {
+            compatible = "zephyr,fstab,littlefs";
+            read-size = <1>;
+            prog-size = <4>;
+            cache-size = <64>;
+            lookahead-size = <32>;
+            block-cycles = <10000>;
+            partition = <&lfs1_partition>;
+            mount-point = "/lfs";
+        };
+    };
+};

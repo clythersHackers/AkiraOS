@@ -219,6 +219,7 @@ if(CONFIG_DISPLAY)
 endif()
 
 # WASM-dependent API wrappers (need wasm_export.h)
+# gpio_api and rf_api are also used by shell commands so compile under WASM_RUNTIME
 if(CONFIG_AKIRA_WASM_RUNTIME)
     target_sources(app PRIVATE
         src/api/akira_gpio_api.c
@@ -227,7 +228,7 @@ if(CONFIG_AKIRA_WASM_RUNTIME)
     )
 endif()
 
-if(CONFIG_AKIRA_WASM_SENSOR)
+if(CONFIG_AKIRA_WASM_API AND CONFIG_SENSOR)
     target_sources(app PRIVATE src/api/akira_sensor_api.c)
 endif()
 
@@ -247,10 +248,8 @@ if(CONFIG_AKIRA_WASM_PWM)
     target_sources(app PRIVATE src/api/akira_pwm_api.c)
 endif()
 
-if(CONFIG_BT)
-    target_sources(app PRIVATE
-        src/api/akira_bt_shell_api.c
-    )
+if(CONFIG_AKIRA_WASM_API AND CONFIG_AKIRA_BT_SHELL)
+    target_sources(app PRIVATE src/api/akira_bt_shell_api.c)
 endif()
 
 if(CONFIG_AKIRA_WASM_HID)
