@@ -248,6 +248,10 @@ if(CONFIG_AKIRA_WASM_PWM)
     target_sources(app PRIVATE src/api/akira_pwm_api.c)
 endif()
 
+if(CONFIG_AKIRA_WASM_STORAGE)
+    target_sources(app PRIVATE src/api/akira_storage_api.c)
+endif()
+
 if(CONFIG_AKIRA_WASM_BLE)
     target_sources(app PRIVATE src/api/akira_ble_api.c)
 endif()
@@ -499,6 +503,10 @@ endif()
 # Filesystem Manager (MUST be before App Manager)
 target_sources(app PRIVATE src/storage/fs_manager.c)
 
+# SD card hardware init (disk probe + FATFS mount at /SD:)
+if(CONFIG_AKIRA_SD_CARD)
+    target_sources(app PRIVATE src/storage/sd_card.c)
+endif()
 
 
 # Storage drivers for app sources

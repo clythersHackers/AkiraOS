@@ -1,4 +1,5 @@
 #include "akira_api.h"
+#include "akira_storage_api.h"
 #include <runtime/akira_runtime.h>
 #include <runtime/security.h>
 #include <zephyr/logging/log.h>
@@ -147,6 +148,15 @@ bool akira_register_native_apis()
         #ifdef CONFIG_AKIRA_WASM_PWM
         {"pwm_set",     (void *)akira_native_pwm_set,     "(iii)i", NULL},
         {"pwm_disable", (void *)akira_native_pwm_disable, "(i)i",   NULL},
+        #endif
+
+        #ifdef CONFIG_AKIRA_WASM_STORAGE
+        {"storage_open",   (void *)akira_native_storage_open,   "($i)i",   NULL},
+        {"storage_read",   (void *)akira_native_storage_read,   "(i*~)i",  NULL},
+        {"storage_write",  (void *)akira_native_storage_write,  "(i*~)i",  NULL},
+        {"storage_close",  (void *)akira_native_storage_close,  "(i)v",    NULL},
+        {"storage_delete", (void *)akira_native_storage_delete, "($)i",    NULL},
+        {"storage_list",   (void *)akira_native_storage_list,   "($*~)i",  NULL},
         #endif
 
     };

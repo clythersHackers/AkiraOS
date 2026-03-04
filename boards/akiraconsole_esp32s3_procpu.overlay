@@ -44,10 +44,11 @@
     pinctrl-names = "default";
     clock-frequency = <80000000>; // 20 MHz for display (LR1121 will override with its own max)
     
-    // CS GPIO array: GPIO38 for LR1121, GPIO10 for ST7789
+    // CS GPIO array: GPIO38 for LR1121, GPIO10 for ST7789, GPIO14 for SD card
     cs-gpios = <&gpio1 6 GPIO_ACTIVE_LOW>,  // CS0: GPIO38 for LR1121
-               <&gpio0 10 GPIO_ACTIVE_LOW>; // CS1: GPIO10 for ST7789 display
-    
+               <&gpio0 10 GPIO_ACTIVE_LOW>, // CS1: GPIO10 for ST7789 display
+               <&gpio0 14 GPIO_ACTIVE_LOW>; // CS2: GPIO14 for SD card (SD_CS)
+
     // LR1121 as child of SPI2
     lr1121_config: lr1121@0 {
         compatible = "semtech,lr1121";
@@ -60,6 +61,23 @@
         busy-gpios = <&gpio1 4 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>; // GPIO36 (36-32=4)
         // IRQ optional - uncomment if connected:
         // irq-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;  // GPIO35 (35-32=3)
+    };
+
+    // ========================================================================
+    // SD Card — SPI-SDHC via CS2 (GPIO14)
+    // Wiring: MOSI=GPIO11, SCK=GPIO12, MISO=GPIO13, CS=GPIO14
+    // Enable with CONFIG_AKIRA_SD_CARD=y CONFIG_DISK_DRIVER_SDHC=y CONFIG_SDHC=y
+    // ========================================================================
+    sdhc0: sdhc@2 {
+        compatible = "zephyr,sdhc-spi-slot";
+        reg = <2>;                              /* uses cs-gpios[2] = GPIO14 */
+        status = "okay";
+        spi-max-frequency = <25000000>;         /* 25 MHz max for SD card SPI */
+        mmc {
+            compatible = "zephyr,sdmmc-disk";
+            disk-name = "SD";
+            status = "okay";
+        };
     };
 };
 

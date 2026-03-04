@@ -9,6 +9,7 @@
  */
 
 #include "fs_manager.h"
+#include "sd_card.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
@@ -244,23 +245,32 @@ static int init_internal_storage(void)
 /* Try to initialize SD card (guarded so boards without SD don’t log errors) */
 static int init_sd_storage(void)
 {
-#if defined(CONFIG_FAT_FILESYSTEM_ELM) && (defined(CONFIG_DISK_ACCESS_SDHC) || defined(CONFIG_DISK_ACCESS_SDMMC) || defined(CONFIG_DISK_DRIVER_SDMMC))
-    LOG_INF("Checking SD card storage...");
+#if defined(CONFIG_FAT_FILESYSTEM_ELM) &&     (defined(CONFIG_AKIRA_SD_CARD) ||      defined(CONFIG_DISK_ACCESS_SDHC) || defined(CONFIG_DISK_ACCESS_SDMMC) ||      defined(CONFIG_DISK_DRIVER_SDMMC) || defined(CONFIG_DISK_DRIVER_SDHC))
 
-    struct fs_dirent entry;
-    int ret = fs_stat("/SD:", &entry);
-    if (ret == 0)
-    {
-        LOG_INF("SD card available at /SD:");
-        fs_state.sd_available = true;
-
-        /* Create app directories on SD */
-        fs_mkdir("/SD:/apps");
-        return 0;
+    /* When CONFIG_AKIRA_SD_CARD is set, sd_card.c (SYS_INIT priority 38) has
+     * already probed and mounted /SD: before fs_manager runs (priority 40).
+     * Call akira_sd_card_is_present() instead of re-doing disk_access_init. */
+#ifdef CONFIG_AKIRA_SD_CARD
+        LOG_DBG("SD card not present");
+        return -ENODEV;
     }
+#else
+    LOG_INF("Checking SD card storage...");
+    struct fs_dirent sd_entry;
+    int ret = fs_stat("/SD:", &sd_entry);
+    if (ret != 0)
+    {
+        LOG_DBG("SD card not available: %d", ret);
+        return -ENODEV;
+    }
+#endif
 
-    LOG_DBG("SD card not available: %d", ret);
-    return -ENODEV;
+    LOG_INF("SD card available at /SD:");
+    fs_state.sd_available = true;
+
+    /* Ensure app directory exists */
+    fs_mkdir("/SD:/apps");
+    return 0;
 #else
     /* SD not enabled for this build; keep quiet */
     return -ENOTSUP;

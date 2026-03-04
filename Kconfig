@@ -627,6 +627,40 @@ endmenu
 
 endmenu # Connectivity
 
+# ---------------------------------------------------------------------------
+# SD Card Hardware
+# ---------------------------------------------------------------------------
+menu "SD Card"
+
+config AKIRA_SD_CARD
+    bool "Enable SD card hardware support"
+    default n
+    select DISK_ACCESS
+    select FAT_FILESYSTEM_ELM
+    help
+      Enables the SD card hardware driver (sd_card.c) which probes the disk
+      and mounts FATFS at /SD: via SYS_INIT at CONFIG_AKIRA_SD_INIT_PRIORITY.
+
+      The actual hardware interface (SPI-SDHC or native SDMMC) is selected
+      by each board's .conf and .overlay files independently of this option.
+
+      Enable per-board:
+        CONFIG_SDHC=y
+        CONFIG_DISK_DRIVER_SDHC=y     # SPI-based, most boards
+        # or
+        CONFIG_DISK_DRIVER_SDMMC=y    # native SDMMC peripheral
+
+config AKIRA_SD_INIT_PRIORITY
+    int "SD card SYS_INIT priority"
+    default 38
+    depends on AKIRA_SD_CARD
+    help
+      Automatic init priority for the SD card driver.  Must be lower than
+      AKIRA_FS_INIT_PRIORITY (default 40) so the SD mount is complete before
+      fs_manager queries disk availability.
+
+endmenu # SD Card
+
 menu "App Manager"
 
 config AKIRA_APP_MANAGER
@@ -704,9 +738,11 @@ config AKIRA_APP_SOURCE_USB
 config AKIRA_APP_SOURCE_SD
     bool "Enable SD card app install"
     default y
-    depends on AKIRA_APP_MANAGER && DISK_ACCESS
+    depends on AKIRA_APP_MANAGER && AKIRA_SD_CARD
     help
       Allow app installation from SD card.
+      Scans /SD:/apps/*.wasm and installs any unregistered apps.
+      Requires CONFIG_AKIRA_SD_CARD=y in the board .conf file.
 
 config AKIRA_APP_SOURCE_FIRMWARE
     bool "Enable firmware-embedded apps"
@@ -1201,6 +1237,30 @@ config AKIRA_WASM_PWM
       Export PWM channel control to WASM applications.
       Provides pwm_set(channel, freq_hz, duty_pct) and pwm_disable(channel).
       Requires AKIRA_CAP_PWM capability in the app manifest.
+
+config AKIRA_WASM_STORAGE
+    bool "Export Storage (filesystem) API to WASM"
+    default y
+    depends on AKIRA_WASM_API && FILE_SYSTEM
+    help
+      Export sandboxed file I/O to WASM applications.
+
+      Each app is confined to <best_mount>/apps/<app_name>/ where best_mount
+      is SD card if present, then LittleFS, then RAM.  Path traversal (..) is
+      rejected with -EACCES.
+
+      Required capabilities in the app manifest:
+        "storage.read"  — read / list
+        "storage.write" — write / delete
+
+config AKIRA_WASM_STORAGE_MAX_FDS
+    int "Maximum simultaneous open storage files per-system"
+    default 8
+    range 2 32
+    depends on AKIRA_WASM_STORAGE
+    help
+      Global limit on open storage file descriptors across all running WASM
+      apps.  Each descriptor holds a Zephyr struct fs_file_t (~48 bytes).
 
 endmenu
 

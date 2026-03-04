@@ -1181,6 +1181,79 @@ extern int pwm_disable(int32_t channel);
 #define ENOSPC          28  /**< No space left on device */
 #define ETIMEDOUT       110 /**< Connection timed out */
 
+/*
+ * =============================================================================
+ * STORAGE API
+ * =============================================================================
+ *
+ * Sandboxed file I/O.  Each app is confined to its private directory:
+ *   <best_mount>/apps/<app_name>/
+ * Paths are relative.  ".." traversal is rejected with -EACCES.
+ *
+ * Required capabilities in the app manifest:
+ *   "storage.read"  — storage_open(O_READ), storage_read, storage_list
+ *   "storage.write" — storage_open(O_WRITE/O_APPEND), storage_write,
+ *                     storage_delete
+ */
+
+/** Open flags for storage_open() */
+#define STORAGE_O_READ    0   /**< Read-only; file must exist */
+#define STORAGE_O_WRITE   1   /**< Write; create/truncate */
+#define STORAGE_O_APPEND  2   /**< Append; create if absent */
+#define STORAGE_O_RDWR    3   /**< Read + write; create/truncate */
+
+/**
+ * @brief Open a file in the app's private sandbox.
+ * @param path  Relative path (e.g. "log.txt", "sub/data.bin").
+ * @param flags STORAGE_O_READ / STORAGE_O_WRITE / STORAGE_O_APPEND / STORAGE_O_RDWR
+ * @return Non-negative fd on success; negative errno on error.
+ */
+extern int storage_open(const char *path, int flags);
+
+/**
+ * @brief Read from an open storage file.
+ * @param fd   Descriptor from storage_open().
+ * @param buf  Destination buffer.
+ * @param len  Max bytes to read.
+ * @return Bytes read (0 = EOF); negative errno on error.
+ */
+extern int storage_read(int fd, void *buf, int len);
+
+/**
+ * @brief Write to an open storage file.
+ * @param fd   Descriptor from storage_open().
+ * @param buf  Source data.
+ * @param len  Number of bytes to write.
+ * @return Bytes written; negative errno on error.
+ */
+extern int storage_write(int fd, const void *buf, int len);
+
+/**
+ * @brief Close an open storage file descriptor.
+ * @param fd  Descriptor to close.
+ */
+extern void storage_close(int fd);
+
+/**
+ * @brief Delete a file from the app's sandbox.
+ * @param path  Relative path.
+ * @return 0 on success; negative errno on error (-ENOENT if not found).
+ */
+extern int storage_delete(const char *path);
+
+/**
+ * @brief List files in a sandbox directory.
+ *
+ * Returns a newline-separated list of names, NUL-terminated.
+ * Directories appear with a trailing '/'.
+ *
+ * @param path  Relative subdirectory, or "" for sandbox root.
+ * @param buf   Output buffer.
+ * @param len   Buffer size in bytes.
+ * @return Total bytes written including NUL; negative errno on error.
+ */
+extern int storage_list(const char *path, char *buf, int len);
+
 #ifdef __cplusplus
 }
 #endif
