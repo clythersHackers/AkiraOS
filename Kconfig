@@ -625,6 +625,8 @@ config AKIRA_CLOUD_AUTO_START_APPS
 
 endmenu
 
+endmenu # Connectivity
+
 menu "App Manager"
 
 config AKIRA_APP_MANAGER
@@ -1022,6 +1024,7 @@ config AKIRA_WASM_BLE
     bool "Export BLE App API to WASM"
     default n
     depends on AKIRA_WASM_API && BT
+    select BT_GATT_DYNAMIC_DB
     help
       Export a clean Arduino-style BLE API to WASM applications.
       Allows apps to create custom GATT services, characteristics,

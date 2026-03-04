@@ -1205,61 +1205,6 @@ static int cmd_benchmark(const struct shell *sh, size_t argc, char **argv)
 }
 
 #if defined(CONFIG_BT) && defined(CONFIG_AKIRA_BT_HID)
-/* Bluetooth shell command handler - requires AKIRA_BT_HID */
-
-static int cmd_ble_shell(const struct shell *shell, size_t argc, char **argv)
-{
-    if (argc < 2)
-    {
-        shell_print(shell, "Usage: ble_shell <command>");
-        shell_print(shell, "Send a shell command to the connected phone via BLE.");
-        shell_print(shell, "");
-        shell_print(shell, "Prerequisites:");
-        shell_print(shell, "  1. Device must be connected to a phone via BLE");
-        shell_print(shell, "  2. Phone app must subscribe to Shell TX notifications");
-        shell_print(shell, "");
-        shell_print(shell, "Service UUID: d5b1b7e2-7f5a-4eef-8fd0-1a2b3c4d5e71");
-        shell_print(shell, "TX Char UUID: d5b1b7e3-7f5a-4eef-8fd0-1a2b3c4d5e72");
-        return -EINVAL;
-    }
-
-    /* Check BLE connection status first */
-    if (!bt_manager_is_connected())
-    {
-        shell_error(shell, "Error: Not connected to any BLE device");
-        shell_print(shell, "Hint: Pair with a phone first using 'bt adv start'");
-        return -ENOTCONN;
-    }
-
-    /* Concatenate command arguments */
-    char cmd_buf[128] = {0};
-    size_t pos = 0;
-    for (size_t i = 1; i < argc && pos < sizeof(cmd_buf) - 1; ++i)
-    {
-        size_t arg_len = strlen(argv[i]);
-        if (pos + arg_len + 1 >= sizeof(cmd_buf))
-        {
-            shell_error(shell, "Command too long (max 127 chars)");
-            return -EINVAL;
-        }
-        memcpy(cmd_buf + pos, argv[i], arg_len);
-        pos += arg_len;
-        if (i < argc - 1)
-        {
-            cmd_buf[pos++] = ' ';
-        }
-    }
-    cmd_buf[pos] = '\0';
-
-    bluetooth_manager_receive_shell_command(cmd_buf);
-    shell_print(shell, "Sent shell command to phone via BLE: %s", cmd_buf);
-    return 0;
-}
-
-SHELL_CMD_REGISTER(ble_shell, NULL, "Send shell command to phone via BLE", cmd_ble_shell);
-#endif
-
-#if defined(CONFIG_BT) && defined(CONFIG_AKIRA_BT_HID)
 /* ===== Bluetooth commands ===== */
 static int cmd_bt_info(const struct shell *sh, size_t argc, char **argv)
 {
