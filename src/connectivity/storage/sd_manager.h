@@ -16,8 +16,15 @@ extern "C"
 {
 #endif
 
+/* When sd_card.c owns the mount it uses the FATFS-style /SD: path.
+ * Otherwise sd_manager handles its own mount at /sd. */
+#if defined(CONFIG_AKIRA_SD_CARD)
+#define SD_MOUNT_POINT "/SD:"
+#define SD_APPS_DIR    "/SD:/apps"
+#else
 #define SD_MOUNT_POINT "/sd"
-#define SD_APPS_DIR "/sd/apps"
+#define SD_APPS_DIR    "/sd/apps"
+#endif
 
     /**
      * @brief SD card state

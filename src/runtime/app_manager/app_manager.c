@@ -387,7 +387,7 @@ int app_manager_install_from_path(const char *path)
 
     /* Determine source from path */
     app_source_t source = APP_SOURCE_UNKNOWN;
-    if (strstr(path, "/sd/"))
+    if (strstr(path, "/SD:") || strstr(path, "/sd/") || strstr(path, "/sd:"))
     {
         source = APP_SOURCE_SD;
     }
@@ -396,14 +396,19 @@ int app_manager_install_from_path(const char *path)
         source = APP_SOURCE_USB;
     }
 
-    /* Try to load manifest */
+    /* Try to load manifest — heap-allocate to avoid blowing the shell stack */
     app_manifest_t manifest;
     char manifest_path[APP_PATH_MAX_LEN];
     snprintf(manifest_path, sizeof(manifest_path), "%.*s.json",
              (int)(ext ? ext - name : strlen(name)), path);
 
-    char json[512];
-    ssize_t mf_size = fs_manager_read_file(manifest_path, json, sizeof(json) - 1);
+    char *json = akira_malloc_buffer(512);
+    if (!json)
+    {
+        akira_free_buffer(buffer);
+        return -ENOMEM;
+    }
+    ssize_t mf_size = fs_manager_read_file(manifest_path, json, 511);
     if (mf_size > 0)
     {
         json[mf_size] = '\0';
@@ -420,11 +425,13 @@ int app_manager_install_from_path(const char *path)
                          "%s/%03d_%s.json", APPS_DIR, (uint8_t)ret, name);
                 fs_manager_write_file(stored_json_path, json, (size_t)mf_size);
             }
+            akira_free_buffer(json);
             return ret;
         }
     }
 
     /* Install without manifest */
+    akira_free_buffer(json);
     int ret = app_manager_install(name, buffer, size, NULL, source);
     akira_free_buffer(buffer);
     return ret;

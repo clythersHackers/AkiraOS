@@ -231,6 +231,50 @@ static int cmd_app_uninstall(const struct shell *sh, size_t argc, char **argv)
     return 0;
 }
 
+static int cmd_app_install(const struct shell *sh, size_t argc, char **argv)
+{
+    if (argc < 3)
+    {
+        shell_error(sh, "Usage: app install <name> <sd|usb>");
+        return -EINVAL;
+    }
+    const char *name = argv[1];
+    const char *src  = argv[2];
+    int ret = -ENOTSUP;
+
+    if (strcmp(src, "sd") == 0)
+    {
+#if defined(CONFIG_AKIRA_APP_SOURCE_SD)
+        ret = sd_manager_install_app(name);
+#else
+        shell_error(sh, "SD card support not enabled");
+        return -ENOTSUP;
+#endif
+    }
+    else if (strcmp(src, "usb") == 0)
+    {
+#if defined(CONFIG_AKIRA_APP_SOURCE_USB)
+        ret = usb_storage_install_app(name);
+#else
+        shell_error(sh, "USB storage support not enabled");
+        return -ENOTSUP;
+#endif
+    }
+    else
+    {
+        shell_error(sh, "Unknown source '%s'. Use sd or usb.", src);
+        return -EINVAL;
+    }
+
+    if (ret < 0)
+    {
+        shell_error(sh, "Install failed (%d): %s from %s", ret, name, src);
+        return ret;
+    }
+    shell_print(sh, "Installed '%s' from %s", name, src);
+    return 0;
+}
+
 static int cmd_app_scan(const struct shell *sh, size_t argc, char **argv)
 {
     if (argc < 2)
@@ -1771,6 +1815,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(app_cmds,
                                SHELL_CMD(stop, NULL, "Stop app <name>", cmd_app_stop),
                                SHELL_CMD(restart, NULL, "Restart app <name>", cmd_app_restart),
                                SHELL_CMD(uninstall, NULL, "Uninstall app <name>", cmd_app_uninstall),
+                               SHELL_CMD(install, NULL, "Install app from SD/USB: <name> <sd|usb>", cmd_app_install),
                                SHELL_CMD(scan, NULL, "Scan for apps in SD/USB", cmd_app_scan),
                                SHELL_SUBCMD_SET_END);
 #endif /* CONFIG_AKIRA_APP_MANAGER */

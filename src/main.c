@@ -56,7 +56,7 @@ int main(void)
     }
 
     /* Display test - runs AFTER HAL initialization */
-#ifdef CONFIG_DISPLAY
+#if 0 //CONFIG_DISPLAY
     akira_display_clear(0x0021);  
     /* Display boot info on screen */
     char buf[64];
@@ -88,7 +88,7 @@ int main(void)
     akira_display_text(5, y_pos, "====================================", text_color);
     
     akira_display_flush();
-    k_sleep(K_MSEC(CONFIG_AKIRA_BOOT_DELAY_MS));
+    // k_sleep(K_MSEC(CONFIG_AKIRA_BOOT_DELAY_MS));
 
 #endif
 
@@ -205,7 +205,34 @@ int main(void)
 
     /* Idle loop */
     while (1) {
-        k_sleep(K_SECONDS(10));
+        #if 0 //def CONFIG_DISPLAY
+        static uint32_t frame = 0;
+        char buf[64];
+        const uint16_t text_color = 0xFFFF;  // White
+        const uint16_t bg_color = 0x0000;    // Black
+
+        akira_display_clear(bg_color);
+
+        // Header
+        akira_display_text(5, 10, "=== AkiraOS System ===", text_color);
+
+        // System info
+        snprintf(buf, sizeof(buf), "Platform: %s", akira_get_platform_name());
+        akira_display_text(5, 25, buf, text_color);
+
+        snprintf(buf, sizeof(buf), "Uptime: %llu s", k_uptime_get() / 1000);
+        akira_display_text(5, 40, buf, text_color);
+
+        // Simple animation (rotating spinner)
+        const char *spinner[] = {"|", "/", "-", "\\"};
+        snprintf(buf, sizeof(buf), "Ready %s", spinner[frame % 4]);
+        akira_display_text(5, 55, buf, text_color);
+
+        frame++;
+
+        akira_display_flush();
+        #endif 
+        k_sleep(K_SECONDS(1));
         // may be add show to display all installed apps and add posibility to run them from there? or just show some system info and status?
         // and if display available show some nice animation or something?
     }

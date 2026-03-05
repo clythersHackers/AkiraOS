@@ -242,15 +242,18 @@ static int init_internal_storage(void)
     return fs_state.internal_available ? 0 : -ENODEV;
 }
 
-/* Try to initialize SD card (guarded so boards without SD don’t log errors) */
+/* Try to initialize SD card (guarded so boards without SD don't log errors) */
 static int init_sd_storage(void)
 {
-#if defined(CONFIG_FAT_FILESYSTEM_ELM) &&     (defined(CONFIG_AKIRA_SD_CARD) ||      defined(CONFIG_DISK_ACCESS_SDHC) || defined(CONFIG_DISK_ACCESS_SDMMC) ||      defined(CONFIG_DISK_DRIVER_SDMMC) || defined(CONFIG_DISK_DRIVER_SDHC))
+#if defined(CONFIG_FAT_FILESYSTEM_ELM) && \
+    (defined(CONFIG_AKIRA_SD_CARD) || \
+     defined(CONFIG_DISK_DRIVER_SDMMC))
 
     /* When CONFIG_AKIRA_SD_CARD is set, sd_card.c (SYS_INIT priority 38) has
      * already probed and mounted /SD: before fs_manager runs (priority 40).
-     * Call akira_sd_card_is_present() instead of re-doing disk_access_init. */
+     * Just check if the mount is live via the public helper. */
 #ifdef CONFIG_AKIRA_SD_CARD
+    if (!akira_sd_card_is_present()) {
         LOG_DBG("SD card not present");
         return -ENODEV;
     }
@@ -263,7 +266,7 @@ static int init_sd_storage(void)
         LOG_DBG("SD card not available: %d", ret);
         return -ENODEV;
     }
-#endif
+#endif /* CONFIG_AKIRA_SD_CARD */
 
     LOG_INF("SD card available at /SD:");
     fs_state.sd_available = true;
@@ -276,6 +279,7 @@ static int init_sd_storage(void)
     return -ENOTSUP;
 #endif
 }
+
 
 /**
  * Initialize filesystem manager

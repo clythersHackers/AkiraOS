@@ -68,7 +68,7 @@
     // Wiring: MOSI=GPIO11, SCK=GPIO12, MISO=GPIO13, CS=GPIO14
     // Enable with CONFIG_AKIRA_SD_CARD=y CONFIG_DISK_DRIVER_SDHC=y CONFIG_SDHC=y
     // ========================================================================
-    sdhc0: sdhc@2 {
+    spi_sdhc0: sdhc@2 {
         compatible = "zephyr,sdhc-spi-slot";
         reg = <2>;                              /* uses cs-gpios[2] = GPIO14 */
         status = "okay";

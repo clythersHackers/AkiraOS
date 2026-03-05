@@ -11,6 +11,9 @@
 #include <zephyr/storage/disk_access.h>
 #include <ff.h>
 #include <string.h>
+#if defined(CONFIG_AKIRA_SD_CARD)
+#include <storage/sd_card.h>
+#endif
 
 LOG_MODULE_REGISTER(sd_manager, CONFIG_AKIRA_LOG_LEVEL);
 
@@ -58,6 +61,21 @@ int sd_manager_mount(void)
         return 0;
     }
 
+#if defined(CONFIG_AKIRA_SD_CARD)
+    /* sd_card.c already mounted the filesystem at /SD: via SYS_INIT.
+     * Just verify the card is present and adopt the existing mount. */
+    if (!akira_sd_card_is_present())
+    {
+        LOG_ERR("SD card not present");
+        notify_state_change(SD_STATE_ERROR);
+        k_mutex_unlock(&g_sd_mutex);
+        return -ENODEV;
+    }
+    notify_state_change(SD_STATE_MOUNTED);
+    LOG_INF("SD card available at %s (via sd_card driver)", SD_MOUNT_POINT);
+    k_mutex_unlock(&g_sd_mutex);
+    return 0;
+#else
     /* Check if disk is available */
     int ret = disk_access_init(SD_DISK_NAME);
     if (ret < 0)
@@ -69,7 +87,6 @@ int sd_manager_mount(void)
     }
 
     /* Get disk status */
-    uint32_t status;
     ret = disk_access_status(SD_DISK_NAME);
     if (ret != DISK_STATUS_OK)
     {
@@ -91,9 +108,9 @@ int sd_manager_mount(void)
 
     notify_state_change(SD_STATE_MOUNTED);
     LOG_INF("SD card mounted at %s", SD_MOUNT_POINT);
-
     k_mutex_unlock(&g_sd_mutex);
     return 0;
+#endif
 }
 
 int sd_manager_unmount(void)
@@ -138,10 +155,15 @@ int sd_manager_scan_apps(char names[][32], int max_count)
         return -EINVAL;
     }
 
+    /* Auto-mount if not already done */
     if (g_state != SD_STATE_MOUNTED)
     {
-        LOG_WRN("SD card not mounted");
-        return -ENODEV;
+        int ret = sd_manager_mount();
+        if (ret < 0)
+        {
+            LOG_WRN("SD card not available: %d", ret);
+            return ret;
+        }
     }
 
     struct fs_dir_t dir;
@@ -207,7 +229,11 @@ int sd_manager_install_app(const char *name)
 
     if (g_state != SD_STATE_MOUNTED)
     {
-        return -ENODEV;
+        int ret = sd_manager_mount();
+        if (ret < 0)
+        {
+            return ret;
+        }
     }
 
     char path[64];
