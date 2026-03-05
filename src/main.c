@@ -56,7 +56,7 @@ int main(void)
     }
 
     /* Display test - runs AFTER HAL initialization */
-#if 0 //CONFIG_DISPLAY
+#ifdef CONFIG_DISPLAY
     akira_display_clear(0x0021);  
     /* Display boot info on screen */
     char buf[64];
@@ -202,37 +202,64 @@ int main(void)
 #endif
 
     LOG_INF("AkiraOS init complete");
-
+    k_sleep(K_MSEC(1000));  // Brief pause before entering main loop
     /* Idle loop */
     while (1) {
-        #if 0 //def CONFIG_DISPLAY
+        #ifdef CONFIG_DISPLAY
+        extern akira_managed_app_t g_apps[AKIRA_MAX_WASM_INSTANCES];
         static uint32_t frame = 0;
+        static bool idle_screen_shown = false;
         char buf[64];
         const uint16_t text_color = 0xFFFF;  // White
         const uint16_t bg_color = 0x0000;    // Black
 
-        akira_display_clear(bg_color);
+        /* Check if any app is running */
+        bool app_running = false;
+        for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++) {
+            if (g_apps[i].used && g_apps[i].status == AKIRA_APP_STATUS_RUNNING) {
+                app_running = true;
+                break;
+            }
+        }
 
-        // Header
-        akira_display_text(5, 10, "=== AkiraOS System ===", text_color);
+        if (!app_running) {
+            /* No app running - show system info animation */
+            idle_screen_shown = true;
+            akira_display_clear(bg_color);
 
-        // System info
-        snprintf(buf, sizeof(buf), "Platform: %s", akira_get_platform_name());
-        akira_display_text(5, 25, buf, text_color);
+            akira_display_text(5, 10, "=== AkiraOS System ===", text_color);
 
-        snprintf(buf, sizeof(buf), "Uptime: %llu s", k_uptime_get() / 1000);
-        akira_display_text(5, 40, buf, text_color);
+            snprintf(buf, sizeof(buf), "Platform: %s", akira_get_platform_name());
+            akira_display_text(5, 25, buf, text_color);
 
-        // Simple animation (rotating spinner)
-        const char *spinner[] = {"|", "/", "-", "\\"};
-        snprintf(buf, sizeof(buf), "Ready %s", spinner[frame % 4]);
-        akira_display_text(5, 55, buf, text_color);
+            snprintf(buf, sizeof(buf), "Uptime: %llu s", k_uptime_get() / 1000);
+            akira_display_text(5, 40, buf, text_color);
 
-        frame++;
+            const char *spinner[] = {"◐", "◓", "◑", "◒"};
+            const char *status[] = {"●", "○"};
 
-        akira_display_flush();
-        #endif 
-        k_sleep(K_SECONDS(1));
+            snprintf(buf, sizeof(buf), "%s Ready %s", spinner[frame % 4], status[(frame / 2) % 2]);
+            akira_display_text(5, 55, buf, text_color);
+
+            snprintf(buf, sizeof(buf), "[");
+            for (int i = 0; i < 16; i++) {
+                buf[i + 1] = (i < (frame % 16)) ? '=' : '-';
+            }
+            buf[17] = ']';
+            buf[18] = '\0';
+            akira_display_text(5, 70, buf, text_color);
+
+            frame++;
+            akira_display_flush();
+        } else if (idle_screen_shown) {
+            /* App just started - clear the idle screen once */
+            akira_display_clear(bg_color);
+            akira_display_flush();
+            idle_screen_shown = false;
+            frame = 0;
+        }
+        #endif
+        k_sleep(K_MSEC(100));
         // may be add show to display all installed apps and add posibility to run them from there? or just show some system info and status?
         // and if display available show some nice animation or something?
     }

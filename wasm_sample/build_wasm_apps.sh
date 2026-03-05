@@ -58,12 +58,11 @@ build_app() {
         echo "  Found manifest: ${app_name}.json"
     fi
 
-    # Compile with WASI SDK (using bare wasm32 target to avoid auto-exports)
+    # Compile with WASI SDK (wasm32-wasi gives full libc; WAMR handles WASI at runtime).
     "${WASI_SDK}/bin/clang" \
-        -target wasm32-unknown-unknown \
-        -nostdlib \
+        --target=wasm32-wasi \
+        --sysroot="${WASI_SDK}/share/wasi-sysroot" \
         -fvisibility=hidden \
-        -Wl,--no-entry \
         -Wl,--allow-undefined \
         -Wl,--strip-all \
         -I"${WASM_APPS_DIR}/include" \
@@ -76,9 +75,11 @@ build_app() {
         local size=$(stat -c%s "$output_file" 2>/dev/null || stat -f%z "$output_file" 2>/dev/null)
         echo -e "${GREEN}✓ Built: ${app_name}.wasm (${size} bytes)${NC}"
 
-        # Show exported functions
-        echo "  Exported symbols:"
-        "${WASI_SDK}/bin/wasm-nm" "$output_file" | grep -v "^U " | sed 's/^/    /' || true
+        # Show exported functions (wasm-nm optional)
+        if [ -x "${WASI_SDK}/bin/wasm-nm" ]; then
+            echo "  Exported symbols:"
+            "${WASI_SDK}/bin/wasm-nm" "$output_file" | grep -v "^U " | sed 's/^/    /'
+        fi
 
         # Embed manifest JSON as .akira.manifest WASM custom section.
         # AkiraOS reads this section at runtime to set cap_mask/memory_quota;

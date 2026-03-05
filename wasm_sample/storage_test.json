@@ -2,5 +2,5 @@
   "name": "storage_test",
   "version": "1.0.0",
   "capabilities": ["storage.read", "storage.write"],
-  "memory_quota": 32768
+  "memory_quota": 65536
 }

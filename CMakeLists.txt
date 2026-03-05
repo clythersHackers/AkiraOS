@@ -96,6 +96,12 @@ if(CONFIG_AKIRA_WASM_RUNTIME)
     set(WAMR_BUILD_LIBC_WASI 0)
     set(WAMR_BUILD_GLOBAL_HEAP_POOL 1)
     set(WAMR_BUILD_GLOBAL_HEAP_SIZE 131072)
+    # Enable reference-types support so WAMR can load WASM binaries produced by
+    # WASI SDK 19+ / LLVM 17+.  Those toolchains emit element sections in the
+    # extended multi-table format (non-zero segment-kind prefix) even when user
+    # code itself does not use reference types.  Without this flag WAMR rejects
+    # such binaries with "zero byte expected … reference types … disabled".
+    set(WAMR_BUILD_REF_TYPES 1)
     include(${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
     target_sources(app PRIVATE ${WAMR_RUNTIME_LIB_SOURCE})
     target_include_directories(app PRIVATE
@@ -254,6 +260,13 @@ endif()
 
 if(CONFIG_AKIRA_WASM_BLE)
     target_sources(app PRIVATE src/api/akira_ble_api.c)
+endif()
+
+if(CONFIG_AKIRA_WASM_NET)
+    target_sources(app PRIVATE
+        src/api/akira_net_api.c
+        src/connectivity/net/net_stream.c
+    )
 endif()
 
 if(CONFIG_AKIRA_WASM_HID)

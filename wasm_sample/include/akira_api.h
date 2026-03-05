@@ -17,6 +17,11 @@
 #define AKIRA_API_H
 
 #include <stdint.h>
+#include <stdbool.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -146,7 +151,7 @@ extern "C" {
  * @param message Null-terminated string message to log
  * @return 0 on success, negative error code on failure
  */
-extern int printf(const char *message);
+/* printf is provided by <stdio.h> with the standard variadic signature */
 
 /**
  * @brief Delay execution for a specified number of microseconds
@@ -1253,6 +1258,239 @@ extern int storage_delete(const char *path);
  * @return Total bytes written including NUL; negative errno on error.
  */
 extern int storage_list(const char *path, char *buf, int len);
+
+/*
+ * =============================================================================
+ * NETWORK API
+ * =============================================================================
+ * Required capability: network
+ *
+ * Data flows through shared-memory ring buffers that live in WASM linear memory.
+ * Only net_tx_flush() / net_event_pop() require a host call; bulk data never does.
+ *
+ * Ring buffer layout (TX and RX buffers use the same format):
+ *
+ *   Byte  0-3  : write_idx  (uint32 LE) — producer increments after writing
+ *   Byte  4-7  : read_idx   (uint32 LE) — consumer increments after reading
+ *   Byte  8-11 : capacity   (uint32 LE) — data area size; set by host at bind
+ *   Byte 12-15 : flags      (uint32 LE) — reserved, must be 0
+ *   Byte 16+   : data area (capacity bytes)
+ *
+ * Each message in the data area: [len_lo][len_hi][payload bytes…]
+ * Indices are monotonically increasing; actual byte = data[(idx % capacity)].
+ *
+ * Event buffer layout returned by net_event_pop():
+ *   Byte 0   : event type (NET_EVT_*)
+ *   Byte 1   : stream handle
+ *   Byte 2-3 : extra (uint16 LE) — new handle for NET_EVT_ACCEPT, errno for NET_EVT_ERROR
+ */
+
+/** @brief Socket type: TCP stream */
+#define NET_TYPE_TCP  0
+/** @brief Socket type: UDP datagram */
+#define NET_TYPE_UDP  1
+
+/** @brief Event: no events in queue */
+#define NET_EVT_NONE         0
+/** @brief Event: TCP handshake complete (or UDP default peer set) */
+#define NET_EVT_CONNECTED    1
+/** @brief Event: peer closed the connection or a socket error occurred */
+#define NET_EVT_DISCONNECTED 2
+/** @brief Event: host wrote data into the RX ring — start reading */
+#define NET_EVT_DATA_READY   3
+/** @brief Event: new inbound connection accepted; extra = new stream handle */
+#define NET_EVT_ACCEPT       4
+/** @brief Event: socket error; extra = errno */
+#define NET_EVT_ERROR        5
+
+/** @brief Ring buffer header size in bytes (must match host-side NET_RING_HDR_SIZE) */
+#define NET_RING_HDR_SIZE  16
+
+/*
+ * Helper: write one framed message into a TX ring buffer.
+ * Returns data_len on success, -1 if the ring is full.
+ *
+ * Usage example:
+ *   static uint8_t tx_buf[2048];
+ *   net_tx_bind(h, tx_buf, sizeof(tx_buf));
+ *   net_ring_write(tx_buf, sizeof(tx_buf), "ping", 4);
+ *   net_tx_flush(h);
+ */
+static inline int net_ring_write(uint8_t *ring_buf, int buf_size,
+                                  const uint8_t *data, int data_len)
+{
+    if (!ring_buf || data_len <= 0 || data_len > 0xFFFF) {
+        return -1;
+    }
+    volatile uint32_t *wi_ptr  = (volatile uint32_t *)(ring_buf + 0);
+    volatile uint32_t *ri_ptr  = (volatile uint32_t *)(ring_buf + 4);
+    volatile uint32_t *cap_ptr = (volatile uint32_t *)(ring_buf + 8);
+    uint32_t cap  = *cap_ptr;
+    uint32_t wi   = *wi_ptr;
+    uint32_t ri   = *ri_ptr;
+    uint32_t used = wi - ri;
+    uint32_t need = (uint32_t)(2 + data_len);
+    if (cap == 0 || (cap - used) < need) {
+        return -1;  /* ring full */
+    }
+    uint8_t *dat = ring_buf + NET_RING_HDR_SIZE;
+    uint32_t wi_mod = wi % cap;
+    dat[wi_mod]             = (uint8_t)(data_len & 0xFF);
+    dat[(wi_mod + 1) % cap] = (uint8_t)((data_len >> 8) & 0xFF);
+    uint32_t data_wi = (wi_mod + 2) % cap;
+    for (int i = 0; i < data_len; i++) {
+        dat[(data_wi + i) % cap] = data[i];
+    }
+    /* Atomic store: ensure payload is visible before write_idx update */
+    __atomic_store_n(wi_ptr, wi + need, __ATOMIC_RELEASE);
+    return data_len;
+}
+
+/*
+ * Helper: read one framed message from an RX ring buffer.
+ * Returns bytes read (0 = no data yet, -1 = output buffer too small).
+ *
+ * Usage example:
+ *   static uint8_t rx_buf[2048];
+ *   net_rx_bind(h, rx_buf, sizeof(rx_buf));
+ *   // after NET_EVT_DATA_READY:
+ *   uint8_t msg[256];
+ *   int n = net_ring_read(rx_buf, sizeof(rx_buf), msg, sizeof(msg));
+ */
+static inline int net_ring_read(uint8_t *ring_buf, int buf_size,
+                                 uint8_t *out, int out_len)
+{
+    if (!ring_buf || !out) {
+        return -1;
+    }
+    volatile uint32_t *wi_ptr  = (volatile uint32_t *)(ring_buf + 0);
+    volatile uint32_t *ri_ptr  = (volatile uint32_t *)(ring_buf + 4);
+    volatile uint32_t *cap_ptr = (volatile uint32_t *)(ring_buf + 8);
+    uint32_t cap  = *cap_ptr;
+    uint32_t wi   = __atomic_load_n(wi_ptr, __ATOMIC_ACQUIRE);
+    uint32_t ri   = *ri_ptr;
+    uint32_t used = wi - ri;
+    if (cap == 0 || used < 2) {
+        return 0;  /* no data */
+    }
+    uint8_t *dat = ring_buf + NET_RING_HDR_SIZE;
+    uint32_t ri_mod = ri % cap;
+    uint16_t plen   = (uint16_t)dat[ri_mod] |
+                      ((uint16_t)dat[(ri_mod + 1) % cap] << 8);
+    if (used < (uint32_t)(2 + plen)) {
+        return 0;  /* incomplete message */
+    }
+    if ((int)plen > out_len) {
+        return -1;  /* output buffer too small */
+    }
+    uint32_t data_ri = (ri_mod + 2) % cap;
+    for (uint16_t i = 0; i < plen; i++) {
+        out[i] = dat[(data_ri + i) % cap];
+    }
+    /* Atomic store: signal that we consumed the message */
+    __atomic_store_n(ri_ptr, ri + 2 + plen, __ATOMIC_RELEASE);
+    return (int)plen;
+}
+
+/**
+ * @brief Open a new TCP or UDP socket.
+ * @param type  NET_TYPE_TCP or NET_TYPE_UDP.
+ * @return Stream handle (>=0) on success; negative errno on failure.
+ */
+extern int net_open(int32_t type);
+
+/**
+ * @brief Initiate an async connection to host:port.
+ *
+ * DNS lookup and connect() happen on a background thread.
+ * Poll net_event_pop() for NET_EVT_CONNECTED or NET_EVT_ERROR.
+ * For UDP, sets the default peer (no handshake occurs).
+ *
+ * @param handle  Stream handle from net_open().
+ * @param host    Null-terminated hostname or IPv4 dotted-decimal string.
+ * @param port    Remote port (1–65535).
+ * @return 0 if queued; negative errno on failure.
+ */
+extern int net_connect(int32_t handle, const char *host, int32_t port);
+
+/**
+ * @brief Bind a socket to a local port (required for servers).
+ * @param handle  Stream handle.
+ * @param port    Local port (0 = OS-assigned).
+ * @return 0 on success; negative errno on failure.
+ */
+extern int net_bind(int32_t handle, int32_t port);
+
+/**
+ * @brief Mark a TCP socket as listening for inbound connections.
+ *
+ * On each accepted connection, net_event_pop() returns NET_EVT_ACCEPT
+ * with the new stream handle in bytes 2–3 (extra field).
+ *
+ * @param handle   Stream handle.
+ * @param backlog  Accept queue depth.
+ * @return 0 on success; negative errno on failure.
+ */
+extern int net_listen(int32_t handle, int32_t backlog);
+
+/**
+ * @brief Close a socket and release its slot.
+ * @param handle  Stream handle.
+ * @return 0 on success; negative errno on failure.
+ */
+extern int net_close(int32_t handle);
+
+/**
+ * @brief Bind a WASM buffer as the TX ring for a stream.
+ *
+ * Call once after net_open(). Write messages into the buffer using
+ * net_ring_write(), then call net_tx_flush() to send them.
+ *
+ * @param handle      Stream handle.
+ * @param tx_buf      Pointer to the WASM buffer (>= NET_RING_HDR_SIZE + 1 byte).
+ * @param total_size  Total buffer size in bytes.
+ * @return 0 on success; negative errno on failure.
+ */
+extern int net_tx_bind(int32_t handle, void *tx_buf, int32_t total_size);
+
+/**
+ * @brief Bind a WASM buffer as the RX ring for a stream.
+ *
+ * Call once after net_open(). Read messages from the buffer using
+ * net_ring_read() after NET_EVT_DATA_READY.
+ *
+ * @param handle      Stream handle.
+ * @param rx_buf      Pointer to the WASM buffer (>= NET_RING_HDR_SIZE + 1 byte).
+ * @param total_size  Total buffer size in bytes.
+ * @return 0 on success; negative errno on failure.
+ */
+extern int net_rx_bind(int32_t handle, void *rx_buf, int32_t total_size);
+
+/**
+ * @brief Flush the TX ring immediately without waiting for the next poll tick.
+ *
+ * The host poll thread drains the TX ring automatically every ~10 ms.
+ * Call this for lower-latency sends.
+ *
+ * @param handle  Stream handle.
+ * @return Bytes sent on success; negative errno on failure.
+ */
+extern int net_tx_flush(int32_t handle);
+
+/**
+ * @brief Pop the next network event (non-blocking).
+ *
+ * Event buffer layout:
+ *   buf[0] : event type (NET_EVT_*)
+ *   buf[1] : stream handle
+ *   buf[2] : extra low byte  (little-endian uint16)
+ *   buf[3] : extra high byte — new stream handle (ACCEPT), errno (ERROR)
+ *
+ * @param buf  Destination buffer (must be >= 4 bytes).
+ * @param len  Buffer capacity in bytes.
+ * @return Event type (NET_EVT_*; >0) if available, 0 if queue empty.
+ */
+extern int net_event_pop(void *buf, int32_t len);
 
 #ifdef __cplusplus
 }

@@ -1105,6 +1105,56 @@ config AKIRA_BLE_CHAR_MAX_LEN
 
 endmenu
 
+config AKIRA_WASM_NET
+    bool "Export Network API to WASM (TCP/UDP sockets)"
+    default n
+    depends on AKIRA_WASM_API && (NET_TCP || NET_UDP)
+    help
+      Export a stream-based TCP/UDP socket API to WASM applications.
+      Data flows through shared-memory ring buffers in WASM linear memory,
+      minimising WASM/host context switches.
+      Requires 'network' capability in the app manifest.
+
+config AKIRA_NET_MAX_STREAMS
+    int "Maximum concurrent network streams"
+    default 4
+    range 1 16
+    depends on AKIRA_WASM_NET
+    help
+      Number of simultaneous TCP/UDP socket slots available.
+      Each slot uses a small amount of SRAM for metadata.
+      Actual data buffers live in WASM linear memory (PSRAM).
+
+config AKIRA_NET_POLL_STACK_SIZE
+    int "Network poll thread stack size (bytes)"
+    default 2048
+    range 1024 8192
+    depends on AKIRA_WASM_NET
+    help
+      Stack size of the internal poll thread that drives all sockets.
+      The stack must accommodate a per-call RX buffer of
+      CONFIG_AKIRA_NET_MAX_MSG_SIZE bytes.
+
+config AKIRA_NET_EVENT_QUEUE_DEPTH
+    int "Network event queue depth (messages)"
+    default 8
+    range 4 32
+    depends on AKIRA_WASM_NET
+    help
+      Number of network events (CONNECTED, DATA_READY, ACCEPT, etc.)
+      that can be buffered before the WASM app drains them with
+      net_event_pop().
+
+config AKIRA_NET_MAX_MSG_SIZE
+    int "Maximum single network message size (bytes)"
+    default 1500
+    range 64 4096
+    depends on AKIRA_WASM_NET
+    help
+      Maximum payload size for a single framed message in the TX/RX ring.
+      Should match or exceed the network MTU (1500 for Ethernet/WiFi).
+      Used to size the temporary receive buffer on the poll thread stack.
+
 config AKIRA_WASM_HID
     bool "Export HID API to WASM"
     default n

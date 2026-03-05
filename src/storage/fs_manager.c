@@ -9,7 +9,9 @@
  */
 
 #include "fs_manager.h"
-#include "sd_card.h"
+#if defined(CONFIG_AKIRA_SD_CARD)
+#include <storage/sd_card.h>
+#endif
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
