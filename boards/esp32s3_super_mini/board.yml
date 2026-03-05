@@ -1,6 +1,5 @@
 board:
   name: esp32s3_super_mini
-  full_name: ESP32-S3 Super Mini (8MB Quad Flash, No PSRAM)
-  vendor: open-source hardware design 
+  vendor: akira
   socs:
-  - name: esp32s3
+    - name: esp32s3

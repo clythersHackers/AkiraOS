@@ -5,40 +5,46 @@
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 #include <zephyr/dt-bindings/input/esp32-touch-sensor-input.h>
 #include <espressif/partitions_0x0_amp.dtsi>
-#include "akiraconsole-pinctrl.dtsi"
+#include "esp32s3_super_mini-pinctrl.dtsi"
 
 / {
-	model = "Espressif ESP32S3-DevkitM PROCPU";
-	compatible = "espressif,esp32s3";
+    model = "ESP32-S3 Super Mini Custom";
+    compatible = "espressif,esp32s3";
 
-	aliases {
-		i2c-0 = &i2c0;
-		watchdog0 = &wdt0;
-	};
+    aliases {
+        led0 = &status_led;      // Алиас для Blinky
+        sw0 = &button0;
+        uart-0 = &uart0;
+        i2c-0 = &i2c0;
+        watchdog0 = &wdt0;
+    };
 
-	chosen {
-		zephyr,sram = &sram1;
-		zephyr,console = &uart0;
-		zephyr,shell-uart = &uart0;
-		zephyr,flash = &flash0;
-		zephyr,code-partition = &slot0_partition;
-		zephyr,bt-hci = &esp32_bt_hci;
-	};
+    chosen {
+        zephyr,sram = &sram1;
+        zephyr,console = &usb_serial;
+        zephyr,shell-uart = &usb_serial;
+        zephyr,flash = &flash0;
+        zephyr,code-partition = &slot0_partition;
+        zephyr,bt-hci = &esp32_bt_hci;
+    };
 
-	aliases {
-		uart-0 = &uart0;
-		sw0 = &button0;
-	};
+    leds {
+        compatible = "gpio-leds";
+        status_led: led_0 {
+            /* GPIO48 = (1 * 32) + 16. В Zephyr это &gpio1 16 */
+            gpios = <&gpio1 16 GPIO_ACTIVE_HIGH>; 
+            label = "Status LED";
+        };
+    };
 
-	buttons {
-		compatible = "gpio-keys";
-
-		button0: button_0 {
-			gpios = <&gpio0 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
-			label = "BOOT Button";
-			zephyr,code = <INPUT_KEY_0>;
-		};
-	};
+    buttons {
+        compatible = "gpio-keys";
+        button0: button_0 {
+            gpios = <&gpio0 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+            label = "BOOT Button";
+            zephyr,code = <INPUT_KEY_0>;
+        };
+    };
 };
 
 &uart0 {
@@ -46,6 +52,10 @@
 	current-speed = <115200>;
 	pinctrl-0 = <&uart0_default>;
 	pinctrl-names = "default";
+};
+
+&usb_serial {
+	status = "okay";
 };
 
 &gpio0 {
@@ -136,7 +146,7 @@
 };
 
 &usb_serial {
-	status = "disabled";
+	status = "okay";
 };
 
 &esp32_bt_hci {
