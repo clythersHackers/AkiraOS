@@ -43,6 +43,7 @@ int akira_display_hal_init(void)
 
     if (!device_is_ready(display_dev)) {
         LOG_ERR("Display device not ready");
+        display_dev = NULL;  /* clear so get_capabilities returns -ENODEV */
         return -ENODEV;
     }
 

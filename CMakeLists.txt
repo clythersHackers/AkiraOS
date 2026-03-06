@@ -338,6 +338,10 @@ if(CONFIG_AKIRA_LSM6DS3_DRIVER)
     target_sources(app PRIVATE src/drivers/akira_lsm6ds3.c)
 endif()
 
+if(CONFIG_AKIRA_ILI9341_DRIVER)
+    target_sources(app PRIVATE src/drivers/display/akira_ili9341.c)
+endif()
+
 # Conditional OTA manager based on flash availability
 if(CONFIG_FLASH_MAP AND CONFIG_BOOTLOADER_MCUBOOT)
     target_sources(app PRIVATE 

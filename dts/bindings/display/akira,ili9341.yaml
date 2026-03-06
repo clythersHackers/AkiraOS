@@ -1,0 +1,43 @@
+# Copyright (c) 2025 AkiraOS Contributors
+# SPDX-License-Identifier: GPL-3.0-only
+
+description: |
+  AkiraOS out-of-tree driver for the Ilitek ILI9341 240×320 display controller.
+  Communicates over SPI with manual DC and optional RST GPIOs.
+  Implements the standard Zephyr display_driver_api.
+
+  Use this instead of "ilitek,ili9341" (MIPI DBI) when the upstream driver
+  fails to initialize — e.g. the upstream driver's init sequence produces a
+  blank/white display on boards where the proven direct-SPI sequence works.
+
+  Compatible: "akira,ili9341"
+  Chosen: zephyr,display = &<node>
+
+compatible: "akira,ili9341"
+
+include: [spi-device.yaml]
+
+properties:
+  dc-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      Data/Command select GPIO (D/CX pin).
+      High = pixel data, Low = command byte.
+
+  reset-gpios:
+    type: phandle-array
+    required: false
+    description: |
+      Active-low hardware reset GPIO (RESX pin).
+      If omitted, only a software reset (0x01) is issued.
+
+  width:
+    type: int
+    required: true
+    description: Display width in pixels after MADCTL orientation is applied.
+
+  height:
+    type: int
+    required: true
+    description: Display height in pixels after MADCTL orientation is applied.

@@ -33,7 +33,7 @@ void akira_display_clear(uint16_t color)
 #else
     struct display_capabilities caps;
     if (akira_display_hal_get_capabilities(&caps) < 0) {
-        LOG_ERR("Failed to get display capabilities");
+        LOG_DBG("Failed to get display capabilities");
         return;
     }
 
@@ -134,7 +134,7 @@ void akira_display_get_size(int *width, int *height)
 #else
     struct display_capabilities caps;
     if (akira_display_hal_get_capabilities(&caps) < 0) {
-        LOG_ERR("Failed to get display capabilities");
+        LOG_DBG("Failed to get display capabilities");
         if (width) *width = 0;
         if (height) *height = 0;
         return;

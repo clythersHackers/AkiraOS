@@ -118,30 +118,30 @@ int akira_hal_init(void)
 
 #elif AKIRA_PLATFORM_ESP32S3
     LOG_INF("Running on ESP32-S3 - full hardware support");
-    
-    /* Initialize hardware display if configured */
-#if defined(CONFIG_DISPLAY) && defined(CONFIG_AKIRA_FRAMEBUFFER_IN_PSRAM)
-    int ret = akira_display_hal_init();
-    if (ret < 0) {
-        LOG_WRN("Display HAL initialization failed: %d", ret);
+
+    /* Initialize hardware display — runs for any board with CONFIG_DISPLAY=y.
+     * display_hal will report ENOTSUP if no zephyr,display is in DT. */
+#if defined(CONFIG_DISPLAY)
+    {
+        int ret = akira_display_hal_init();
+        if (ret < 0 && ret != -ENOTSUP) {
+            LOG_WRN("Display HAL initialization failed: %d", ret);
+        }
     }
-#endif
-    
-#elif AKIRA_PLATFORM_ESP32
-    LOG_INF("Running on ESP32 - full hardware support");
-    
-    /* Initialize hardware display if configured */
-#if defined(CONFIG_DISPLAY) && defined(CONFIG_AKIRA_FRAMEBUFFER_IN_PSRAM)
-    int ret = akira_display_hal_init();
-    if (ret < 0) {
-        LOG_WRN("Display HAL initialization failed: %d", ret);
-    }
-#endif
-    
-#else
-    LOG_WRN("Running on unknown platform");
 #endif
 
+#else 
+    LOG_INF("Running on ESP32 - full hardware support");
+
+#if defined(CONFIG_DISPLAY)
+    {
+        int ret = akira_display_hal_init();
+        if (ret < 0 && ret != -ENOTSUP) {
+            LOG_WRN("Display HAL initialization failed: %d", ret);
+        }
+    }
+#endif
+#endif /* Platform-specific initialization */
     return 0;
 }
 

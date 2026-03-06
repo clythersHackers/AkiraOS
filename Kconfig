@@ -1044,6 +1044,16 @@ config AKIRA_LSM6DS3_DRIVER
       Zephyr's upstream lsm6dsl driver (expects 0x6A).
       Use compatible "akira,lsm6ds3" in your board DTS overlay.
 
+config AKIRA_ILI9341_DRIVER
+    bool "AkiraOS out-of-tree ILI9341 display driver"
+    depends on DISPLAY && SPI
+    help
+      Enable the AkiraOS direct-SPI driver for the Ilitek ILI9341 display.
+      Uses the proven AkiraOS init sequence — use this instead of the
+      upstream CONFIG_ILI9341 (MIPI DBI) driver when that produces a
+      blank/white display.
+      Use compatible "akira,ili9341" in your board DTS overlay.
+
 config AKIRA_WASM_MEMORY
     bool "Export Memory API to WASM"
     default y

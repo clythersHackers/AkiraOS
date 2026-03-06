@@ -82,13 +82,17 @@
 };
 
 / {
-    // Chosen node for display
+    // ST7789V is the default display for AkiraConsole.
+    // chosen and the MIPI DBI node are unconditional — `#if` inside a DTS
+    // root node is not reliably evaluated before label resolution.
+    // To use ILI9341 instead: set CONFIG_ILI9341=y (and drop CONFIG_ST7789V)
+    // in the board .conf; the ili9341 override block below will then replace
+    // the chosen pointer and add the ILI9341 child node.
     chosen {
         zephyr,display = &st7789v_akiraconsole;
     };
 
-    // MIPI DBI interface for ST7789 Display
-    mipi_dbi_st7789_akiraconsole {
+    mipi_dbi_ctrl: mipi_dbi_akiraconsole {
         compatible = "zephyr,mipi-dbi-spi";
         spi-dev = <&spi2>;
         dc-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;    // TFT_DC  - GPIO9
@@ -105,12 +109,12 @@
             height = <240>;
             x-offset = <0>;
             y-offset = <0>;
-            inversion-off;  // Enable display inversion for correct colors
+            inversion-off;
             vcom = <0x19>;
             gctrl = <0x35>;
             vrhs = <0x12>;
             vdvs = <0x20>;
-            mdac = <0x68>;  // Enable BGR color order (bit 3)
+            mdac = <0x68>;
             gamma = <0x01>;
             colmod = <0x55>;
             lcm = <0x2c>;
@@ -125,6 +129,50 @@
         };
     };
 };
+
+// ============================================================================
+// ILI9341 override — only active when CONFIG_ILI9341=y is in the board .conf.
+// Replaces the chosen pointer and adds a 2nd child to the shared MIPI DBI bus.
+// Pins are identical: DC=GPIO9, RST=GPIO45, CS=GPIO10 (reg=<1>).
+//
+// To activate:  uncomment CONFIG_ILI9341=y in akiraconsole_esp32s3_procpu.conf
+//               and comment out CONFIG_ST7789V=y
+// ============================================================================
+// ============================================================================
+// AkiraOS ILI9341 override — only active when CONFIG_AKIRA_ILI9341_DRIVER=y.
+//
+// Uses akira,ili9341 (direct SPI) instead of the upstream ilitek,ili9341
+// (MIPI DBI) driver whose init sequence leaves the display white.
+// Pins are identical: DC=GPIO9, RST=GPIO45, CS=GPIO10 (spi2 reg=1).
+//
+// To activate: set CONFIG_AKIRA_ILI9341_DRIVER=y in the board .conf and
+//              comment out CONFIG_ST7789V=y / CONFIG_MIPI_DBI_SPI=y.
+// ============================================================================
+#ifdef CONFIG_AKIRA_ILI9341_DRIVER
+/ {
+    chosen {
+        zephyr,display = &akira_ili9341_akiraconsole;
+    };
+};
+
+// Disable the MIPI DBI bus and ST7789V — direct SPI takes over CS1.
+&mipi_dbi_ctrl {
+    status = "disabled";
+};
+
+&spi2 {
+    akira_ili9341_akiraconsole: akira_ili9341@1 {
+        compatible = "akira,ili9341";
+        reg = <1>;                                 /* cs-gpios[1] = GPIO10 */
+        spi-max-frequency = <25000000>;
+        dc-gpios    = <&gpio0 9  GPIO_ACTIVE_HIGH>; /* TFT_DC  - GPIO9  */
+        reset-gpios = <&gpio0 45 GPIO_ACTIVE_LOW>;  /* TFT_RST - GPIO45 */
+        width  = <320>;
+        height = <240>;
+        status = "okay";
+    };
+};
+#endif /* CONFIG_AKIRA_ILI9341_DRIVER */
 
 // ============================================================================
 // GPIO Configuration
