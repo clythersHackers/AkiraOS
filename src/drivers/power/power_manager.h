@@ -1,6 +1,11 @@
+/*
+ * Copyright (c) 2025 AkiraOS Contributors
+ * SPDX-License-Identifier: GPL-3.0-only
+ */
+
 /**
  * @file power_manager.h
- * @brief AkiraOS Power Management
+ * @brief AkiraOS Power Management — sleep modes, battery, wake sources.
  */
 
 #ifndef AKIRA_POWER_MANAGER_H
@@ -10,127 +15,113 @@
 #include <stdbool.h>
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-    /**
-     * @brief Power modes
-     */
-    typedef enum
-    {
-        POWER_MODE_ACTIVE = 0,  // Full speed
-        POWER_MODE_IDLE,        // CPU clock gated, RAM on
-        POWER_MODE_LIGHT_SLEEP, // CPU off, RAM on, peripherals selectable
-        POWER_MODE_DEEP_SLEEP,  // CPU off, RTC RAM only, peripherals off
-        POWER_MODE_HIBERNATE    // Everything off except RTC timer
-    } akira_power_mode_t;
+/** @brief System power modes (ordered from most to least active). */
+typedef enum {
+    POWER_MODE_ACTIVE      = 0, /**< Full speed, all peripherals on.                */
+    POWER_MODE_IDLE,            /**< CPU clock gated when idle, RAM on.             */
+    POWER_MODE_LIGHT_SLEEP,     /**< CPU off, RAM retained, fast wakeup.            */
+    POWER_MODE_DEEP_SLEEP,      /**< CPU + RAM off, only RTC domain retained.       */
+    POWER_MODE_HIBERNATE,       /**< Everything off except RTC alarm / ext reset.   */
+} akira_power_mode_t;
 
-    /**
-     * @brief Wake sources
-     */
-    typedef enum
-    {
-        WAKE_SOURCE_NONE = 0,
-        WAKE_SOURCE_GPIO = (1 << 0),
-        WAKE_SOURCE_TIMER = (1 << 1),
-        WAKE_SOURCE_UART = (1 << 2),
-        WAKE_SOURCE_BT = (1 << 3),
-        WAKE_SOURCE_WIFI = (1 << 4),
-        WAKE_SOURCE_ULP = (1 << 5)
-    } akira_wake_source_t;
+/** @brief Bitmask of enabled wake sources. */
+typedef enum {
+    WAKE_SOURCE_NONE  = 0,
+    WAKE_SOURCE_GPIO  = (1 << 0),
+    WAKE_SOURCE_TIMER = (1 << 1),
+    WAKE_SOURCE_UART  = (1 << 2),
+    WAKE_SOURCE_BT    = (1 << 3),
+    WAKE_SOURCE_WIFI  = (1 << 4),
+    WAKE_SOURCE_ULP   = (1 << 5),
+} akira_wake_source_t;
 
-    /**
-     * @brief Power policy for apps
-     */
-    typedef enum
-    {
-        POWER_POLICY_DEFAULT = 0,
-        POWER_POLICY_PERFORMANCE, // Keep CPU active
-        POWER_POLICY_BALANCED,    // Allow idle sleep
-        POWER_POLICY_LOW_POWER    // Aggressive power saving
-    } akira_power_policy_t;
+/** @brief Per-app power policy hint. */
+typedef enum {
+    POWER_POLICY_DEFAULT     = 0,
+    POWER_POLICY_PERFORMANCE,   /**< Keep CPU running at full speed. */
+    POWER_POLICY_BALANCED,      /**< Allow idle sleep between tasks.  */
+    POWER_POLICY_LOW_POWER,     /**< Aggressive power saving.         */
+} akira_power_policy_t;
 
-    /**
-     * @brief Battery status
-     */
-    typedef struct
-    {
-        uint8_t level_percent;
-        float voltage;
-        float current;
-        bool charging;
-        bool low_battery;
-    } akira_battery_status_t;
+/**
+ * @brief Live battery status snapshot.
+ *
+ * All electrical values use integer millivolts / milliamps to avoid
+ * floating-point in WASM-facing code paths.
+ */
+typedef struct {
+    uint8_t  level_percent; /**< State of charge 0-100 %.                 */
+    int32_t  voltage_mv;    /**< Bus / pack voltage in millivolts.         */
+    int32_t  current_ma;    /**< Charge(+) / discharge(-) current in mA.  */
+    bool     charging;      /**< True when an external charger is active.  */
+    bool     low_battery;   /**< True when SoC < CONFIG_AKIRA_BATTERY_LOW_THRESHOLD. */
+} akira_battery_status_t;
 
-    /**
-     * @brief Initialize power manager
-     * @return 0 on success
-     */
-    int power_manager_init(void);
+/**
+ * @brief Initialize power manager and bind hardware (fuel gauge / INA219).
+ * @return 0 on success, negative errno otherwise.
+ */
+int power_manager_init(void);
 
-    /**
-     * @brief Set power mode
-     * @param mode Power mode to enter
-     * @return 0 on success
-     */
-    int akira_pm_set_mode(akira_power_mode_t mode);
+/**
+ * @brief Transition to a new power mode.
+ *
+ * Delegates to Zephyr PM state forcing.  Deep sleep and hibernate require
+ * CONFIG_AKIRA_POWER_DEEP_SLEEP=y.
+ *
+ * @param mode Target power mode.
+ * @return 0 on success, -ENOTSUP if mode is disabled, -EINVAL on bad arg.
+ */
+int akira_pm_set_mode(akira_power_mode_t mode);
 
-    /**
-     * @brief Get current power mode
-     * @return Current power mode
-     */
-    akira_power_mode_t akira_pm_get_mode(void);
+/** @brief Return the current power mode. */
+akira_power_mode_t akira_pm_get_mode(void);
 
-    /**
-     * @brief Configure GPIO wake source
-     * @param pin GPIO pin number
-     * @param edge Edge type (0=low, 1=high, 2=any)
-     * @return 0 on success
-     */
-    int akira_pm_wake_on_gpio(uint32_t pin, int edge);
+/**
+ * @brief Register a GPIO pin as a wakeup source.
+ * @param pin  GPIO pin number.
+ * @param edge 0=low, 1=high, 2=any edge.
+ * @return 0 on success.
+ */
+int akira_pm_wake_on_gpio(uint32_t pin, int edge);
 
-    /**
-     * @brief Configure timer wake source
-     * @param ms Wake time in milliseconds
-     * @return 0 on success
-     */
-    int akira_pm_wake_on_timer(uint32_t ms);
+/**
+ * @brief Register a timer wakeup after @p ms milliseconds.
+ * @return 0 on success, -EINVAL if ms == 0.
+ */
+int akira_pm_wake_on_timer(uint32_t ms);
 
-    /**
-     * @brief Get battery level
-     * @param percent Output for battery percentage
-     * @return 0 on success
-     */
-    int akira_pm_get_battery_level(uint8_t *percent);
+/**
+ * @brief Read battery state of charge.
+ * @param[out] percent  0-100 %.
+ * @return 0 on success, -ENODEV if no battery hardware is present.
+ */
+int akira_pm_get_battery_level(uint8_t *percent);
 
-    /**
-     * @brief Get full battery status
-     * @param status Output for battery status
-     * @return 0 on success
-     */
-    int akira_pm_get_battery_status(akira_battery_status_t *status);
+/**
+ * @brief Read full battery status snapshot.
+ * @param[out] status Filled on success.
+ * @return 0 on success, -ENODEV if no battery hardware is present.
+ */
+int akira_pm_get_battery_status(akira_battery_status_t *status);
 
-    /**
-     * @brief Enable/disable low power mode
-     * @param enable true to enable
-     * @return 0 on success
-     */
-    int akira_pm_enable_low_power_mode(bool enable);
+/**
+ * @brief Enable or disable automatic low-power idle management.
+ * @return 0 always.
+ */
+int akira_pm_enable_low_power_mode(bool enable);
 
-    /**
-     * @brief Set power policy for container
-     * @param name Container name
-     * @param policy Power policy
-     * @return 0 on success
-     */
-    int akira_pm_set_policy(const char *name, akira_power_policy_t policy);
+/**
+ * @brief Register a power policy for a named app / container.
+ * @return 0 on success, -ENOMEM if the policy table is full.
+ */
+int akira_pm_set_policy(const char *name, akira_power_policy_t policy);
 
-    /**
-     * @brief Get aggregated power policy
-     * @return System power policy based on all containers
-     */
-    akira_power_policy_t akira_pm_get_aggregate_policy(void);
+/** @brief Return the most performance-demanding policy across all registered apps. */
+akira_power_policy_t akira_pm_get_aggregate_policy(void);
 
 #ifdef __cplusplus
 }

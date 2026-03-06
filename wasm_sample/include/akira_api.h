@@ -1492,6 +1492,101 @@ extern int net_tx_flush(int32_t handle);
  */
 extern int net_event_pop(void *buf, int32_t len);
 
+/*
+ * =============================================================================
+ * POWER MANAGEMENT API
+ * =============================================================================
+ *
+ * Required manifest capabilities:
+ *   "power.read"   — power_get_mode, power_get_battery_level,
+ *                    power_get_battery_status
+ *   "power.control"— power_set_mode, power_wake_on_gpio,
+ *                    power_wake_on_timer, power_set_low_power
+ *                    (elevated — only works when host has
+ *                     CONFIG_AKIRA_WASM_POWER_CONTROL=y)
+ */
+
+/** @brief System power modes */
+#define POWER_MODE_ACTIVE       0
+#define POWER_MODE_IDLE         1
+#define POWER_MODE_LIGHT_SLEEP  2
+#define POWER_MODE_DEEP_SLEEP   3
+#define POWER_MODE_HIBERNATE    4
+
+/** @brief Battery status buffer flags (buf[1] from power_get_battery_status) */
+#define BATT_FLAG_CHARGING      (1 << 0)
+#define BATT_FLAG_LOW_BATTERY   (1 << 1)
+
+/**
+ * @brief Unpack a battery status buffer filled by power_get_battery_status().
+ *
+ * Example:
+ *   uint8_t buf[12];
+ *   power_get_battery_status(buf, sizeof(buf));
+ *   int pct = buf[0];
+ *   bool charging = buf[1] & BATT_FLAG_CHARGING;
+ *   int32_t mv; memcpy(&mv, buf + 4, 4);
+ */
+
+/**
+ * @brief Return the current power mode (POWER_MODE_* constant).
+ * @return Power mode, or -EACCES if permission denied.
+ */
+extern int power_get_mode(void);
+
+/**
+ * @brief Read battery state of charge.
+ * @return 0-100 %, -ENODEV if no battery present, -EACCES if denied.
+ */
+extern int power_get_battery_level(void);
+
+/**
+ * @brief Read full battery status into @p buf (12 bytes required).
+ *
+ * Buffer layout:
+ *   [0]     uint8  level_percent (0-100)
+ *   [1]     uint8  flags (BATT_FLAG_*)
+ *   [2-3]   pad
+ *   [4-7]   int32  voltage_mv (little-endian)
+ *   [8-11]  int32  current_ma (little-endian, positive=charge, negative=discharge)
+ *
+ * @return 0 on success, negative errno on error.
+ */
+extern int power_get_battery_status(void *buf, int len);
+
+/**
+ * @brief Request a power mode transition.
+ *
+ * Deep sleep and hibernate require the host to have
+ * CONFIG_AKIRA_POWER_DEEP_SLEEP=y; otherwise returns -ENOTSUP.
+ *
+ * @param mode POWER_MODE_* constant.
+ * @return 0 on success.
+ */
+extern int power_set_mode(int mode);
+
+/**
+ * @brief Register a GPIO pin as a wake source before deep sleep.
+ * @param pin  GPIO pin number.
+ * @param edge 0=low level, 1=high level, 2=any edge.
+ * @return 0 on success.
+ */
+extern int power_wake_on_gpio(int pin, int edge);
+
+/**
+ * @brief Register a timer wake source before deep sleep.
+ * @param ms Wake delay in milliseconds (must be > 0).
+ * @return 0 on success, -EINVAL if ms == 0.
+ */
+extern int power_wake_on_timer(int ms);
+
+/**
+ * @brief Enable or disable automatic low-power idle.
+ * @param enable 1 to enable, 0 to disable.
+ * @return 0 always.
+ */
+extern int power_set_low_power(int enable);
+
 #ifdef __cplusplus
 }
 #endif

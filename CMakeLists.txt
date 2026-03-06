@@ -269,6 +269,10 @@ if(CONFIG_AKIRA_WASM_NET)
     )
 endif()
 
+if(CONFIG_AKIRA_WASM_POWER)
+    target_sources(app PRIVATE src/api/akira_power_api.c)
+endif()
+
 if(CONFIG_AKIRA_WASM_HID)
     target_sources(app PRIVATE src/api/akira_hid_api.c)
 endif()

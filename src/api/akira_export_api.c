@@ -1,6 +1,7 @@
 #include "akira_api.h"
 #include "akira_storage_api.h"
 #include "akira_net_api.h"
+#include "akira_power_api.h"
 #include <runtime/akira_runtime.h>
 #include <runtime/security.h>
 #include <zephyr/logging/log.h>
@@ -171,6 +172,18 @@ bool akira_register_native_apis()
         {"net_rx_bind",    (void *)akira_native_net_rx_bind,    "(iii)i",  NULL},
         {"net_tx_flush",   (void *)akira_native_net_tx_flush,   "(i)i",    NULL},
         {"net_event_pop",  (void *)akira_native_net_event_pop,  "(ii)i",   NULL},
+        #endif
+
+        /* power.read: battery level/status, mode query */
+        #ifdef CONFIG_AKIRA_WASM_POWER
+        {"power_get_mode",           (void *)akira_native_power_get_mode,           "()i",   NULL},
+        {"power_get_battery_level",  (void *)akira_native_power_get_battery_level,  "()i",   NULL},
+        {"power_get_battery_status", (void *)akira_native_power_get_battery_status, "(*~)i", NULL},
+        /* power.control: mode transitions and wake sources (elevated) */
+        {"power_set_mode",           (void *)akira_native_power_set_mode,           "(i)i",  NULL},
+        {"power_wake_on_gpio",       (void *)akira_native_power_wake_on_gpio,       "(ii)i", NULL},
+        {"power_wake_on_timer",      (void *)akira_native_power_wake_on_timer,      "(i)i",  NULL},
+        {"power_set_low_power",      (void *)akira_native_power_set_low_power,      "(i)i",  NULL},
         #endif
 
     };

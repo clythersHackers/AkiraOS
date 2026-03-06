@@ -50,6 +50,13 @@ extern "C" {
  * Does NOT grant start/stop authority — use app.control for that.
  * Manifest string: "app.info" */
 #define AKIRA_CAP_APP_INFO    (1U << 20)
+/* Read-only power & battery queries (mode, battery level/status).
+ * Manifest string: "power.read" */
+#define AKIRA_CAP_POWER_READ  (1U << 21)
+/* Full power control: set sleep mode, configure wake sources.
+ * Elevated privilege — do not grant to untrusted apps.
+ * Manifest string: "power.control" */
+#define AKIRA_CAP_POWER_CTRL  (1U << 22)
 
 /*
  * Capability check macro using security subsystem.

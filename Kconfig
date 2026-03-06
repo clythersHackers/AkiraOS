@@ -846,6 +846,70 @@ config AKIRA_POWER_DEEP_SLEEP
     help
       Enable deep sleep mode for maximum power savings.
 
+config AKIRA_BATTERY_LOW_THRESHOLD
+    int "Low battery threshold (%)"
+    default 15
+    range 1 50
+    depends on AKIRA_POWER_MANAGER
+    help
+      State-of-charge percentage below which low_battery is flagged.
+
+config AKIRA_BATTERY_ADC
+    bool "Enable ADC battery voltage measurement"
+    default n
+    depends on AKIRA_POWER_MANAGER && ADC
+    help
+      Read battery voltage via an ADC channel wired through a resistor
+      divider.  Define a DTS alias 'battery-voltage' pointing to the ADC
+      device, then set the channel, reference voltage, and divider below.
+      Use this when no fuel-gauge IC (CONFIG_FUEL_GAUGE) or INA219
+      (CONFIG_INA219) is available.
+
+config AKIRA_BATTERY_ADC_CHANNEL
+    int "ADC channel for battery voltage"
+    default 0
+    range 0 31
+    depends on AKIRA_BATTERY_ADC
+    help
+      ADC channel number connected to the battery voltage divider output.
+
+config AKIRA_BATTERY_ADC_VREF_MV
+    int "ADC internal reference voltage (mV)"
+    default 3300
+    depends on AKIRA_BATTERY_ADC
+    help
+      Internal ADC reference in millivolts (3300 for 3.3 V VDD reference,
+      1100 for ESP32 internal 1.1 V reference, etc.).
+
+config AKIRA_BATTERY_ADC_VDIV_MUL
+    int "Voltage divider multiplier (*1000)"
+    default 2000
+    depends on AKIRA_BATTERY_ADC
+    help
+      Integer scaling factor to convert the ADC pin voltage to the true
+      battery voltage.  Expressed as (actual_factor * 1000).  For equal
+      R1=R2 the battery is 2x the pin voltage, so set this to 2000.
+      For R1=1M, R2=470k: factor = (1000+470)/470 ≈ 3128, so set 3128.
+
+config AKIRA_WASM_POWER
+    bool "Enable WASM power/battery read API"
+    default y
+    depends on AKIRA_POWER_MANAGER && AKIRA_WASM_RUNTIME
+    help
+      Expose power_get_mode, power_get_battery_level and
+      power_get_battery_status to WASM apps (requires power.read cap).
+      Battery data is pulled from whatever hardware tier is enabled:
+      CONFIG_FUEL_GAUGE > CONFIG_INA219 > CONFIG_AKIRA_BATTERY_ADC.
+
+config AKIRA_WASM_POWER_CONTROL
+    bool "Enable WASM power control API (elevated)"
+    default n
+    depends on AKIRA_WASM_POWER
+    help
+      Also expose power_set_mode, power_wake_on_gpio, power_wake_on_timer
+      and power_set_low_power to WASM apps. Requires power.control cap.
+      Do NOT enable for untrusted app stores.
+
 endmenu
 
 menu "Security"
