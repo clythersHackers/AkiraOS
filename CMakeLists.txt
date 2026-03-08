@@ -113,7 +113,7 @@ if(CONFIG_AKIRA_WASM_RUNTIME)
     # NOTE: akira_log_module and akira_time_module register to separate namespaces
     # ("akira_log", "akira_time") for WASM apps using named imports.
     # Their akira_register_*_module() functions must be called in akira_runtime_init()
-    # before wasm_runtime_full_init().  akira_display_module was a stub and has been removed.
+    # before wasm_runtime_full_init(). 
     target_sources(app PRIVATE
         src/runtime/modules/akira_log_module.c
         src/runtime/modules/akira_time_module.c

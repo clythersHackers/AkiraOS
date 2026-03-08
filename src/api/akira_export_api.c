@@ -77,9 +77,9 @@ bool akira_register_native_apis()
         {"ble_advertise",            (void *)akira_native_ble_advertise,            "()i",     NULL},
         {"ble_stop_advertise",       (void *)akira_native_ble_stop_advertise,       "()i",     NULL},
         {"ble_is_connected",         (void *)akira_native_ble_is_connected,         "()i",     NULL},
-        {"ble_char_write",           (void *)akira_native_ble_char_write,           "(i*~)i",  NULL},
-        {"ble_char_read",            (void *)akira_native_ble_char_read,            "(i*~)i",  NULL},
-        {"ble_event_pop",            (void *)akira_native_ble_event_pop,            "(*~)i",   NULL},
+        {"ble_char_write",           (void *)akira_native_ble_char_write,           "(iii)i",  NULL},
+        {"ble_char_read",            (void *)akira_native_ble_char_read,            "(iii)i",  NULL},
+        {"ble_event_pop",            (void *)akira_native_ble_event_pop,            "(ii)i",   NULL},
         #endif
 
         #ifdef CONFIG_AKIRA_WASM_HID
@@ -100,7 +100,7 @@ bool akira_register_native_apis()
         {"hid_mouse_btn_release",  (void *)akira_native_hid_mouse_btn_release,  "(i)i",   NULL},
         {"hid_mouse_scroll",       (void *)akira_native_hid_mouse_scroll,       "(i)i",   NULL},
         {"hid_consumer_send",      (void *)akira_native_hid_consumer_send,      "(i)i",   NULL},
-        {"hid_send_raw_report",    (void *)akira_native_hid_send_raw_report,    "(i*~)i", NULL},
+        {"hid_send_raw_report",    (void *)akira_native_hid_send_raw_report,    "(iii)i", NULL},
         {"hid_action_register",    (void *)akira_native_hid_action_register,    "($ii)i", NULL},
         {"hid_action_trigger",     (void *)akira_native_hid_action_trigger,     "($)i",   NULL},
         {"hid_set_transport",      (void *)akira_native_hid_set_transport,      "(i)i",   NULL},

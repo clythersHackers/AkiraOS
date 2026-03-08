@@ -40,6 +40,7 @@ LOG_MODULE_REGISTER(bt_manager, CONFIG_AKIRA_LOG_LEVEL);
 static struct
 {
     bool initialized;
+    bool hid_active;   /**< true when HID was started at boot via SYS_INIT */
     bt_config_t config;
     bt_state_t state;
     bt_stats_t stats;
@@ -503,12 +504,24 @@ int bt_manager_set_mode(bt_manager_mode_t mode)
     k_mutex_lock(&bt_mgr.mutex, K_FOREVER);
 
     if (mode != BT_MODE_NONE && bt_mgr.mode != BT_MODE_NONE && bt_mgr.mode != mode) {
-        k_mutex_unlock(&bt_mgr.mutex);
-        LOG_ERR("BT mode conflict: active=%d requested=%d", bt_mgr.mode, mode);
-        return -EBUSY;
+        /* HID and BLE_APP can coexist: HID uses BLE HID profile,
+         * BLE_APP adds custom GATT services on the same stack. */
+        if ((bt_mgr.mode == BT_MODE_HID && mode == BT_MODE_BLE_APP) ||
+            (bt_mgr.mode == BT_MODE_BLE_APP && mode == BT_MODE_HID)) {
+            LOG_INF("BT: HID and BLE_APP sharing stack, switching to mode %d", mode);
+        } else {
+            k_mutex_unlock(&bt_mgr.mutex);
+            LOG_ERR("BT mode conflict: active=%d requested=%d", bt_mgr.mode, mode);
+            return -EBUSY;
+        }
     }
 
-    bt_mgr.mode = mode;
+    /* When HID was started at boot, releasing to NONE restores it */
+    if (mode == BT_MODE_NONE && bt_mgr.hid_active) {
+        bt_mgr.mode = BT_MODE_HID;
+    } else {
+        bt_mgr.mode = mode;
+    }
     k_mutex_unlock(&bt_mgr.mutex);
 
     /* Lazy init when transitioning out of NONE and not yet initialized */
@@ -593,6 +606,7 @@ int bt_manager_start_advertising_custom(const uint8_t svc_uuid128[16])
 static int bt_manager_sys_init(void)
 {
     bt_mgr.mode = BT_MODE_HID;
+    bt_mgr.hid_active = true;
     return bt_manager_init(NULL);
 }
 SYS_INIT(bt_manager_sys_init, APPLICATION, CONFIG_AKIRA_BT_INIT_PRIORITY);

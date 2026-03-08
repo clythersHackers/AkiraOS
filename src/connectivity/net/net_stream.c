@@ -36,6 +36,7 @@ LOG_MODULE_REGISTER(akira_net_stream, CONFIG_AKIRA_LOG_LEVEL);
 #include <zephyr/net/socket.h>
 #include <zephyr/net/net_ip.h>
 #include <zephyr/sys/atomic.h>
+#include "mem_helper.h"
 
 /* =========================================================================
  * Configuration defaults (overridden by Kconfig)
@@ -175,7 +176,7 @@ static int ring_drain_tx(struct net_stream_ctx *ctx)
 		}
 
 		/* Copy payload from ring (handles wrap-around) */
-		uint8_t payload[CONFIG_AKIRA_NET_MAX_MSG_SIZE];
+		static AKIRA_BULK_BSS uint8_t payload[CONFIG_AKIRA_NET_MAX_MSG_SIZE];
 		uint32_t data_ri = (ri_mod + 2) % cap;
 
 		for (uint16_t i = 0; i < plen; i++) {
@@ -346,7 +347,7 @@ static void net_poll_thread_fn(void *a, void *b, void *c)
 
 	struct zsock_pollfd pfds[CONFIG_AKIRA_NET_MAX_STREAMS];
 	int                 handles[CONFIG_AKIRA_NET_MAX_STREAMS];
-	uint8_t             rx_buf[CONFIG_AKIRA_NET_MAX_MSG_SIZE];
+	static AKIRA_BULK_BSS uint8_t rx_buf[CONFIG_AKIRA_NET_MAX_MSG_SIZE];
 
 	while (1) {
 		/* ---- 1. Snapshot active fds under mutex ---- */

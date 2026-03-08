@@ -123,22 +123,29 @@ static atomic_t g_runtime_initialized = ATOMIC_INIT(0);
 /*
  * WAMR allocator trampolines — Alloc_With_Allocator mode.
  *
- * Each allocation carries a uint64_t header (8 bytes) storing the requested
- * size.  Using uint64_t (not size_t which is 4 bytes on 32-bit Xtensa) keeps
- * the returned user pointer 8-byte aligned when the underlying allocator
- * returns an 8-byte-aligned block.  WAMR asserts 8-byte alignment on the
- * instance heap buffer — misalignment produces the "heap init struct buf not
- * 8-byte aligned" error.
+ * Each allocation carries a uint64_t header (8 bytes) encoding:
+ *   low  32 bits = requested size
+ *   high 32 bits = byte offset from the raw allocation to the header
+ * The raw allocation is rounded up to the next 8-byte boundary so that
+ * hdr+1 (the returned user pointer) is always 8-byte aligned regardless
+ * of whether the underlying allocator returns 4- or 8-byte-aligned blocks.
+ * WAMR asserts 8-byte alignment on the instance heap buffer — misalignment
+ * produces the "heap init struct buf not 8-byte aligned" error.
  */
 static void *wamr_malloc(unsigned int size)
 {
-    uint64_t *hdr = akira_malloc_buffer(sizeof(uint64_t) + size);
+    /* Request enough space for padding (up to 7 bytes) + header + data */
+    uint8_t *raw = akira_malloc_buffer(sizeof(uint64_t) + 7 + size);
 
-    if (!hdr) {
+    if (!raw) {
         return NULL;
     }
-    *hdr = (uint64_t)size;
-    return hdr + 1;   /* +8 bytes — user ptr is 8-byte aligned */
+    /* Round raw up to next 8-byte boundary */
+    uintptr_t hdr_addr = ((uintptr_t)raw + 7) & ~(uintptr_t)7;
+    uint32_t  padding  = (uint32_t)(hdr_addr - (uintptr_t)raw);
+    uint64_t *hdr = (uint64_t *)hdr_addr;
+    *hdr = ((uint64_t)padding << 32) | (uint64_t)size;
+    return hdr + 1;   /* user ptr is 8-byte aligned */
 }
 
 static void wamr_free(void *ptr)
@@ -146,7 +153,9 @@ static void wamr_free(void *ptr)
     if (!ptr) {
         return;
     }
-    akira_free_buffer((uint64_t *)ptr - 1);
+    uint64_t *hdr     = (uint64_t *)ptr - 1;
+    uint32_t  padding = (uint32_t)(*hdr >> 32);
+    akira_free_buffer((uint8_t *)hdr - padding);
 }
 
 static void *wamr_realloc(void *ptr, unsigned int new_size)
@@ -159,7 +168,7 @@ static void *wamr_realloc(void *ptr, unsigned int new_size)
         return NULL;
     }
 
-    uint64_t old_size = *((uint64_t *)ptr - 1);
+    uint32_t old_size = (uint32_t)(*((uint64_t *)ptr - 1) & 0xFFFFFFFFu);
     void *new_ptr = wamr_malloc(new_size);
 
     if (!new_ptr) {
