@@ -18,15 +18,9 @@
 #   -h, --help      Show this help message
 #
 # Boards:
-#   native_sim                         Native simulator (default)
-#   esp32s3_devkitm_esp32s3_procpu     ESP32-S3 DevKitM (Akira Console)
-#   akiraconsole                       Akira Console (ESP32-S3 DevKitM) - short alias
-#   akiraconsole_esp32s3_procpu        Akira Console (ESP32-S3 DevKitM) - full name
-#   esp32s3_super_mini_esp32s3_procpu   ESP32-S3 Super Mini (compact)
-#   esp32_devkitc_procpu               ESP32 DevKitC (Akira Micro)
-#   nrf54l15dk_nrf54l15_cpuapp         nRF54L15 DK (Nordic)
-#   steval_stwinbx1                    STM32 STWIN.box
-#   b_u585i_iot02a                     STM32U5 IoT Discovery Kit
+#   Automatically discovered from boards/*.conf metadata.
+#   Each .conf file declares: BOARD_ZEPHYR, BOARD_CHIP, BOARD_DESC (and optionally BOARD_ALIAS).
+#   Run ./build.sh -h to see all available boards.
 #
 # Examples:
 #   ./build.sh                              # Build and run native_sim
@@ -64,49 +58,41 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 # =============================================================================
-# Board Mappings
+# Board Discovery (auto-loaded from boards/*.conf metadata)
 # =============================================================================
-declare -A BOARD_MAP=(
-    ["native_sim"]="native_sim"
-    ["esp32s3_devkitm_esp32s3_procpu"]="esp32s3_devkitm/esp32s3/procpu"
-    ["akiraconsole"]="akiraconsole/esp32s3/procpu"
-    ["akiraconsole_esp32s3_procpu"]="akiraconsole/esp32s3/procpu"
-    ["esp32s3_super_mini_esp32s3_procpu"]="esp32s3_super_mini/esp32s3/procpu"
-    ["esp32s3_super_mini"]="esp32s3_super_mini/esp32s3/procpu"
-    ["esp32c3_devkitm"]="esp32c3_devkitm"
-    ["esp32_devkitc_procpu"]="esp32_devkitc/esp32/procpu"
-    ["nrf54l15dk_nrf54l15_cpuapp"]="nrf54l15dk/nrf54l15/cpuapp"
-    ["steval_stwinbx1"]="steval_stwinbx1"
-    ["b_u585i_iot02a"]="b_u585i_iot02a"
-)
+declare -A BOARD_MAP=()
+declare -A BOARD_CHIP=()
+declare -A BOARD_DESC=()
+declare -A BOARD_ALIASES=()  # primary_id -> space-separated short aliases
+declare -a BOARD_PRIMARY=()  # ordered list of primary board IDs for display
 
-declare -A BOARD_CHIP=(
-    ["native_sim"]="native"
-    ["esp32s3_devkitm_esp32s3_procpu"]="esp32s3"
-    ["akiraconsole"]="esp32s3"
-    ["akiraconsole_esp32s3_procpu"]="esp32s3"
-    ["esp32s3_super_mini_esp32s3_procpu"]="esp32s3"
-    ["esp32s3_super_mini"]="esp32s3"
-    ["esp32c3_devkitm"]="esp32c3"
-    ["esp32_devkitc_procpu"]="esp32"
-    ["nrf54l15dk_nrf54l15_cpuapp"]="nrf54l15"
-    ["steval_stwinbx1"]="stm32"
-    ["b_u585i_iot02a"]="stm32"
-)
+load_boards() {
+    local boards_dir="$SCRIPT_DIR/boards"
+    local conf board_id zephyr chip desc aliases
+    for conf in "$boards_dir"/*.conf; do
+        [[ -f "$conf" ]] || continue
+        board_id="$(basename "$conf" .conf)"
+        zephyr="$(grep -m1 '^# BOARD_ZEPHYR:' "$conf" | sed 's/^# BOARD_ZEPHYR:[[:space:]]*//')"
+        chip="$(grep -m1   '^# BOARD_CHIP:'   "$conf" | sed 's/^# BOARD_CHIP:[[:space:]]*//')"
+        desc="$(grep -m1   '^# BOARD_DESC:'   "$conf" | sed 's/^# BOARD_DESC:[[:space:]]*//')"
+        aliases="$(grep -m1 '^# BOARD_ALIAS:' "$conf" | sed 's/^# BOARD_ALIAS:[[:space:]]*//')"
+        [[ -z "$zephyr" || -z "$chip" ]] && continue
+        BOARD_MAP["$board_id"]="$zephyr"
+        BOARD_CHIP["$board_id"]="$chip"
+        BOARD_DESC["$board_id"]="${desc:-$board_id}"
+        BOARD_PRIMARY+=("$board_id")
+        if [[ -n "$aliases" ]]; then
+            BOARD_ALIASES["$board_id"]="$aliases"
+            for alias in $aliases; do
+                BOARD_MAP["$alias"]="$zephyr"
+                BOARD_CHIP["$alias"]="$chip"
+                BOARD_DESC["$alias"]="${desc:-$board_id}"
+            done
+        fi
+    done
+}
 
-declare -A BOARD_DESC=(
-    ["native_sim"]="Native Simulator"
-    ["esp32s3_devkitm_esp32s3_procpu"]="ESP32-S3 DevKitM "
-    ["akiraconsole"]="Akira Console (ESP32-S3 DevKitM)"
-    ["akiraconsole_esp32s3_procpu"]="Akira Console (ESP32-S3 DevKitM)"
-    ["esp32s3_super_mini"]="ESP32-S3 Super Mini"
-    ["esp32s3_super_mini_esp32s3_procpu"]="ESP32-S3 Super Mini"
-    ["esp32c3_devkitm"]="ESP32-C3 DevKitM (RISC-V)"
-    ["esp32_devkitc_procpu"]="ESP32 DevKitC "
-    ["nrf54l15dk_nrf54l15_cpuapp"]="Nordic nRF54L15 DK"
-    ["steval_stwinbx1"]="ST STEVAL-STWINBX1"
-    ["b_u585i_iot02a"]="ST B-U585I-IOT02A Discovery Kit"
-)
+load_boards
 
 # =============================================================================
 # Helper Functions
@@ -152,16 +138,15 @@ ${BOLD}OPTIONS:${NC}
     --baud <rate>   Baud rate for flashing (default: 921600)
     -h, --help      Show this help message
 
-${BOLD}BOARDS:${NC}
-    native_sim                         Native simulator (default)
-    esp32s3_devkitm_esp32s3_procpu     ESP32-S3 DevKitM (Akira Console)
-    akiraconsole                       Akira Console - short alias
-    akiraconsole_esp32s3_procpu        Akira Console - full name
-    esp32s3_super_mini_esp32s3_procpu  ESP32-S3 Super Mini (compact)
-    esp32c3_devkitm                    ESP32-C3 DevKitM (RISC-V)
-    esp32_devkitc_procpu               ESP32 DevKitC (Legacy)
-    nrf54l15dk_nrf54l15_cpuapp         Nordic nRF54L15 DK
-    steval_stwinbx1                    ST STEVAL-STWINBX1
+EOF
+    echo -e "${BOLD}BOARDS:${NC}"
+    for board in "${BOARD_PRIMARY[@]}"; do
+        printf "    %-42s %s\n" "$board" "${BOARD_DESC[$board]}"
+        if [[ -n "${BOARD_ALIASES[$board]:-}" ]]; then
+            printf "    %-42s aliases: %s\n" "" "${BOARD_ALIASES[$board]}"
+        fi
+    done
+    cat << EOF
 
 ${BOLD}EXAMPLES:${NC}
     ./build.sh
@@ -237,7 +222,8 @@ get_build_dir() {
 }
 
 get_mcuboot_build_dir() {
-    echo "$WORKSPACE_ROOT/build-mcuboot"
+    local board_short="${BOARD//_/-}"
+    echo "$WORKSPACE_ROOT/build-mcuboot-$board_short"
 }
 
 clean_build() {
@@ -268,16 +254,26 @@ clean_build() {
 build_mcuboot() {
     local zephyr_board="${BOARD_MAP[$BOARD]}"
     local build_dir=$(get_mcuboot_build_dir)
-    
+
     print_step "Building MCUboot bootloader..."
     print_info "Board: $zephyr_board"
     print_info "Build dir: $build_dir"
-    
+
+    # Always provide AkiraOS board root and DTS bindings so MCUboot sees the
+    # same board overlay (and custom bindings) as the application build.
+    # EXTRA_DTC_OVERLAY_FILE mirrors what sysbuild does automatically — it
+    # ensures MCUboot's compiled-in partition layout matches the app's layout.
+    local extra_cmake="-DBOARD_ROOT=$SCRIPT_DIR -DDTS_ROOT=$SCRIPT_DIR"
+    local board_overlay="$SCRIPT_DIR/boards/${BOARD}.overlay"
+    if [[ -f "$board_overlay" ]]; then
+        extra_cmake+=" -DEXTRA_DTC_OVERLAY_FILE=$board_overlay"
+        print_info "MCUboot overlay: $board_overlay"
+    fi
+
     cd "$WORKSPACE_ROOT"
-    
-    # Include custom board root for boards defined in AkiraOS/boards
-    if west build -b "$zephyr_board" bootloader/mcuboot/boot/zephyr -d "$build_dir" \
-        -- -DBOARD_ROOT="$SCRIPT_DIR"; then
+
+    if west build --pristine -b "$zephyr_board" bootloader/mcuboot/boot/zephyr -d "$build_dir" \
+        -- $extra_cmake; then
         print_success "MCUboot build complete!"
         print_info "Binary: $build_dir/zephyr/zephyr.bin"
     else
@@ -448,19 +444,68 @@ flash_nordic() {
 
 flash_stm32() {
     local build_dir=$(get_build_dir)
-    
-    # Flash bootloader
-    if [[ "$FLASH_TARGET" == "b" || "$FLASH_TARGET" == "all" ]]; then
-        local mcuboot_dir=$(get_mcuboot_build_dir)
+    local mcuboot_dir=$(get_mcuboot_build_dir)
+
+    # Resolve app hex/bin (prefer signed image produced by Zephyr MCUboot integration)
+    local app_hex="$build_dir/zephyr/zephyr.signed.hex"
+    [[ -f "$app_hex" ]] || app_hex="$build_dir/zephyr/zephyr.hex"
+    local mcuboot_hex="$mcuboot_dir/zephyr/zephyr.hex"
+
+    # STM32CubeProgrammer (default runner for this board) passes --erase to the CLI,
+    # which does a FULL chip erase.  Calling west flash twice therefore erases MCUboot
+    # when the app is subsequently flashed.  Merge both hex files into a single file
+    # so a single erase + write covers both regions.
+    stm32_merge_hex() {
+        local hex1="$1" hex2="$2" out="$3"
+        python3 - "$hex1" "$hex2" "$out" << 'PYEOF'
+import sys
+lines1 = open(sys.argv[1]).read().strip().splitlines()
+lines2 = open(sys.argv[2]).read().strip().splitlines()
+# Strip EOF record from first file; keep EOF only at the very end
+lines1 = [l for l in lines1 if l.strip() != ':00000001FF']
+with open(sys.argv[3], 'w') as f:
+    f.write('\n'.join(lines1 + lines2) + '\n')
+PYEOF
+    }
+
+    if [[ "$FLASH_TARGET" == "all" ]]; then
+        # Single-pass: erase once, program MCUboot + app together
+        if [[ ! -f "$mcuboot_hex" ]]; then
+            print_error "MCUboot hex not found: $mcuboot_hex"
+            print_info "Build bootloader first: ./build.sh -b $BOARD -bl o"
+            exit 1
+        fi
+        if [[ ! -f "$app_hex" ]]; then
+            print_error "App hex not found in $build_dir/zephyr/"
+            exit 1
+        fi
+        local merged_hex
+        merged_hex="$(mktemp /tmp/akira_merged_XXXXXX.hex)"
+        print_info "Merging MCUboot + AkiraOS hex files..."
+        stm32_merge_hex "$mcuboot_hex" "$app_hex" "$merged_hex"
+        print_step "Flashing MCUboot + AkiraOS (STM32, single-pass)..."
+        west flash -d "$mcuboot_dir" --hex-file "$merged_hex"
+        rm -f "$merged_hex"
+        print_success "MCUboot + AkiraOS flashed!"
+
+    elif [[ "$FLASH_TARGET" == "b" ]]; then
         print_step "Flashing MCUboot (STM32)..."
         west flash -d "$mcuboot_dir"
         print_success "MCUboot flashed!"
-    fi
-    
-    # Flash application
-    if [[ "$FLASH_TARGET" == "a" || "$FLASH_TARGET" == "all" ]]; then
-        print_step "Flashing AkiraOS (STM32)..."
-        west flash -d "$build_dir"
+
+    elif [[ "$FLASH_TARGET" == "a" ]]; then
+        # App-only flash: merge with existing MCUboot hex to avoid erasing it
+        if [[ -f "$mcuboot_hex" ]]; then
+            local merged_hex
+            merged_hex="$(mktemp /tmp/akira_merged_XXXXXX.hex)"
+            print_info "Preserving MCUboot — merging before flash..."
+            stm32_merge_hex "$mcuboot_hex" "$app_hex" "$merged_hex"
+            west flash -d "$mcuboot_dir" --hex-file "$merged_hex"
+            rm -f "$merged_hex"
+        else
+            print_warning "MCUboot not built — flashing app alone (MCUboot will be erased!)"
+            west flash -d "$build_dir"
+        fi
         print_success "AkiraOS flashed!"
     fi
 }
