@@ -80,6 +80,9 @@ exclude:
   - src/
   - tests/
   - wasm_sample/
+  - AkiraSDK/wasm_apps/
+  - AkiraSDK/include/
+  - AkiraSDK/scripts/
   - boards/
   - include/
   - .vscode/

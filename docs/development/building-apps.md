@@ -8,26 +8,34 @@ Complete guide to developing WebAssembly applications for AkiraOS.
 
 ```bash
 cd ~
-wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-21/wasi-sdk-21.0-linux.tar.gz
-tar xvf wasi-sdk-21.0-linux.tar.gz
-export WASI_SDK_PATH=~/wasi-sdk-21.0
+wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-24/wasi-sdk-24.0-x86_64-linux.tar.gz
+tar xvf wasi-sdk-24.0-x86_64-linux.tar.gz
+export WASI_SDK_PATH=~/wasi-sdk-24.0
 ```
 
 ## Build Process
 
-### Simple App
+### Using AkiraSDK (Recommended)
+
+The `AkiraSDK/` submodule includes `include/akira_api.h` and ready-to-build sample apps in `AkiraSDK/wasm_apps/`.
+
+```bash
+# Build all sample apps
+cd ~/akira-workspace/AkiraOS/AkiraSDK/wasm_apps
+./build.sh
+
+# Build a single app
+./build.sh hello_world
+```
+
+### Simple Custom App
 
 ```c
 // app.c
-#include <stdint.h>
+#include "akira_api.h"
 
-__attribute__((import_module("akira")))
-__attribute__((import_name("log")))
-extern void akira_log(const char *msg, uint32_t len);
-
-__attribute__((export_name("_start")))
-void app_main() {
-    akira_log("Hello from WASM!", 17);
+int main(void) {
+    log_info("Hello from WASM!");
 }
 ```
 
@@ -36,9 +44,10 @@ void app_main() {
 $WASI_SDK_PATH/bin/clang \
   --target=wasm32-wasi \
   --sysroot=$WASI_SDK_PATH/share/wasi-sysroot \
+  -I ~/akira-workspace/AkiraOS/AkiraSDK/include \
   -O3 \
   -Wl,--no-entry \
-  -Wl,--export=_start \
+  -Wl,--export=main \
   -Wl,--allow-undefined \
   -o app.wasm \
   app.c

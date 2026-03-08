@@ -89,12 +89,12 @@ Native sim uses host filesystem at `/tmp/akiraos-fs/`:
 ls /tmp/akiraos-fs/
 ls /tmp/akiraos-fs/apps/
 
-# Copy WASM apps directly
-cp wasm_sample/example_app.wasm /tmp/akiraos-fs/apps/
+# Copy WASM apps from AkiraSDK sample apps
+cp AkiraSDK/wasm_apps/hello_world/hello_world.wasm /tmp/akiraos-fs/apps/
 
 # In AkiraOS:
 uart:~$ fs ls /apps
-uart:~$ wasm load /apps/example_app.wasm
+uart:~$ wasm load /apps/hello_world.wasm
 ```
 
 ---

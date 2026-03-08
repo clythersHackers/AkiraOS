@@ -89,21 +89,21 @@ west update
 ```bash
 cd ~
 
-# Download SDK v0.17.0 (for Zephyr 4.3.0)
-wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.0/zephyr-sdk-0.17.0_linux-x86_64.tar.xz
+# Download SDK v0.17.4 (for Zephyr 4.3.0)
+wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-x86_64.tar.xz
 
 # Extract
-tar xvf zephyr-sdk-0.17.0_linux-x86_64.tar.xz
+tar xvf zephyr-sdk-0.17.4_linux-x86_64.tar.xz
 
 # Run setup script
-cd zephyr-sdk-0.17.0
+cd zephyr-sdk-0.17.4
 ./setup.sh
 
 # Register CMake package
 ./setup.sh -c
 
 # Set environment variables (add to ~/.bashrc for persistence)
-export ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-0.17.0
+export ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-0.17.4
 export ZEPHYR_BASE=~/akira-workspace/zephyr
 ```
 
@@ -234,13 +234,13 @@ Only needed when Zephyr version changes:
 ```bash
 # Download new SDK version
 cd ~
-wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.X.Y/zephyr-sdk-0.X.Y_linux-x86_64.tar.xz
-tar xvf zephyr-sdk-0.X.Y_linux-x86_64.tar.xz
-cd zephyr-sdk-0.X.Y
+wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.17.4/zephyr-sdk-0.17.4_linux-x86_64.tar.xz
+tar xvf zephyr-sdk-0.17.4_linux-x86_64.tar.xz
+cd zephyr-sdk-0.17.4
 ./setup.sh
 
 # Update environment variable
-export ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-0.X.Y
+export ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-0.17.4
 ```
 
 ## Troubleshooting
@@ -263,7 +263,7 @@ sudo usermod -a -G dialout $USER
 ### "CMake Error: Zephyr SDK not found"
 
 ```bash
-export ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-0.17.0
+export ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-0.17.4
 export ZEPHYR_BASE=~/akira-workspace/zephyr
 # Add to ~/.bashrc for persistence
 ```

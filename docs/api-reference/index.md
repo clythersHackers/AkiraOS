@@ -10,7 +10,8 @@ permalink: /api-reference
 
 Complete reference for AkiraOS WASM application APIs.
 
-> **Looking for the high-level SDK API?** See the [SDK API Reference](../development/sdk-api-reference.md) for event system, display, input, sensors, RF, storage, network, and system functions with full examples.
+> **Looking for the high-level SDK API?** See the [SDK API Reference](../development/sdk-api-reference.md) or the canonical [AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/API_REFERENCE.md).  
+> For most apps, use `#include "akira_api.h"` (from `AkiraSDK/include/`) which wraps all imports for you.
 
 ## Available APIs
 

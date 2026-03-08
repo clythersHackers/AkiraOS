@@ -30,14 +30,14 @@ See [CONTRIBUTING.md](../../CONTRIBUTING.md) for contribution guidelines.
 - **Build System:** West + CMake
 - **Source Code:** `/src` directory
 - **Tests:** `/tests` directory
-- **Examples:** `/wasm_sample` directory
+- **Examples:** `AkiraSDK/wasm_apps/` directory (see [AkiraSDK](https://github.com/ArturR0k3r/AkiraSDK))
 
 ## Development Workflow
 
 1. Write your app using the [SDK API](sdk-api-reference.md)
 2. Follow [Best Practices](best-practices.md) for quality code
-3. Build WASM binary (`build.sh`)
-4. Flash firmware to hardware (`west flash`)
+3. Build WASM binary (`AkiraSDK/wasm_apps/build.sh` or per-app `Makefile`)
+4. Flash AkiraOS firmware to hardware (`west flash`)
 5. Deploy WASM app via HTTP upload or shell
 6. Debug with [Troubleshooting](sdk-troubleshooting.md) if needed
 
