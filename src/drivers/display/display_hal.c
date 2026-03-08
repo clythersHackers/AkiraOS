@@ -59,6 +59,14 @@ int akira_display_hal_init(void)
 
     LOG_INF("Display ready: %dx%d", display_caps.x_resolution, display_caps.y_resolution);
 
+    /* Pre-clear the display GRAM before turning the display on.
+     * The framebuffer is zero-initialised (BSS / PSRAM ext_ram.bss), so this
+     * writes an all-black frame to GRAM and prevents a flash of GRAM garbage
+     * (white noise / previous session content) that would otherwise be visible
+     * between display_blanking_off() and the first akira_display_flush() call
+     * from main.c. */
+    akira_display_hal_flush();
+
     /* Enable display output */
     int ret = display_blanking_off(display_dev);
     if (ret < 0) {

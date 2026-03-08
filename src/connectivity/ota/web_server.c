@@ -58,6 +58,7 @@ static void register_webserver_ota_transport(void)
 #include <zephyr/net/net_ip.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/kernel.h>
+#include <zephyr/posix/fcntl.h>
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
@@ -1197,9 +1198,18 @@ static int run_web_server(void)
     int opt = 1;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    /* Set accept timeout so we can check state periodically */
-    struct timeval timeout = {.tv_sec = 5, .tv_usec = 0};
-    setsockopt(server_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    /* Set socket non-blocking so accept() returns EAGAIN immediately if no
+     * client is queued.  We use poll() with a 5 s timeout to wait for
+     * incoming connections.  poll() on Zephyr's native TCP stack delegates to
+     * k_poll on the accept_q FIFO — it properly sleeps (zero CPU usage) until
+     * a SYN-SYNACK-ACK handshake completes and a connection is queued, or the
+     * timeout fires so we can check server_state every 5 seconds. */
+    int sock_flags = fcntl(server_fd, F_GETFL, 0);
+    if (sock_flags < 0)
+    {
+        sock_flags = 0;
+    }
+    fcntl(server_fd, F_SETFL, sock_flags | O_NONBLOCK);
 
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
@@ -1271,7 +1281,8 @@ static int run_web_server(void)
             continue;
         }
         setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-        setsockopt(server_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        sock_flags = fcntl(server_fd, F_GETFL, 0);
+        fcntl(server_fd, F_SETFL, (sock_flags < 0 ? 0 : sock_flags) | O_NONBLOCK);
         if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
         {
             LOG_ERR("Bind retry failed: %d (%s)", errno, strerror(errno));
@@ -1283,18 +1294,44 @@ static int run_web_server(void)
 
     while (server_state.state == WEB_SERVER_RUNNING)
     {
+        /* poll() sleeps (via k_poll on accept_q FIFO) until a completed TCP
+         * connection is queued or the 5 s timeout fires.  Zero CPU overhead. */
+        struct zsock_pollfd pfd = {.fd = server_fd, .events = ZSOCK_POLLIN};
+        int pret = poll(&pfd, 1, 5000);
+
+        if (pret < 0)
+        {
+            if (server_state.state == WEB_SERVER_RUNNING)
+            {
+                LOG_ERR("poll failed: errno=%d (%s)", errno, strerror(errno));
+            }
+            continue;
+        }
+
+        if (pret == 0)
+        {
+            /* Timeout — no connection in 5 s, just check state and retry */
+            LOG_DBG("Web server waiting for connections on port %d...", HTTP_PORT);
+            continue;
+        }
+
+        /* Connection ready — accept() should succeed immediately */
         client_len = sizeof(client_addr);
         client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
         if (client_fd < 0)
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
             {
-                /* Timeout - just continue to check state */
+                /* Race: connection reset before accept() ran */
                 continue;
             }
             if (server_state.state == WEB_SERVER_RUNNING)
             {
-                LOG_ERR("Accept failed: %d", errno);
+                LOG_ERR("accept failed: errno=%d (%s)", errno, strerror(errno));
+                if (errno == ENOMEM)
+                {
+                    k_sleep(K_MSEC(100));
+                }
             }
             continue;
         }

@@ -341,6 +341,45 @@ static char *unescape_value(const char *value) {
     return unescaped;
 }
 
+/* Compact NVS entries: reads all valid entries, rewrites them sequentially
+ * from SETTINGS_START_ID, and updates the counter.  Called at init when
+ * holes are detected (e.g. after OTA that wiped the old NVS partition address
+ * but left a stale counter value). */
+static int compact_entries(uint16_t counter)
+{
+    /* Heap-allocate to avoid blowing the stack (MAX_KEYS * ~97 bytes). */
+    settings_entry_t *buf = k_malloc(sizeof(settings_entry_t) * counter);
+    if (!buf) {
+        LOG_ERR("compact_entries: out of memory");
+        return -ENOMEM;
+    }
+
+    uint16_t valid = 0;
+    for (uint16_t i = 0; i < counter; i++) {
+        int r = nvs_read(&storage.nvs, SETTINGS_START_ID + i, &buf[valid], sizeof(settings_entry_t));
+        if (r >= 0) {
+            valid++;
+        }
+    }
+
+    /* Rewrite valid entries packed from slot 0 */
+    for (uint16_t i = 0; i < valid; i++) {
+        nvs_write(&storage.nvs, SETTINGS_START_ID + i, &buf[i], sizeof(settings_entry_t));
+    }
+    k_free(buf);
+
+    /* Delete any leftover slots above the new count */
+    for (uint16_t i = valid; i < counter; i++) {
+        nvs_delete(&storage.nvs, SETTINGS_START_ID + i);
+    }
+
+    /* Persist updated counter */
+    nvs_write(&storage.nvs, SETTINGS_COUNTER_ID, &valid, sizeof(valid));
+
+    LOG_INF("NVS compact: %u entries -> %u valid entries", counter, valid);
+    return 0;
+}
+
 static int settings_get_id(const char* key){
     int ret;
     if(storage.type == AKIRA_SETTINGS_STORAGE_FLASH){
@@ -354,6 +393,10 @@ static int settings_get_id(const char* key){
         for(uint16_t i = 0; i < counter; i++){
             ret = nvs_read(&storage.nvs, SETTINGS_START_ID + i, &entry, sizeof(entry));
             if(ret < 0){
+                if (ret == -ENOENT) {
+                    /* Hole: this slot was deleted or never written — skip it */
+                    continue;
+                }
                 LOG_INF("Failed to read entry at index: %d (%d)", i, ret);
                 return ret;
             }
@@ -669,6 +712,26 @@ static int init_flash(void){
     }
 
     LOG_INF("Settings entries in flash: %d", counter);
+
+    /* Heal: if the counter says there are entries but NVS has holes (e.g. after
+     * OTA that overwrote the old NVS partition address, leaving a stale counter
+     * while the actual entry slots are gone), compact now so every subsequent
+     * settings_get_id scan starts from a clean, contiguous list. */
+    if (counter > 0) {
+        bool has_holes = false;
+        settings_entry_t probe;
+        for (uint16_t i = 0; i < counter; i++) {
+            if (nvs_read(&storage.nvs, SETTINGS_START_ID + i, &probe, sizeof(probe)) < 0) {
+                has_holes = true;
+                break;
+            }
+        }
+        if (has_holes) {
+            LOG_WRN("NVS holes detected (stale counter?), compacting entries...");
+            compact_entries(counter);
+        }
+    }
+
     LOG_INF("Flash type initialized (NVS mounted)");
 
     return 0;
