@@ -690,11 +690,12 @@ config AKIRA_APP_MAX_RUNNING
 
 config AKIRA_APP_MAX_SIZE_KB
     int "Maximum app size (KB)"
-    default 64
-    range 16 256
+    default 1024
+    range 16 2048
     depends on AKIRA_APP_MANAGER
     help
       Maximum size of a single WASM app binary in kilobytes.
+      Retro emulator apps bundle a full ROM and need at least 512 KB.
 
 config AKIRA_APP_DEFAULT_HEAP_KB
     int "Default app heap size (KB)"

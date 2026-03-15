@@ -1171,7 +1171,7 @@ static int cmd_reboot(const struct shell *sh, size_t argc, char **argv)
     }
 
     LOG_WRN("System reboot requested via shell");
-    sys_reboot(SYS_REBOOT_WARM);
+    sys_reboot(SYS_REBOOT_COLD);
     return 0;
 }
 
