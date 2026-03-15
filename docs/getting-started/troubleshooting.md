@@ -24,11 +24,11 @@ west --version  # Verify
 
 **Solution:**
 ```bash
-export ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-0.17.0
+export ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-0.17.4
 export ZEPHYR_BASE=~/akira-workspace/zephyr
 
 # Add to ~/.bashrc for persistence:
-echo 'export ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-0.17.0' >> ~/.bashrc
+echo 'export ZEPHYR_SDK_INSTALL_DIR=~/zephyr-sdk-0.17.4' >> ~/.bashrc
 echo 'export ZEPHYR_BASE=~/akira-workspace/zephyr' >> ~/.bashrc
 ```
 
@@ -105,7 +105,7 @@ west espressif erase-flash
 
 # Rebuild and reflash
 cd ~/akira-workspace/AkiraOS
-rm -rf ../build
+./build.sh --full-clean
 ./build.sh -b esp32s3_devkitm_esp32s3_procpu -r all
 ```
 
@@ -126,7 +126,7 @@ CONFIG_LOG_DEFAULT_LEVEL=3  # Reduce logging
 # Or upload in smaller chunks (split firmware)
 ```
 
-**Solution (future):** Implemented in [IMPLEMENTATION_TASKS.md](../../IMPLEMENTATION_TASKS.md) - Direct flash writes remove timeout.
+**Workaround (longer term):** A fix is planned — direct flash writes will remove the timeout.
 
 ---
 
@@ -313,7 +313,7 @@ CONFIG_INIT_STACKS=y
 **Solution:**
 ```bash
 # Use correct baud rate (115200 for ESP32)
-west espressif monitor
+west espmonitor
 
 # Or manually:
 picocom -b 115200 /dev/ttyUSB0
@@ -421,7 +421,7 @@ When opening a GitHub issue, include:
 | No app signing | 🚧 Future feature | Manual verification |
 | File-based WASM loading | ⏳ Improvement planned | Works but uses more memory |
 
-See [IMPLEMENTATION_TASKS.md](../../IMPLEMENTATION_TASKS.md) for planned fixes.
+Fixes for these are tracked in [GitHub Issues](https://github.com/ArturR0k3r/AkiraOS/issues).
 
 ---
 
@@ -433,7 +433,7 @@ See [IMPLEMENTATION_TASKS.md](../../IMPLEMENTATION_TASKS.md) for planned fixes.
 ./build.sh -b <board> -r all  # Build, flash, monitor
 west build -t menuconfig      # Configuration
 west flash                    # Flash only
-west espressif monitor        # Serial console
+west espmonitor        # Serial console
 ```
 
 **Shell Commands:**
@@ -457,6 +457,6 @@ log enable <module> 4         # Debug logging
 
 - Check [SDK Troubleshooting](../development/sdk-troubleshooting.md) for app-level issues
 - Read [Best Practices](../development/best-practices.md) to avoid common pitfalls
-- Check [GitHub Issues](https://github.com/akiraos/AkiraOS/issues)
-- Ask in [Discussions](https://github.com/akiraos/AkiraOS/discussions)
+- Check [GitHub Issues](https://github.com/ArturR0k3r/AkiraOS/issues)
+- Ask in [Discussions](https://github.com/ArturR0k3r/AkiraOS/discussions)
 - Review [Architecture Docs](../architecture/)

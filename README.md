@@ -158,11 +158,12 @@ cd zephyr-sdk-0.17.4
 ```bash
 cd akira-workspace/AkiraOS
 
-# Build for ESP32-S3
-./build.sh -b esp32s3_devkitm_esp32s3_procpu
+# Test without hardware first (auto-runs on your host)
+./build.sh
 
-# Flash to device
-west flash
+# Fetch ESP32 binary blobs, build for ESP32-S3, and flash
+cd .. && west blobs fetch hal_espressif && cd AkiraOS
+./build.sh -b esp32s3_devkitm_esp32s3_procpu -r a
 
 # Monitor output
 west espmonitor
@@ -254,26 +255,25 @@ AkiraOS implements **defense-in-depth** security:
 ### 1. Local Development
 
 ```bash
-# Native simulation (fastest iteration)
-./build.sh -b native_sim
-cd ../build && ./zephyr/zephyr.exe
+# Native simulation (fastest iteration) — builds and runs automatically
+./build.sh   # defaults to native_sim
 ```
 
 ### 2. Hardware Testing
 
 ```bash
 # Build and flash to ESP32-S3
-./build.sh -b esp32s3_devkitm_esp32s3_procpu
-west flash
+./build.sh -b esp32s3_devkitm_esp32s3_procpu -r a
 west espmonitor
 ```
 
 ### 3. WASM Application Development
 
 ```bash
-cd wasm_sample
-./build_wasm_apps.sh
-# Generated .wasm files can be uploaded via HTTP
+cd AkiraSDK/wasm_apps
+./build.sh hello_world          # build a single app
+# Upload the .wasm to a running device over HTTP
+curl -X POST -F "file=@bin/hello_world.wasm" http://<device-ip>/upload
 ```
 
 ---
@@ -307,7 +307,8 @@ AkiraOS is licensed under the **GNU General Public License v3.0**. See [LICENSE]
 - **Zephyr RTOS** 
 - **WASM Micro Runtime (WAMR)**
 - **MCUboot**
-- **ESP-IDF Components** 
+- **ESP-IDF Components**
+
 ---
 
 ## 💬 Community

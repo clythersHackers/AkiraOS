@@ -55,7 +55,7 @@ python3 --version # Should show 3.8+
 mkdir ~/akira-workspace && cd ~/akira-workspace
 
 # Clone AkiraOS
-git clone --recursive https://github.com/akiraos/AkiraOS.git
+git clone --recursive https://github.com/ArturR0k3r/AkiraOS.git
 cd AkiraOS
 ```
 
@@ -154,12 +154,8 @@ deactivate
 ```bash
 cd ~/akira-workspace/AkiraOS
 
-# Build for native_sim
-./build.sh -b native_sim
-
-# Run
-cd ../build/zephyr
-./zephyr.exe
+# Build and run native_sim (runs automatically after build)
+./build.sh
 ```
 
 **Expected output:**
@@ -207,11 +203,18 @@ For **ESP32-S3 DevKitM:**
 
 ### WiFi Credentials (ESP32)
 
-In the terminal of working application:
+Set credentials in your board config before building:
+
 ```bash
-settings set_wifi SSID Password
-wifi_connect
-wifi_status
+# boards/esp32s3_devkitm_esp32s3_procpu.conf
+CONFIG_WIFI_SSID="YourNetwork"
+CONFIG_WIFI_PSK="YourPassword"
+```
+
+Verify connection after boot:
+```bash
+uart:~$ net iface    # shows IP address when connected
+uart:~$ wifi connect -s YourNetwork -p YourPassword   # manual connect
 ```
 
 ### Global Settings
@@ -313,9 +316,10 @@ rm -rf ../build
 **Workspace:**
 ```bash
 ~/akira-workspace/
-├── AkiraOS/          # Application
-├── zephyr/           # Zephyr RTOS
-└── build/            # Build output
+├── AkiraOS/                    # Application
+├── zephyr/                     # Zephyr RTOS
+├── build-native-sim/           # native_sim build output
+└── build-esp32s3-.../          # ESP32-S3 build output
 ```
 
 **Common Commands:**
@@ -323,7 +327,7 @@ rm -rf ../build
 ./build.sh -b native_sim              # Build for simulation
 ./build.sh -b esp32s3_devkitm_esp32s3_procpu  # Build for ESP32-S3
 west flash                            # Flash to hardware
-west espressif monitor                # Open serial console
+west espmonitor                # Open serial console
 ```
 
 **Build Script Options:**

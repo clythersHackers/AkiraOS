@@ -63,12 +63,12 @@ Before contributing, ensure you have:
 
 2. **Verify build setup**:
    ```bash
-   ./build_both.sh clean
+   ./build.sh          # builds and runs native_sim
    ```
 
 3. **Test on hardware** (if available):
    ```bash
-   ./flash.sh
+   ./build.sh -b esp32s3_devkitm_esp32s3_procpu -r a
    ```
 
 ## 🤝 How to Contribute
@@ -133,11 +133,14 @@ enum akira_error {
 
 ```
 src/
-├── core/           # Core system functionality
-├── drivers/        # Hardware drivers
-├── apps/          # Built-in applications
-├── wasm/          # WASM runtime integration
-└── ui/            # User interface components
+├── main.c          # Entry point
+├── runtime/        # WAMR integration and app lifecycle
+├── api/            # Native API wrappers (display, GPIO, BLE, etc.)
+├── connectivity/   # WiFi, BLE, OTA, HTTP server
+├── drivers/        # HAL and hardware drivers
+├── shell/          # Interactive CLI commands
+├── ui/             # Native UI framework
+└── lib/            # Shared utilities
 ```
 
 ## 📝 Commit Guidelines
@@ -196,10 +199,10 @@ test(core): add unit tests for memory management
 
 4. **Test your changes**:
    ```bash
-   # Build and test
-   ./build_both.sh clean
+   # Test on native_sim first
+   ./build.sh
    # Flash to hardware if available
-   ./flash.sh --app-only
+   ./build.sh -b esp32s3_devkitm_esp32s3_procpu -r a
    ```
 
 5. **Commit your changes**:
@@ -238,7 +241,7 @@ If you have AkiraOS hardware:
 
 1. **Flash your changes**:
    ```bash
-   ./flash.sh --app-only
+   ./build.sh -b esp32s3_devkitm_esp32s3_procpu -r a
    ```
 
 2. **Test basic functionality**:

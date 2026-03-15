@@ -20,7 +20,7 @@ permalink: /
 
 [![Version](https://img.shields.io/badge/version-1.4.9-blue.svg)](../VERSION)
 [![Zephyr](https://img.shields.io/badge/Zephyr-4.3.0-green.svg)](https://github.com/zephyrproject-rtos/zephyr)
-[![WAMR](https://img.shields.io/badge/WAMR-2.4-purple.svg)](https://github.com/bytecodealliance/wasm-micro-runtime)
+[![WAMR](https://img.shields.io/badge/WAMR-2.0-purple.svg)](https://github.com/bytecodealliance/wasm-micro-runtime)
 
 *Production-ready embedded OS combining Zephyr RTOS with WebAssembly sandboxed execution.*
 
@@ -29,7 +29,7 @@ permalink: /
 
 ## 🚀 Quick Start
 
-**New to AkiraOS?** Get up and running in under 30 minutes:
+**New to AkiraOS?** Get up and running in under 15 minutes:
 
 1. **[Installation Guide](getting-started/installation.md)** - Set up development environment
 2. **[Build Your First App](getting-started/first-app.md)** - Hello World in WASM
@@ -126,18 +126,6 @@ AkiraOS is a production-ready embedded operating system that enables **secure, d
 
 ---
 
-### [Development](development/)
-**Advanced development topics and workflows.**
-
-- [Building WASM Apps](development/building-apps.md) - Complete workflow
-- [SDK API Reference](development/sdk-api-reference.md) - Full function reference
-- [Best Practices](development/best-practices.md) - Write efficient apps
-- [SDK Troubleshooting](development/sdk-troubleshooting.md) - Debug app issues
-- [OTA Updates](development/ota-updates.md) - Firmware deployment
-- [Debugging](development/debugging.md) - Debug techniques
-
----
-
 ### [Hardware](hardware/)
 **Custom hardware designs and schematics.**
 
@@ -195,8 +183,8 @@ AkiraOS is a production-ready embedded operating system that enables **secure, d
 
 AkiraOS is open source and welcomes contributions!
 
-- **Report Issues:** [GitHub Issues](https://github.com/akiraos/AkiraOS/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/akiraos/AkiraOS/discussions)
+- **Report Issues:** [GitHub Issues](https://github.com/ArturR0k3r/AkiraOS/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/ArturR0k3r/AkiraOS/discussions)
 - **Contribute:** See [CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ---
@@ -228,6 +216,3 @@ AkiraOS is licensed under the [GNU General Public License v3.0](../LICENSE).
 [Install AkiraOS →](getting-started/installation.md)
 
 </div>
-
-
-

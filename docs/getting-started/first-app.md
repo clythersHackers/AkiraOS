@@ -1,333 +1,226 @@
+---
+layout: default
+title: First App
+parent: Getting Started
+nav_order: 2
+---
+
 # Building Your First WASM App
 
 Create, build, and deploy a "Hello World" WebAssembly application on AkiraOS.
 
 ## Prerequisites
 
-- AkiraOS firmware flashed and running
-- WASM toolchain installed
+- AkiraOS firmware flashed and running on a device (or `native_sim` built)
+- WASI SDK installed (see below)
 - Basic C programming knowledge
 
-## Install WASM Toolchain
-
-### Option 1: WASI SDK (Recommended)
+## Install WASI SDK
 
 ```bash
-cd ~
-wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-24/wasi-sdk-24.0-x86_64-linux.tar.gz
-tar xvf wasi-sdk-24.0-x86_64-linux.tar.gz
-export WASI_SDK_PATH=~/wasi-sdk-24.0
+WASI_VERSION=24
+wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_VERSION}/wasi-sdk-${WASI_VERSION}.0-x86_64-linux.tar.gz
+sudo tar xvf wasi-sdk-${WASI_VERSION}.0-x86_64-linux.tar.gz -C /opt
+sudo ln -sf /opt/wasi-sdk-${WASI_VERSION}.0 /opt/wasi-sdk
 ```
 
-### Option 2: Emscripten
+> **Note:** Install to `/opt/wasi-sdk` (the default path all sample Makefiles expect) or set `WASI_SDK=/your/path`.
 
-```bash
-cd ~
-git clone https://github.com/emscripten-core/emsdk.git
-cd emsdk
-./emsdk install latest
-./emsdk activate latest
-source ./emsdk_env.sh
-```
+---
 
 ## Hello World App
 
-The **AkiraSDK submodule** (`AkiraSDK/`) already contains a ready-to-build `hello_world` example.
-You can copy it as a starting point or browse the other sample apps in `AkiraSDK/wasm_apps/`.
+The `AkiraSDK/` submodule contains ready-to-build sample apps in `AkiraSDK/wasm_apps/`. The fastest way to get started is to copy an existing app as a template.
 
-### Step 1: Create Project
+### Step 1: Create your project
 
 ```bash
-# Copy the example app (recommended starting point)
 cp -r ~/akira-workspace/AkiraOS/AkiraSDK/wasm_apps/hello_world ~/my_hello_world
 cd ~/my_hello_world
 ```
 
-### Step 2: Write the Code
+### Step 2: Write the code
 
-The SDK provides a single header — include it and all APIs are available:
+Apps include a single header — all APIs are declared there:
 
-**hello_world.c:**
+**main.c:**
 ```c
 #include "akira_api.h"
 
 int main(void) {
-    log_info("Hello from WASM!");
+    printf("Hello from AkiraOS WASM!");
 
     display_clear(COLOR_BLACK);
-    display_text(10, 10, "Hello AkiraOS!", COLOR_WHITE, 1);
+    display_text(10, 10, "Hello AkiraOS!", COLOR_WHITE);
     display_flush();
 
     while (1) {
-        delay(1000000);  // idle — 1 second
+        delay(1000000);  // idle — yield every 1 second
     }
     return 0;
 }
 ```
 
-### Step 3: Create Manifest
+> **Key rules:**
+> - Use `printf()` from `akira_api.h` — do **not** include `<stdio.h>`
+> - All API functions are `extern` — they are provided by AkiraOS at runtime, not linked from a library
+> - Always call `display_flush()` after drawing, or the screen stays blank
+> - Always `delay()` in your loop — spinning without yielding burns 100% CPU
 
-The AkiraSDK sample apps include a pre-made `manifest.json`. For a custom app, create:
+### Step 3: Create the manifest
 
-**hello_world.json:**
+**manifest.json:**
 ```json
 {
   "name": "hello_world",
   "version": "1.0.0",
-  "author": "Your Name",
-  "capabilities": ["display.write", "log"],
-  "memory_quota": 65536,
-  "description": "My first WASM app"
+  "capabilities": ["display.write"],
+  "memory_quota": 65536
 }
 ```
 
-### Step 4: Build WASM Binary
+The manifest is automatically embedded into the `.wasm` binary by `embed_manifest.py` (called by the Makefile).
 
-**Using the AkiraSDK Makefile (recommended):**
+### Step 4: Build
+
 ```bash
-# From your app directory (copy the Makefile from any AkiraSDK sample):
-cp ~/akira-workspace/AkiraOS/AkiraSDK/wasm_apps/hello_world/Makefile .
+# Using the SDK build script (recommended)
+cd ~/akira-workspace/AkiraOS/AkiraSDK/wasm_apps
+./build.sh hello_world        # single app → bin/hello_world.wasm
+./build.sh                    # all apps
+
+# Or with Make directly from your app directory
+cd ~/my_hello_world
 make
 ```
 
-**Or using the SDK build script (builds all apps in wasm_apps/):**
+Verify the output:
 ```bash
-cd ~/akira-workspace/AkiraOS/AkiraSDK/wasm_apps
-./build.sh hello_world       # build a single app
-./build.sh                   # build all apps
+ls -lh bin/hello_world.wasm   # should be ~2–5 KB
+file bin/hello_world.wasm     # "WebAssembly (wasm) binary module"
 ```
 
-**Or manually with WASI SDK:**
-```bash
-$WASI_SDK_PATH/bin/clang \
-  --target=wasm32-wasi \
-  --sysroot=$WASI_SDK_PATH/share/wasi-sysroot \
-  -I ~/akira-workspace/AkiraOS/AkiraSDK/include \
-  -O3 \
-  -Wl,--no-entry \
-  -Wl,--export=main \
-  -Wl,--allow-undefined \
-  -o hello_world.wasm \
-  hello_world.c
-```
-
-**Verify the output:**
-```bash
-ls -lh hello_world.wasm
-# Should be ~2-5KB
-
-file hello_world.wasm
-# Should say: WebAssembly (wasm) binary module
-```
-
-### Step 5: Optimize (Optional)
-
-```bash
-# Install wasm-opt
-sudo apt install binaryen
-
-# Optimize for size
-wasm-opt -Oz hello_world.wasm -o hello_world_opt.wasm
-
-# Compare sizes
-ls -lh hello_world*.wasm
-```
+---
 
 ## Deploy to Hardware
 
-### Method 1: HTTP Upload (Recommended)
+### Upload via HTTP (recommended)
+
+The device must be connected to WiFi. Find its IP from the serial console (`net iface`).
 
 ```bash
-# Find ESP32 IP address (check serial console or router)
-export ESP32_IP=192.168.1.100
-
-# Upload WASM app
-curl -X POST \
-  -F "file=@hello_world.wasm" \
-  http://$ESP32_IP/upload
-
-# Upload manifest
-curl -X POST \
-  -F "file=@hello_world.json" \
-  http://$ESP32_IP/upload
+curl -X POST -F "file=@bin/hello_world.wasm" http://<device-ip>/upload
 ```
 
-### Method 2: File System Pre-load
-
-```bash
-# Copy to FS partition before flashing
-cd ~/akira-workspace/AkiraOS
-cp ~/my_hello_world/hello_world.wasm storage/apps/
-./build.sh -b esp32s3_devkitm_esp32s3_procpu -r all
-```
-
-## Run Your App
-
-### Via Shell Command
+### Run from the shell
 
 ```bash
 # Connect to serial console
-west espressif monitor
+west espmonitor
 
 # In the shell:
 uart:~$ wasm load /apps/hello_world.wasm
 uart:~$ wasm start hello_world
 ```
 
-**Expected output:**
+Expected output:
 ```
-[00:00:10.523] <inf> wasm: Loading app: /apps/hello_world.wasm
+[00:00:10.523] <inf> wasm: Loading: /apps/hello_world.wasm
 [00:00:10.687] <inf> wasm: App loaded: hello_world
-[00:00:10.690] <inf> wasm: Starting app: hello_world
-[00:00:10.692] <inf> app: Hello from WASM!
-[00:00:10.698] <inf> display: Clear screen: 0x000000
-[00:00:10.702] <inf> display: Draw pixel: (100, 50) = 0xFF0000
-[00:00:10.705] <inf> wasm: App hello_world exited
+[00:00:10.692] <inf> app: Hello from AkiraOS WASM!
 ```
 
-### Via Autostart
-
-Edit `prj.conf`:
-```bash
-CONFIG_AKIRA_AUTOSTART_APP="/apps/hello_world.wasm"
-```
-
-Rebuild and app will start on boot.
+---
 
 ## Next Steps
 
-### Add Input Handling
+### Read a sensor
 
 ```c
 #include "akira_api.h"
 
 int main(void) {
-    log_info("Waiting for button press...");
-    
+    int raw = sensor_read(SENSOR_CHAN_AMBIENT_TEMP);
+    if (raw == AKIRA_SENSOR_ERROR) {
+        printf("sensor unavailable");
+    } else {
+        // raw = 23500 → 23.5 °C; divide by 1000 for whole degrees
+        printf("Temp: %d.%d C", raw / 1000, (raw % 1000) / 100);
+    }
+    return 0;
+}
+```
+
+Capability required: `"sensor.read"`
+
+### Read a GPIO input
+
+```c
+#include "akira_api.h"
+
+#define BTN_PIN 0   // adjust to your hardware
+
+int main(void) {
+    gpio_configure(BTN_PIN, GPIO_INPUT | GPIO_PULL_DOWN);
+
     while (1) {
-        uint32_t buttons = input_read_buttons();
-        if (buttons & AKIRA_BTN_UP) {
-            log_info("Button pressed!");
-            break;
+        if (gpio_read(BTN_PIN) == 1) {
+            printf("button pressed!");
         }
-        delay(10000);  // 10 ms
+        delay(10000);  // poll every 10 ms
     }
     return 0;
 }
 ```
 
-### Read Sensors
+Capability required: `"gpio.read"`
+
+### Write to persistent storage
 
 ```c
 #include "akira_api.h"
 
 int main(void) {
-    float ax, ay, az;
-    sensor_read_accel(&ax, &ay, &az);
-
-    char msg[64];
-    snprintf(msg, sizeof(msg), "Accel: %.2f %.2f %.2f", ax, ay, az);
-    log_info(msg);
-    return 0;
-}
-```
-
-### Persistent Storage
-
-```c
-#include "akira_api.h"
-
-int main(void) {
-    int fd = file_open("/data/hello/message.txt", FILE_WRITE | FILE_CREATE);
+    int fd = storage_open("message.txt", STORAGE_O_WRITE);
     if (fd >= 0) {
-        const char *data = "Hello, filesystem!";
-        file_write(fd, data, strlen(data));
-        file_close(fd);
+        storage_write(fd, "Hello, filesystem!", 18);
+        storage_close(fd);
+        printf("saved");
     }
     return 0;
 }
 ```
 
-## Debugging
+Capability required: `"storage.write"`
 
-### Check App Status
+---
 
-```bash
-uart:~$ wasm status
-```
+## Troubleshooting
 
-### View Logs
-
-```bash
-uart:~$ log list   # List log sources
-uart:~$ log enable akira 4   # Set debug level
-```
-
-### Common Issues
-
-**"Failed to load WASM": **Check file exists
+**"Failed to load WASM"** — check the file exists:
 ```bash
 uart:~$ fs ls /apps
 ```
 
-**"Permission denied":** Missing capability
+**"capability denied"** — add the required capability to `manifest.json`:
 ```json
-{
-  "capabilities": ["display", "log", "input"]  # Add required caps
-}
+{ "capabilities": ["display.write", "sensor.read"] }
 ```
 
-**"Out of memory":** Increase quota
+**"Out of memory"** — increase the quota in `manifest.json`:
 ```json
-{
-  "memory_quota": 131072  # 128KB instead of 64KB
-}
+{ "memory_quota": 131072 }
 ```
 
-## Build Automation
+**Screen stays black** — you forgot `display_flush()` after your draw calls.
 
-The AkiraSDK sample apps ship with ready-made Makefiles. Copy one as a starting point:
+**Function not found at build time** — do not include `<stdio.h>` or other stdlib headers. All functions come from `akira_api.h`.
 
-```bash
-cp ~/akira-workspace/AkiraOS/AkiraSDK/wasm_apps/hello_world/Makefile .
-```
-
-Or write your own:
-
-```makefile
-WASI_SDK = ~/wasi-sdk-24.0
-SDK_INCLUDE = ~/akira-workspace/AkiraOS/AkiraSDK/include
-CC = $(WASI_SDK)/bin/clang
-CFLAGS = --target=wasm32-wasi --sysroot=$(WASI_SDK)/share/wasi-sysroot \
-         -I$(SDK_INCLUDE) -O3
-LDFLAGS = -Wl,--no-entry -Wl,--export=main -Wl,--allow-undefined
-
-hello_world.wasm: hello_world.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
-	wasm-opt -Oz $@ -o $@
-
-clean:
-	rm -f hello_world.wasm
-
-deploy:
-	curl -X POST -F "file=@hello_world.wasm" http://$(ESP32_IP)/upload
-
-.PHONY: clean deploy
-```
-
-**Usage:**
-```bash
-make                    # Build
-make deploy ESP32_IP=192.168.1.100  # Build and upload
-```
-
-## API Reference
-
-See [Native API Documentation](../api-reference/native-api.md) for complete list of available functions.
+---
 
 ## Related Documentation
 
-- [API Reference](../api-reference/) - Complete native API
-- [Manifest Format](../api-reference/manifest-format.md) - Capability specification
-- [Development Guide](../development/building-apps.md) - Advanced topics
-- [Troubleshooting](troubleshooting.md) - Common issues
+- [SDK API Reference](../../AkiraSDK/docs/API_REFERENCE.md) — every function with examples
+- [Best Practices](../../AkiraSDK/docs/BEST_PRACTICES.md) — main loop patterns, memory, display
+- [Manifest Format](../api-reference/manifest-format.md) — capability specification
+- [Building Apps](../development/building-apps.md) — AOT compilation and advanced topics

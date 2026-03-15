@@ -35,7 +35,8 @@ cd ~/akira-workspace/AkiraOS/AkiraSDK/wasm_apps
 #include "akira_api.h"
 
 int main(void) {
-    log_info("Hello from WASM!");
+    printf("Hello from WASM!");
+    return 0;
 }
 ```
 
@@ -71,44 +72,42 @@ wasm-strip app.wasm
 
 #### Setup wamrc
 
+Build `wamrc` from the WAMR submodule already included in AkiraOS (required — the AkiraOS fork includes Xtensa backend support):
+
 ```bash
-# Clone WAMR and build AOT compiler
-git clone https://github.com/bytecodealliance/wasm-micro-runtime.git
-cd wasm-micro-runtime/wamr-compiler
-./build_llvm.sh
-mkdir build && cd build
-cmake ..
+cd ~/akira-workspace/AkiraOS/modules/wasm-micro-runtime/wamr-compiler
+cmake . -DWAMR_BUILD_PLATFORM=linux
 make
 sudo cp wamrc /usr/local/bin/
+# or: export WAMRC=$PWD/wamrc
 ```
 
-#### Compile for ESP32-S3
+#### Compile with the AkiraSDK build script (recommended)
 
 ```bash
-wamrc --target=xtensa \
-      --cpu=esp32s3 \
-      --size-level=3 \
-      -o app_esp32s3.aot \
-      app.wasm
+cd ~/akira-workspace/AkiraOS/AkiraSDK/wasm_apps
+./build.sh                    # build .wasm
+./build.sh aot                # AOT for ESP32-S3 (xtensa, default)
+./build.sh aot thumb          # AOT for nRF54L15 (Cortex-M33)
+./build.sh aot thumbv7em      # AOT for STM32 (Cortex-M7)
+./build.sh aot riscv32        # AOT for ESP32-C3 (RISC-V)
+# Output: bin/<app>-<target>.aot
 ```
 
-#### Compile for STM32/nRF (ARM Cortex-M)
+#### Or invoke wamrc directly
 
 ```bash
-wamrc --target=thumbv7 \
-      --cpu=cortex-m4 \
-      --size-level=3 \
-      -o app_stm32.aot \
-      app.wasm
-```
+# ESP32-S3 (Xtensa LX7)
+wamrc --target=xtensa --cpu=esp32s3 -o app-xtensa.aot app.wasm
 
-#### Compile for Native Simulation
+# nRF54L15 (Cortex-M33)
+wamrc --target=thumb --cpu=cortex-m33 -o app-thumb.aot app.wasm
 
-```bash
-wamrc --target=x86-64 \
-      --size-level=3 \
-      -o app_native.aot \
-      app.wasm
+# ESP32-C3 (RISC-V 32)
+wamrc --target=riscv32 -o app-riscv32.aot app.wasm
+
+# Native simulation (x86-64)
+wamrc --target=x86_64 -o app-x86_64.aot app.wasm
 ```
 
 **Performance Gain:** 10-50x faster execution compared to interpreter mode.
