@@ -91,19 +91,37 @@ typedef struct {
     wasm_module_t module;         // WAMR module handle
     wasm_module_inst_t instance;  // Instantiated module
     wasm_exec_env_t exec_env;     // Execution environment
-    bool running;
+    uint8_t status;               // CREATED, RUNNING, EXITED, STOPPED, ERROR
+    int8_t exit_code;             // Return code from WASM
+    k_tid_t tid;                  // Thread ID
+    struct k_sem sem_start;       // Thread synchronization
+    struct k_mutex exit_mutex;
+    struct k_condvar cond_exit;
     uint32_t cap_mask;            // Capability bitmask
-    size_t memory_quota;          // Per-app memory limit
-    size_t memory_used;           // Current usage tracking
+    sandbox_ctx_t sandbox;        // Security sandbox context
+    akira_trust_level_t trust_level;
+    uint32_t memory_quota;        // Per-app memory limit (from manifest)
+    atomic_t memory_used;         // Current usage tracking (atomic)
+    runtime_perf_stats_t perf;    // Execution statistics
+    uint8_t binary_hash[32];      // SHA-256 for cache validation
+    bool hash_valid;
+    uint8_t *wasm_binary;         // Binary lifetime management
 } akira_managed_app_t;
 ```
 
 **Operations:**
-- `akira_runtime_load()` - Load WASM from file (chunked)
+- `akira_runtime_load_wasm()` - Load WASM from file (chunked)
 - `akira_runtime_start()` - Execute main function
 - `akira_runtime_stop()` - Terminate execution
-- `akira_runtime_unload()` - Free resources
-- `akira_runtime_set_quota()` - Set memory limit
+- `akira_runtime_destroy()` - Free resources
+- `akira_runtime_uninstall()` - Remove app from system
+
+**Status States:**
+- **CREATED** - App loaded, not yet running
+- **RUNNING** - Actively executing WASM code
+- **EXITED** - Completed execution (exit_code set)
+- **STOPPED** - Paused by stop() call
+- **ERROR** - Runtime error occurred
 
 **Limits:** 8 concurrent app instances default (adequate for embedded use cases). Note that AkiraOS uses a Thread-per-App Polling Model, meaning each application runs in an isolated Zephyr thread. Applications MUST yield control manually within tight loops using `delay()` to prevent system starvation.
 
@@ -148,13 +166,14 @@ Custom native API layer for AkiraOS system access.
 
 **Not WASI:** AkiraRuntime uses custom native functions optimized for embedded peripherals, not POSIX-like WASI interfaces.
 
-**Registered Functions:**
+**Registered Functions (examples):**
 - `akira_native_display_clear()`
 - `akira_native_display_pixel()`
-- `akira_native_input_read_buttons()`
+- `akira_native_gpio_read()` / `akira_native_gpio_write()`
 - `akira_native_rf_send()`
 - `akira_native_sensor_read()`
-- `akira_native_log()`
+- `akira_native_printf()` - Logging to console
+- Plus 100+ additional APIs across 18 modules
 
 **Call Mechanism:**
 ```
@@ -181,28 +200,59 @@ Actual API implementation
 
 Custom capability-based access control system.
 
-**Capability Bits:**
+**Capability Bits (23 total):**
 ```c
-#define CAP_DISPLAY_WRITE   (1U << 0)
-#define CAP_INPUT_READ      (1U << 1)
-#define CAP_SENSOR_READ     (1U << 2)
-#define CAP_RF_TRANSCEIVE   (1U << 3)
-#define CAP_FS_READ         (1U << 4)
-#define CAP_FS_WRITE        (1U << 5)
+// Hardware Access (Bits 0-4)
+#define AKIRA_CAP_DISPLAY_WRITE  (1U << 0)
+#define AKIRA_CAP_INPUT_READ     (1U << 1)
+#define AKIRA_CAP_INPUT_WRITE    (1U << 2)
+#define AKIRA_CAP_SENSOR_READ    (1U << 3)
+#define AKIRA_CAP_RF_TRANSCEIVE  (1U << 4)
+
+// Communication (Bits 5, 8, 15)
+#define AKIRA_CAP_BLE            (1U << 5)
+#define AKIRA_CAP_NETWORK        (1U << 8)
+#define AKIRA_CAP_HID            (1U << 15)
+
+// Storage (Bits 6-7)
+#define AKIRA_CAP_STORAGE_READ   (1U << 6)
+#define AKIRA_CAP_STORAGE_WRITE  (1U << 7)
+
+// Peripherals (Bits 9-10, 11-14)
+#define AKIRA_CAP_GPIO_READ      (1U << 9)
+#define AKIRA_CAP_GPIO_WRITE     (1U << 10)
+#define AKIRA_CAP_TIMER          (1U << 11)
+#define AKIRA_CAP_UART           (1U << 12)
+#define AKIRA_CAP_I2C            (1U << 13)
+#define AKIRA_CAP_PWM            (1U << 14)
+
+// System & App Control (Bits 16-22)
+#define AKIRA_CAP_APP_CONTROL    (1U << 16)  // Start/stop apps
+#define AKIRA_CAP_IPC            (1U << 17)  // Inter-process communication
+#define AKIRA_CAP_APP_SWITCH     (1U << 18)  // Switch to another app
+#define AKIRA_CAP_MEMORY         (1U << 19)  // Quota-enforced heap allocation
+#define AKIRA_CAP_APP_INFO       (1U << 20)  // Read app status/list
+#define AKIRA_CAP_POWER_READ     (1U << 21)  // Battery level queries
+#define AKIRA_CAP_POWER_CTRL     (1U << 22)  // Sleep mode control
 ```
 
 **Inline Enforcement:**
 ```c
-// Macro for fast checking
-#define AKIRA_CHECK_CAP_INLINE(inst, cap) \
+// Macro delegates to security subsystem
+#define AKIRA_CHECK_CAP_INLINE(exec_env, capability) \
+    akira_security_check_exec(exec_env, capability)
+
+// Alternatively, direct macro from akira_api.h:
+#define AKIRA_CHECK_CAP_OR_RETURN(exec_env, cap, ret) \
     do { \
-        uint32_t mask = get_app_cap_mask(inst); \
-        if (!(mask & cap)) return -EACCES; \
+        if (!akira_security_check_exec(exec_env, cap)) { \
+            return ret; \
+        } \
     } while(0)
 
 // Usage in native functions
 int akira_native_display_clear(wasm_exec_env_t env, uint32_t color) {
-    AKIRA_CHECK_CAP_INLINE(get_module_inst(env), CAP_DISPLAY_WRITE);
+    AKIRA_CHECK_CAP_OR_RETURN(env, AKIRA_CAP_DISPLAY_WRITE, -EACCES);
     return platform_display_clear(color);
 }
 ```
@@ -212,15 +262,20 @@ int akira_native_display_clear(wasm_exec_env_t env, uint32_t color) {
 AkiraRuntime implements a Pub/Sub event messaging system built directly over Zephyr's IPC mechanisms, designed explicitly for exchanging messages between sandboxed WASM applications and the Host OS natively.
 
 **Architecture:**
-- **Topic Exchange:** Up to `8` configurable hardware or software topics (`CONFIG_AKIRA_IPC_MAX_TOPICS`). 
-- **Subscribers:** Max `4` concurrent subscribers per topic. 
-- **Memory Routing:** Firing an event across IPC copies a small payload out of the publisher's Linear Memory constraints into `akira_ipc.c` internal queues, broadcasting copies into the subscriber's app instances queue space to bypass WAMR boundary sandboxing safely.
+- **Topic Exchange:** Up to `8` configurable hardware or software topics (`CONFIG_AKIRA_IPC_MAX_TOPICS`)
+- **Subscribers:** Max `4` concurrent subscribers per topic
+- **Message Size:** Max `256 bytes` per message (`CONFIG_AKIRA_IPC_MSG_MAX_SIZE`)
+- **Queue Depth:** `4 messages` per subscription (`CONFIG_AKIRA_IPC_QUEUE_DEPTH`)
+- **Memory Routing:** Firing an event across IPC copies payloads from publisher's linear memory into `akira_ipc.c` internal queues, broadcasting to subscriber app instance queues to bypass WAMR sandboxing safely
 
 ### Manifest Configuration & Caching Layer
 
-The internal capability sandboxes rely on a rigorous parser bound to `.akira.manifest` files attached to or adjacent to loaded `.wasm` modules. 
-- **Dynamic Rejection:** If `manifest_parser.c` detects a module requesting a capability beyond the compiled boundaries (or missing digital signatures if `CONFIG_AKIRA_APP_SIGNING=y`), it halts execution prior to memory allocation.
-- **Runtime Caching:** Utilizing `runtime_cache.c`, AkiraOS avoids constant deep-flash retrievals of bytecode payloads. Successfully validated modules can be optionally cached dynamically onto faster storage or directly in PSRAM based on board availability to heavily trim startup times on application swaps.
+The internal capability sandboxes rely on a rigorous parser bound to `.akira.manifest` files attached to or adjacent to loaded `.wasm` modules.
+
+- **Dynamic Rejection:** If `manifest_parser.c` detects a module requesting a capability beyond the compiled boundaries (or missing digital signatures if `CONFIG_AKIRA_APP_SIGNING=y`), it halts execution prior to memory allocation
+- **Runtime Caching:** Utilizing `runtime_cache.c`, AkiraOS avoids constant deep-flash retrievals of bytecode payloads. Successfully validated modules can be optionally cached dynamically onto faster storage or directly in PSRAM based on board availability to heavily trim startup times on application swaps
+- **Security Subsystem:** The `src/runtime/security/` subsystem provides sandbox context with syscall filtering, trust level enforcement, app signing/verification, and audit logging
+- **Performance Tracking:** Each app instance tracks execution statistics including call count, trap count, timing metrics, and module load timestamps for debugging and optimization
 
 **Embedded Manifest:**
 ```wasm
@@ -243,11 +298,11 @@ The internal capability sandboxes rely on a rigorous parser bound to `.akira.man
 
 **PSRAM Allocation:**
 ```c
-CONFIG_HEAP_MEM_POOL_SIZE=262144  // 256KB PSRAM pool
+CONFIG_HEAP_MEM_POOL_SIZE=65536   // 64KB system heap
 
-// Per-app quotas
-#define DEFAULT_APP_QUOTA   (64 * 1024)   // 64KB default
-#define MAX_APP_QUOTA      (128 * 1024)   // 128KB maximum
+// Per-app quotas defined in manifest
+// Example: memory_quota: 65536  (64KB per app)
+// No hardcoded DEFAULT_APP_QUOTA or MAX_APP_QUOTA
 ```
 
 **Quota Enforcement:**
@@ -264,6 +319,8 @@ void *akira_wasm_malloc(size_t size) {
     return ptr;
 }
 ```
+
+**Note:** Memory quotas are set per-app via manifest configuration, not compile-time constants. Boards with PSRAM (ESP32-S3) allocate additional heap (e.g., 4MB on AkiraConsole board).
 
 **Memory Layout:**
 - WASM module code (after loading)

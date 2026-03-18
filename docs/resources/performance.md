@@ -97,6 +97,6 @@ AkiraOS:~$ wasm status
 
 ## Related Documentation
 
-- [Architecture Overview](../architecture/)
+- [Architecture Overview](../architecture)
 - [Runtime Performance](../architecture/runtime.md)
 - [Data Flow](../architecture/data-flow.md)

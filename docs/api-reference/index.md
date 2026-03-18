@@ -10,8 +10,9 @@ permalink: /api-reference
 
 Complete reference for AkiraOS WASM application APIs.
 
-> **Looking for the high-level SDK API?** See the [SDK API Reference](../development/sdk-api-reference.md) or the canonical [AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/API_REFERENCE.md).  
-> For most apps, use `#include "akira_api.h"` (from `AkiraSDK/include/`) which wraps all imports for you.
+> **Canonical reference:** The full, up-to-date API is documented in the AkiraSDK repository.  
+> See [AkiraSDK/docs/API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/API_REFERENCE.md) for function signatures, constants, and examples.  
+> For most apps, use `#include "akira_api.h"` (from `AkiraSDK/include/`) which provides all imports.
 
 ## Available APIs
 
@@ -21,106 +22,104 @@ AkiraOS provides a custom native API for WASM applications. This is **not** WASI
 
 There are **two API layers** in AkiraOS:
 
-1. **Native WASM Exports (14 functions)**: Low-level natives exported via `"akira"` module
-   - Direct imports available to WASM modules
+1. **Native WASM Exports**: Low-level natives registered via `"env"` module in `src/api/akira_export_api.c`
+   - All categories are gated by Kconfig (`CONFIG_DISPLAY`, `CONFIG_AKIRA_WASM_BLE`, etc.)
    - Minimal overhead, real-time suitable
-   - Documented below in [Import Module](#import-module)
+   - Documented in [Native API Reference](native-api.md)
 
-2. **SDK Wrapper API (50+ functions)**: High-level convenience library
-   - C library in `AkiraSDK/include/akira_api.h`
-   - Provides higher-level abstractions over native APIs
-   - Reduces boilerplate code
-   - See [SDK API Reference](../development/sdk-api-reference.md)
+2. **SDK Wrapper API**: High-level convenience library (`AkiraSDK/include/akira_api.h`)
+   - Provides `printf()`, color constants, `SENSOR_CHAN_*` defines, and thin wrappers
+   - See [AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/API_REFERENCE.md)
 
 **Most developers use the SDK API** (via `#include "akira_api.h"`), which automatically handles native imports.
 
 ### API Categories
 
-| Category | Key Functions | Purpose |
-|----------|---------------|---------|
-| [Logging](#logging-api) | `log_info`, `log_debug`, `log_error`, `printf` | Debug output |
-| [Display](#display-api) | `display_clear`, `display_text`, `display_rect`, `display_flush` | Framebuffer |
-| [GPIO](#gpio-api) | `gpio_configure`, `gpio_read`, `gpio_write` | Pin control and input |
-| [Storage](#storage-api) | `storage_open`, `storage_read`, `storage_write`, `storage_close` | File I/O |
-| [Timer](#timer-api) | `timer_create`, `timer_start`, `timer_elapsed`, `delay` | Timing |
-| [Memory](#memory-api) | `mem_alloc`, `mem_free` | Heap allocation |
+| Category | Key Functions | Kconfig Guard |
+|----------|---------------|---------------|
+| [Logging / Timing](#logging-api) | `printf_native`, `delay` | `CONFIG_AKIRA_WASM_API` |
+| [Display](#display-api) | `display_clear`, `display_text`, `display_rect`, `display_flush` | `CONFIG_DISPLAY` |
+| [GPIO](#gpio-api) | `gpio_configure`, `gpio_read`, `gpio_write` | `CONFIG_GPIO` |
+| [Sensor](#sensor-api) | `sensor_read` | `CONFIG_SENSOR` |
+| [RF](#rf-api) | `rf_send`, `rf_set_frequency`, `rf_set_power`, `rf_get_rssi` | `CONFIG_AKIRA_RF_FRAMEWORK` |
+| [Storage](#storage-api) | `storage_open`, `storage_read`, `storage_write`, `storage_close` | `CONFIG_AKIRA_WASM_STORAGE` |
+| [Net / Sockets](#net-api) | `net_open`, `net_connect`, `net_bind`, `net_tx_bind`, `net_rx_bind` | `CONFIG_AKIRA_WASM_NET` |
+| [BLE](#ble-api) | `ble_init`, `ble_service_create`, `ble_char_write`, `ble_event_pop` | `CONFIG_AKIRA_WASM_BLE` |
+| [HID](#hid-api) | `hid_key_press`, `hid_type_string`, `hid_mouse_move`, `hid_gamepad_*` | `CONFIG_AKIRA_WASM_HID` |
+| [Timer](#timer-api) | `timer_create`, `timer_start`, `timer_elapsed`, `timer_free` | `CONFIG_AKIRA_WASM_TIMER` |
+| [UART](#uart-api) | `uart_open`, `uart_write`, `uart_read`, `uart_close` | `CONFIG_AKIRA_WASM_UART` |
+| [I2C](#i2c-api) | `i2c_write_reg`, `i2c_read_reg` | `CONFIG_AKIRA_WASM_I2C` |
+| [PWM](#pwm-api) | `pwm_set`, `pwm_disable` | `CONFIG_AKIRA_WASM_PWM` |
+| [Power](#power-api) | `power_get_battery_level`, `power_set_mode`, `power_wake_on_gpio` | `CONFIG_AKIRA_WASM_POWER` |
+| [Memory](#memory-api) | `mem_alloc`, `mem_free` | `CONFIG_AKIRA_WASM_MEMORY` |
+| [IPC Pub/Sub](#ipc-api) | `msg_subscribe`, `msg_publish`, `msg_recv` | `CONFIG_AKIRA_WASM_IPC` |
+| [App Lifecycle](#lifecycle-api) | `app_start`, `app_stop`, `app_switch`, `app_get_self_name` | `CONFIG_AKIRA_WASM_LIFECYCLE` |
 
 ## Import Module
 
-All native functions are imported from the `"akira"` module:
+All native functions are imported from the `"env"` module (registered via WAMR's `wasm_runtime_register_natives`):
 
 ```c
-__attribute__((import_module("akira")))
-__attribute__((import_name("log")))
-extern void akira_log(const char *message, uint32_t len);
+// SDK header (AkiraSDK/include/akira_api.h) declares all imports as extern:
+extern int display_clear(uint32_t color);
+extern int sensor_read(int32_t channel);
+// ... etc.
 ```
 
+**With the SDK header you do not need manual `__attribute__((import_module))` annotations.**
+
+## Logging API
+
+### `printf_native` / `printf`
+Send a message to the AkiraOS host console.
+
+```c
+extern int printf_native(const char *message);  // raw native export
+void printf(const char *fmt, ...);              // SDK wrapper (supports %d, %s)
+```
+
+**No capability required.** The SDK's `printf()` handles formatting internally; newlines are stripped by the host logger.
+
+### `delay`
+Yield execution for the given number of **microseconds**.
+
+```c
+extern int delay(uint32_t microseconds);
+```
+
+---
+
 ## Display API
+
+> Full display API (20+ functions) documented in [AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/API_REFERENCE.md#display-api).
 
 ### `display_clear`
 Clear the entire screen to a specific color.
 
 ```c
-__attribute__((import_module("akira")))
-__attribute__((import_name("display_clear")))
-extern int akira_display_clear(uint32_t color);
-```
-
-    **Parameters:**
-    - `color`: RGB565 16-bit color (e.g., 0xF800 for red)
-
-**Returns:** 0 on success, negative on error
-
-**Capability Required:** `CAP_DISPLAY_WRITE`
-
----
-
-### `display_pixel`
-Draw a single pixel.
-
-```c
-__attribute__((import_module("akira")))
-__attribute__((import_name("display_pixel")))
-extern int akira_display_pixel(uint32_t x, uint32_t y, uint32_t color);
+extern int display_clear(uint32_t color);
 ```
 
 **Parameters:**
-- `x`, `y`: Pixel coordinates
-- `color`: 24-bit RGB color
+- `color`: RGB565 16-bit color (e.g., `COLOR_RED` = 0xF800)
 
-**Returns:** 0 on success, negative on error
+**Returns:** 0 on success, `-EACCES` if missing `CAP_DISPLAY_WRITE`
 
 **Capability Required:** `CAP_DISPLAY_WRITE`
 
 ---
 
-### `display_rect`
-Draw a filled rectangle.
+### `display_pixel` / `display_rect` / `display_text` / `display_text_large` / `display_flush`
 
 ```c
-extern int akira_display_rect(uint32_t x, uint32_t y,
-                              uint32_t width, uint32_t height,
-                              uint32_t color);
+extern int display_pixel(int32_t x, int32_t y, uint32_t color);
+extern int display_rect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color);
+extern int display_text(int32_t x, int32_t y, const char *text, uint32_t color);
+extern int display_text_large(int32_t x, int32_t y, const char *text, uint32_t color);
+extern int display_flush(void);
 ```
 
----
-
-### `display_text`
-Render text string.
-
-```c
-extern int akira_display_text(uint32_t x, uint32_t y,
-                              const char *text, uint32_t color);
-```
-
----
-
-### `display_flush`
-Flush framebuffer to screen (if buffered).
-
-```c
-extern int akira_display_flush();
-```
+All require `CAP_DISPLAY_WRITE`.
 
 ---
 
@@ -128,6 +127,8 @@ extern int akira_display_flush();
 
 ### `input_read_buttons`
 Read digital button states.
+
+> **Note:** When using `#include "akira_api.h"` from the AkiraSDK, manual `__attribute__((import_module))` annotations are not required. The example below shows the low-level import syntax for reference.
 
 ```c
 __attribute__((import_module("akira")))
@@ -156,65 +157,69 @@ extern int akira_input_read_touch(uint32_t *x, uint32_t *y);
 
 **Returns:** 0 if touched, -1 if not
 
+> **Note:** `input_read_buttons` and `input_read_touch` are not native exports in the current runtime. Check the AkiraSDK docs for the current input API.
+
 ---
 
 ## Sensor API
 
 ### `sensor_read`
-Read sensor value by ID.
+Read sensor value by channel.
+
+> **Note:** When using `#include "akira_api.h"` from the AkiraSDK, manual `__attribute__((import_module))` annotations are not required. The example below shows the low-level import syntax for reference.
 
 ```c
 __attribute__((import_module("akira")))
 __attribute__((import_name("sensor_read")))
-extern int akira_sensor_read(uint32_t sensor_id, float *data);
+extern int sensor_read(int32_t channel);
 ```
 
 **Parameters:**
-- `sensor_id`: Sensor identifier (0-15)
-- `data`: Pointer to receive sensor value
+- `channel`: Zephyr `enum sensor_channel` integer — use `SENSOR_CHAN_*` constants from `akira_api.h`
 
-**Returns:** 0 on success, negative on error
+**Returns:** Reading scaled ×1000 on success (divide by 1000.0 to get physical value), or `AKIRA_SENSOR_ERROR` (`INT32_MIN`) on any error.
 
 **Capability Required:** `CAP_SENSOR_READ`
 
-**Sensor IDs:**
-- 0: Temperature (°C)
-- 1: Humidity (%)
-- 2: Pressure (hPa)
-- 3: Accel X (m/s²)
-- 4: Accel Y
-- 5: Accel Z
-- 6: Gyro X (°/s)
-- 7: Gyro Y
-- 8: Gyro Z
+**Common Channel IDs** (Zephyr `enum sensor_channel` values):
+- `SENSOR_CHAN_ACCEL_X` = 0, `ACCEL_Y` = 1, `ACCEL_Z` = 2
+- `SENSOR_CHAN_GYRO_X` = 4, `GYRO_Y` = 5, `GYRO_Z` = 6
+- `SENSOR_CHAN_AMBIENT_TEMP` = 13
+- `SENSOR_CHAN_PRESS` = 14
+- `SENSOR_CHAN_HUMIDITY` = 16
+
+> For the full list of `SENSOR_CHAN_*` constants see `AkiraSDK/include/akira_api.h`.
 
 ---
 
 ## RF/Network API
 
+> **Work In Progress:** The RF module is implemented but still under active development. Use with caution in production environments.
+
+> See [AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/API_REFERENCE.md#rf-api) for full RF and network API.
+
 ### `rf_send`
 Send data via RF interface.
+
+> **Note:** When using `#include "akira_api.h"` from the AkiraSDK, manual `__attribute__((import_module))` annotations are not required. The example below shows the low-level import syntax for reference.
 
 ```c
 __attribute__((import_module("akira")))
 __attribute__((import_name("rf_send")))
-extern int akira_rf_send(const uint8_t *data, uint32_t len);
+extern int rf_send(const uint8_t *data, uint32_t len);
 ```
 
 **Capability Required:** `CAP_RF_TRANSCEIVE`
 
-**Max Length:** 256 bytes per call
+**Only available when `CONFIG_AKIRA_RF_FRAMEWORK=y`.**
 
 ---
 
-### `rf_recv`
-Receive data from RF interface.
+## Net API
 
-```c
-extern int akira_rf_recv(uint8_t *buffer, uint32_t max_len);
-```
+> Socket-style network API. See [AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/API_REFERENCE.md#network-api) for full reference.
 
-**Returns:** Bytes received, or 0 if no data
+**Available when `CONFIG_AKIRA_WASM_NET=y`:** `net_open`, `net_connect`, `net_bind`, `net_listen`, `net_close`, `net_tx_bind`, `net_rx_bind`, `net_tx_flush`, `net_event_pop`.
 
 ---
 
@@ -269,38 +274,13 @@ extern int storage_list(const char *path, char *buf, int len);
 
 ## Logging API
 
-### `log`
-Write log message.
-
-```c
-__attribute__((import_module("akira")))
-__attribute__((import_name("log")))
-extern void akira_log(const char *message, uint32_t len);
-```
-
-**No capability required** - Always available
-
-**Max Length:** 256 characters
+> Logging is documented above under [Logging / Timing](#logging-api). Use `printf_native` / `printf()` from the SDK.
 
 ---
 
 ## Time API
 
-### `time_ms`
-Get current time in milliseconds since boot.
-
-```c
-extern uint64_t akira_time_ms();
-```
-
----
-
-### `sleep_ms`
-Sleep for specified milliseconds.
-
-```c
-extern void akira_sleep_ms(uint32_t ms);
-```
+> `time_ms()` and `sleep_ms()` are not native exports in the current runtime — use `delay(microseconds)` (Logging/Timing section above) or the Timer API (`timer_create`, `timer_elapsed`).
 
 ---
 
@@ -309,59 +289,39 @@ extern void akira_sleep_ms(uint32_t ms);
 | Code | Constant | Meaning |
 |------|----------|---------|
 | 0 | OK | Success |
-| -1 | EPERM | Permission denied (capability) |
+| -1 | EPERM | Capability check failed |
 | -2 | ENOENT | File not found |
-| -3 | EIO | I/O error |
+| -5 | EIO | I/O error |
 | -12 | ENOMEM | Out of memory |
 | -22 | EINVAL | Invalid argument |
+
+See [Error Codes Reference](error-codes.md) for the full table including domain-specific (`AKIRA_ERR_*`) codes.
 
 ---
 
 ## Complete Example
 
 ```c
-#include <stdint.h>
-#include <string.h>
+#include "akira_api.h"  // from AkiraSDK/include/
 
-// Import native functions
-__attribute__((import_module("akira")))
-__attribute__((import_name("log")))
-extern void akira_log(const char *msg, uint32_t len);
-
-__attribute__((import_module("akira")))
-__attribute__((import_name("display_clear")))
-extern int akira_display_clear(uint32_t color);
-
-__attribute__((import_module("akira")))
-__attribute__((import_name("input_read_buttons")))
-extern uint32_t akira_input_read_buttons();
-
-__attribute__((import_module("akira")))
-__attribute__((import_name("sensor_read")))
-extern int akira_sensor_read(uint32_t id, float *data);
-
-// Entry point
 __attribute__((export_name("_start")))
 void app_main() {
-    akira_log("App starting", 12);
-    
-    // Clear screen to blue
-    akira_display_clear(0x0000FF);
-    
-    // Read temperature
-    float temp = 0.0f;
-    if (akira_sensor_read(0, &temp) == 0) {
-        char msg[64];
-        snprintf(msg, sizeof(msg), "Temp: %.2f C", temp);
-        akira_log(msg, strlen(msg));
+    printf("App starting");
+
+    // Clear screen to blue (RGB565)
+    display_clear(COLOR_BLUE);
+
+    // Read temperature — sensor_read returns value x1000
+    int raw = sensor_read(SENSOR_CHAN_AMBIENT_TEMP);
+    if (raw != AKIRA_SENSOR_ERROR) {
+        printf("Temp: %d milli-C", raw);
     }
-    
-    // Wait for button press
-    while (!(akira_input_read_buttons() & 0x01)) {
-        // Busy wait (bad practice, use sleep in real app)
-    }
-    
-    akira_log("Button pressed!", 14);
+
+    // Flush framebuffer
+    display_flush();
+
+    // Yield 1 second
+    delay(1000000);
 }
 ```
 

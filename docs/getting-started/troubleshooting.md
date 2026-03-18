@@ -459,4 +459,4 @@ log enable <module> 4         # Debug logging
 - Read [Best Practices](../development/best-practices.md) to avoid common pitfalls
 - Check [GitHub Issues](https://github.com/ArturR0k3r/AkiraOS/issues)
 - Ask in [Discussions](https://github.com/ArturR0k3r/AkiraOS/discussions)
-- Review [Architecture Docs](../architecture/)
+- Review [Architecture Docs](../architecture)

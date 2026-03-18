@@ -25,70 +25,137 @@ AkiraOS implements a **multi-layered security architecture** combining WASM sand
 
 **Purpose:** Fine-grained permission control for native API access.
 
-**Capability Bits:**
+**Capability Bits (23 total):**
 ```c
-#define CAP_DISPLAY_WRITE   (1U << 0)  // Screen rendering
-#define CAP_INPUT_READ      (1U << 1)  // Button/touch input
-#define CAP_SENSOR_READ     (1U << 2)  // IMU, temp, etc.
-#define CAP_RF_TRANSCEIVE   (1U << 3)  // WiFi/BT/LoRa send/recv
-#define CAP_FS_READ         (1U << 4)  // File system read
-#define CAP_FS_WRITE        (1U << 5)  // File system write
-#define CAP_NETWORK_CLIENT  (1U << 6)  // HTTP/TCP client
-#define CAP_NETWORK_SERVER  (1U << 7)  // HTTP/TCP server
+// Hardware Access (Bits 0-4)
+#define AKIRA_CAP_DISPLAY_WRITE  (1U << 0)  // Screen rendering
+#define AKIRA_CAP_INPUT_READ     (1U << 1)  // Button/touch input
+#define AKIRA_CAP_INPUT_WRITE    (1U << 2)  // Input device control
+#define AKIRA_CAP_SENSOR_READ    (1U << 3)  // IMU, temp, etc.
+#define AKIRA_CAP_RF_TRANSCEIVE  (1U << 4)  // WiFi/LoRa send/recv
+
+// Communication (Bits 5, 8, 15)
+#define AKIRA_CAP_BLE            (1U << 5)  // Bluetooth LE
+#define AKIRA_CAP_NETWORK        (1U << 8)  // TCP/UDP/HTTP
+#define AKIRA_CAP_HID            (1U << 15) // HID devices (ELEVATED)
+
+// Storage (Bits 6-7)
+#define AKIRA_CAP_STORAGE_READ   (1U << 6)  // File system read
+#define AKIRA_CAP_STORAGE_WRITE  (1U << 7)  // File system write
+
+// Peripherals (Bits 9-14)
+#define AKIRA_CAP_GPIO_READ      (1U << 9)  // GPIO input
+#define AKIRA_CAP_GPIO_WRITE     (1U << 10) // GPIO output
+#define AKIRA_CAP_TIMER          (1U << 11) // Timer APIs
+#define AKIRA_CAP_UART           (1U << 12) // Serial communication
+#define AKIRA_CAP_I2C            (1U << 13) // I2C bus access
+#define AKIRA_CAP_PWM            (1U << 14) // PWM output
+
+// System & App Control (Bits 16-22) - ELEVATED PRIVILEGES
+#define AKIRA_CAP_APP_CONTROL    (1U << 16) // Start/stop apps (ELEVATED)
+#define AKIRA_CAP_IPC            (1U << 17) // Inter-process messaging
+#define AKIRA_CAP_APP_SWITCH     (1U << 18) // Switch to another app
+#define AKIRA_CAP_MEMORY         (1U << 19) // Heap allocation APIs
+#define AKIRA_CAP_APP_INFO       (1U << 20) // App status queries
+#define AKIRA_CAP_POWER_READ     (1U << 21) // Battery level queries
+#define AKIRA_CAP_POWER_CTRL     (1U << 22) // Sleep mode control (ELEVATED)
 ```
+
+**Elevated Privilege Capabilities:**
+The following capabilities grant significant system control and should **not** be granted to untrusted apps:
+- `AKIRA_CAP_HID` - Can emulate keyboards/mice
+- `AKIRA_CAP_APP_CONTROL` - Can terminate other apps
+- `AKIRA_CAP_POWER_CTRL` - Can modify power state
 
 **Enforcement:**
 ```c
-// Inline macro (fast path)
-#define AKIRA_CHECK_CAP_INLINE(inst, cap) \
+// Macro delegates to security subsystem
+#define AKIRA_CHECK_CAP_INLINE(exec_env, capability) \
+    akira_security_check_exec(exec_env, capability)
+
+// Alternative macro for functions returning int
+#define AKIRA_CHECK_CAP_OR_RETURN(exec_env, cap, ret) \
     do { \
-        uint32_t mask = get_app_cap_mask(inst); \
-        if (!(mask & cap)) return -EACCES; \
+        if (!akira_security_check_exec(exec_env, cap)) { \
+            return (ret); \
+        } \
     } while(0)
 
 // Example: Display API
 int akira_native_display_clear(wasm_exec_env_t env, uint32_t color) {
-    AKIRA_CHECK_CAP_INLINE(get_module_inst(env), CAP_DISPLAY_WRITE);
+    AKIRA_CHECK_CAP_OR_RETURN(env, AKIRA_CAP_DISPLAY_WRITE, -EACCES);
     return platform_display_clear(color);
 }
 ```
 
-**Performance:** ~60ns overhead per native call (inline check, no function call)
+**Performance:** ~60ns overhead per native call (estimated, board-dependent)
 
 ### 3. Resource Quotas (Memory Layer)
 
 **Per-App Memory Limits:**
-```c
-#define DEFAULT_APP_QUOTA   (64 * 1024)   // 64KB default
-#define MAX_APP_QUOTA      (128 * 1024)   // 128KB maximum
+Memory quotas are defined per-app in manifest files (no hardcoded system-wide defaults). Example manifest:
+```json
+{
+  "name": "sensor_logger",
+  "memory_quota": 65536
+}
 ```
 
 **Quota Enforcement:**
+The runtime tracks memory usage per app and enforces manifest-defined limits:
 ```c
-void *akira_wasm_malloc(size_t size) {
-    akira_managed_app_t *app = get_current_app();
-    
-    // Check quota
-    if (app->memory_used + size > app->memory_quota) {
-        LOG_ERR("App %s exceeded quota: %zu + %zu > %zu",
-                app->name, app->memory_used, size, app->memory_quota);
-        return NULL;
-    }
-    
-    void *ptr = psram_malloc(size);
-    if (ptr) {
-        app->memory_used += size;
-    }
-    return ptr;
+// Simplified enforcement concept
+if (app->memory_used + size > app->memory_quota) {
+    return NULL;  // Quota exceeded
 }
 ```
 
 **Benefits:**
 - Prevents one app from exhausting all memory
-- Protects system stability
-- Configurable per-app limits
+- Protects system stability  
+- Configurable per-app via manifest
+- Boards with PSRAM (ESP32-S3) support larger quotas
 
-### 4. Flash Protection (Boot Layer)
+### 4. Trust Levels & Sandbox Contexts
+
+**Trust Level System:**
+Apps are assigned trust levels that determine syscall filtering and capability enforcement:
+
+```c
+typedef enum {
+    TRUST_LEVEL_KERNEL = 0,  // Full system access
+    TRUST_LEVEL_SYSTEM = 1,  // System services
+    TRUST_LEVEL_TRUSTED = 2, // Verified apps
+    TRUST_LEVEL_USER = 3     // Untrusted apps (default)
+} akira_trust_level_t;
+```
+
+**Sandbox Context:**
+Each app runs in a sandbox with:
+- Trust level assignment
+- Syscall filtering based on trust level
+- Rate limiting for sensitive operations
+- Performance statistics tracking
+
+### 5. Audit Logging
+
+**Security Event Tracking:**
+The runtime logs security-relevant events for debugging and threat detection:
+
+**Audit Events:**
+- `AUDIT_EVENT_SYSCALL_DENIED` - Blocked syscall attempt
+- `AUDIT_EVENT_CAPABILITY_DENIED` - Permission denied
+- `AUDIT_EVENT_INTEGRITY_FAIL` - Binary validation failed
+- `AUDIT_EVENT_SIGNATURE_FAIL` - Invalid signature
+- `AUDIT_EVENT_SIGNATURE_OK` - Valid signature verified
+- `AUDIT_EVENT_APP_LOADED` - App successfully loaded
+- `AUDIT_EVENT_APP_STARTED` - App execution began
+- `AUDIT_EVENT_WATCHDOG_KILL` - App terminated by watchdog
+
+**Configuration:**
+`CONFIG_AKIRA_AUDIT_LOG_SIZE` - Ring buffer size for audit events
+
+### 6. Flash Protection (Boot Layer)
 
 **MCUboot Verified Boot:**
 - RSA/ECDSA signature verification
@@ -122,7 +189,7 @@ Apps declare required capabilities in an embedded WASM custom section.
 ```wasm
 ;; Custom section in .wasm file. Must be valid JSON.
 (custom ".akira.manifest"
-  "{\"name\": \"sensor_logger\", \"version\": \"1.2.0\", \"capabilities\": [\"sensor\", \"fs.write\", \"display\"], \"memory_quota\": 81920}"
+  "{\"name\": \"sensor_logger\", \"version\": \"1.2.0\", \"capabilities\": [\"sensor\", \"storage.write\", \"display\"], \"memory_quota\": 81920}"
 )
 ```
 
@@ -135,6 +202,14 @@ Apps declare required capabilities in an embedded WASM custom section.
   "memory_quota": 81920
 }
 ```
+
+**Capability String Namespace:**
+Supported capability strings (30+ mappings):
+- **Hardware:** `"display.write"`, `"input.read"`, `"input.write"`, `"sensor.read"`, `"gpio.read"`, `"gpio.write"`, `"i2c"`, `"uart"`, `"pwm"`
+- **Communication:** `"rf"`, `"ble"`, `"network"`, `"hid"`
+- **Storage:** `"storage.read"`, `"storage.write"`
+- **System:** `"timer"`, `"memory"`, `"power.read"`, `"power.control"`, `"app.control"`, `"app.switch"`, `"app.info"`, `"ipc"`
+- **Wildcards:** `"display.*"`, `"input.*"`, `"sensor.*"`, `"gpio.*"`, `"storage.*"`, `"hw.*"`, `"*"` (all capabilities)
 
 **Manifest Parsing:**
 1. Try to extract embedded `.akira.manifest` custom section and parse JSON.
@@ -168,7 +243,8 @@ Apps declare required capabilities in an embedded WASM custom section.
 ### Minimal Attack Surface
 
 **Exposed Interfaces:**
-- HTTP server (port 80)
+- HTTP server (port 8080)
+- WebSocket server (port 8081)
 - Bluetooth GATT services
 - Native API calls from WASM
 
@@ -222,36 +298,12 @@ Apps declare required capabilities in an embedded WASM custom section.
 
 ## Known Limitations
 
-1. **No Secure Storage** - Apps can read each other's data files
-2. **No App Signing** - No verification of app authenticity
-3. **Coarse Capabilities** - All sensors lumped into `CAP_SENSOR_READ`
-4. **No Network Isolation** - Apps share network stack
-5. **No Process Isolation** - All apps run in same address space
+1. **Limited Storage Isolation** - Per-app directories enforced, but no encryption
+2. **Coarse Capabilities** - All sensors share `AKIRA_CAP_SENSOR_READ`
+3. **No Network Isolation** - Apps share network stack
+4. **Shared Address Space** - All apps run in same kernel context
+5. **No Hardware Security Module** - No TPM/secure element integration
 
-## Future Enhancements
-
-- **App Signing** - Code signing with public key verification
-- **Secure Storage** - Per-app encrypted storage
-- **Fine-Grained Caps** - Per-sensor, per-network capabilities
-- **Secure Element Integration** - TPM/HSM for key storage
-- **SELinux-style Policies** - Advanced MAC policies
-- **Audit Logging** - Security event logging
-
-## Security Checklist
-
-**Before Deploying an App:**
-- [ ] Review requested capabilities
-- [ ] Test with quota limits enabled
-- [ ] Check for excessive network usage
-- [ ] Verify app behavior matches description
-- [ ] Scan for known malicious patterns
-
-**Before Firmware Update:**
-- [ ] Verify signature (if signing enabled)
-- [ ] Check version (prevent downgrades)
-- [ ] Test in staging environment
-- [ ] Backup current configuration
-- [ ] Ensure rollback capability
 
 ## Related Documentation
 

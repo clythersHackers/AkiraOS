@@ -308,7 +308,7 @@ rm -rf ../build
 ## Next Steps
 
 - [Build Your First App](first-app.md) - WASM Hello World
-- [Platform Guides](../platform/) - Board-specific setup
+- [Platform Guides](../platform) - Board-specific setup
 - [Troubleshooting](troubleshooting.md) - Common issues
 
 ## Quick Reference

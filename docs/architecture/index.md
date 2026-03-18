@@ -29,6 +29,8 @@ graph TB
         MANAGER[App Manager]
         SECURITY[Security Layer]
         BRIDGE[Native Bridge]
+        UI[UI Framework]
+        SHELL[Shell System]
     end
 
     subgraph Connectivity["Connectivity Layer"]
@@ -60,22 +62,25 @@ graph TB
     
     SCHEDULER --> Runtime
     SCHEDULER --> Connectivity
+    
+    UI --> BRIDGE
+    SHELL --> MANAGER
 
     class APP1,APP2,APP3 app
-    class MANAGER,SECURITY,BRIDGE runtime
+    class MANAGER,SECURITY,BRIDGE,UI,SHELL runtime
     class HTTP,OTA,BT,HID connectivity
     class SCHEDULER,NETWORK,DRIVERS,FS kernel
 ```
 
 ## Architecture Layers
 
-### [User Space](../api-reference/)
+### [User Space](../api-reference)
 WebAssembly applications run in isolated sandboxes with capability-based access control.
 
 - **Execution:** WASM bytecode (interpreter) or AOT (native code)
 - **Security:** Per-app capabilities, memory quotas
 - **Size:** 50KB-200KB per app
-- **Max Instances:** 2 concurrent running apps (configurable per board)
+- **Max Instances:** 8 installable apps, 2 concurrent running (configurable per board)
 - **Performance:** 1x (interpreter) or 10-50x (AOT)
 
 [Learn more about the Runtime →](runtime.md) | [AOT Compilation →](aot-compilation.md)
@@ -84,9 +89,11 @@ WebAssembly applications run in isolated sandboxes with capability-based access 
 Custom WASM runtime managing application lifecycle, security, and native API bridging.
 
 - **App Management:** Load, start, stop, unload
-- **Security:** Inline capability checks (~60ns overhead)
+- **Security:** Inline capability checks (~60ns overhead, estimated)
 - **Memory:** PSRAM allocation with per-app quotas
-- **Native APIs:** Display, input, sensors, RF, logging
+- **Native APIs:** 18 modules including BLE, Display, GPIO, HID, I2C, IPC (pub/sub), Lifecycle, Memory, Net (sockets), Power, PWM, RF, Sensor, Storage, Timer, UART, and common utilities (printf, delay)
+- **UI Framework:** 32 widgets, 8 screens, touch support
+- **Shell System:** System stats, command history, diagnostics
 
 [Runtime Architecture Details →](runtime.md)
 
@@ -97,7 +104,7 @@ Modular protocol stack for WiFi, Bluetooth, USB, and OTA operations.
 - **HTTP Server:** File uploads, OTA endpoints
 - **Bluetooth:** BLE stack, HID support
 - **OTA Manager:** MCUboot firmware updates
-- **AkiraMesh:** Planned mesh networking
+- **AkiraMesh:** Foundation mesh networking
 
 [Connectivity Architecture Details →](connectivity.md)
 
@@ -109,7 +116,7 @@ Real-time kernel providing threading, networking, drivers, and file system.
 - **Drivers:** SPI, I2C, UART, GPIO, flash
 - **File System:** LittleFS on flash storage
 
-[Platform Support →](../platform/)
+[Platform Support →](../platform)
 
 ## Key Components
 
@@ -118,6 +125,11 @@ Real-time kernel providing threading, networking, drivers, and file system.
 | App Manager | WASM app lifecycle | [Runtime](runtime.md) |
 | Security Layer | Capability enforcement | [Security](security.md) |
 | Native Bridge | WASM↔Native calls | [Runtime](runtime.md) |
+| UI Framework | Widget-based display UI | [Runtime](runtime.md) |
+| Shell System | System diagnostics/control | [Runtime](runtime.md) |
+| Driver Registry | Dynamic driver lookup | `src/drivers/` |
+| Settings Storage | NVS-backed configuration | `src/settings/` |
+| Error Codes | Standardized error system | `src/lib/` |
 | Transport Interface | Protocol routing | [Connectivity](connectivity.md) |
 | OTA Manager | Firmware updates | [Connectivity](connectivity.md) |
 | HTTP Server | Network API | [Connectivity](connectivity.md) |
@@ -147,17 +159,19 @@ WASM Code → WAMR Import → Native Bridge → Inline Cap Check → HAL Functio
 2. **Direct-to-Hardware** – Minimal abstraction layers for performance
 3. **Modular Connectivity** – Pluggable transport protocols
 4. **OTA-First** – Atomic updates with rollback protection
-5. **Resource Constrained** – Optimized for devices with <1MB RAM
+5. **Resource Efficient** – Supports devices from <1MB SRAM (native_sim) to 8MB PSRAM (ESP32-S3 boards)
 
 ## Performance Targets
 
 | Metric | Current | Target |
 |--------|---------|--------|
-| Native Call Overhead | ~60ns | <50ns |
-| WASM Load Time (100KB) | ~80ms | <50ms |
+| Native Call Overhead | ~60ns (estimated) | <50ns |
+| WASM Load Time (100KB) | ~80ms (estimated) | <50ms |
 | OTA Flash Write | ~200 KB/s | ~300 KB/s |
 | HTTP Throughput | ~1.3 MB/s | ~2 MB/s |
 | Memory Overhead | ~32KB | <24KB |
+
+*Note: Performance metrics are board-dependent and represent estimates. Actual values vary by hardware configuration.*
 
 [Performance Benchmarks →](../resources/performance.md)
 
@@ -183,7 +197,7 @@ WASM Code → WAMR Import → Native Bridge → Inline Cap Check → HAL Functio
 
 ## Related Documentation
 
-- [Getting Started](../getting-started/) - Setup guides
-- [API Reference](../api-reference/) - Developer APIs
-- [Platform Guides](../platform/) - Board-specific docs
-- [Development](../development/) - Build & debug
+- [Getting Started](../getting-started) - Setup guides
+- [API Reference](../api-reference) - Developer APIs
+- [Platform Guides](../platform) - Board-specific docs
+- [Development](../development) - Build & debug

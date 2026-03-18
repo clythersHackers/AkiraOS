@@ -71,5 +71,5 @@ AkiraOS can be ported to any Zephyr-supported board. Requirements:
 ## Related Documentation
 
 - [Installation Guide](../getting-started/installation.md) — Environment setup
-- [Architecture Overview](../architecture/) — System design
-- [Hardware](../hardware/) — Custom hardware designs
+- [Architecture Overview](../architecture) — System design
+- [Hardware](../hardware) — Custom hardware designs

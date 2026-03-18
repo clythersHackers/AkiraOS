@@ -50,7 +50,7 @@ Compact wearable platform.
 
 ## Supported Development Boards
 
-See [Platform Guides](../platform/) for supported development kits:
+See [Platform Guides](../platform) for supported development kits:
 
 - ESP32-S3 DevKitM
 - nRF54L15 DK
@@ -80,5 +80,5 @@ All hardware designs are open source.
 
 ## Related Documentation
 
-- [Platform Support](../platform/) - Software support for boards
-- [Getting Started](../getting-started/) - Flashing firmware
+- [Platform Support](../platform) - Software support for boards
+- [Getting Started](../getting-started) - Flashing firmware

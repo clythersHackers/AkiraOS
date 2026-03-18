@@ -10,20 +10,16 @@ Embed manifest as a WASM custom section (preferred method):
 
 ```wasm
 (module
-  ;; Custom section: akira-manifest
-  (custom "akira-manifest"
-    (data "\
-      name: sensor_logger\n\
-      version: 1.2.0\n\
-      capabilities: sensor.read,storage.write,display.write\n\
-      memory_quota: 81920\n\
-      description: Logs sensor data to file\n\
-    ")
+  ;; Custom section: .akira.manifest  (content must be valid JSON)
+  (custom ".akira.manifest"
+    (data "{\"name\":\"sensor_logger\",\"version\":\"1.2.0\",\"capabilities\":[\"sensor.read\",\"storage.write\",\"display.write\"],\"memory_quota\":81920}")
   )
   
   ;; Rest of WASM module...
 )
 ```
+
+> **Important:** The custom section content is parsed as **JSON**, not as key-value pairs. The embedded data must be a valid JSON object.
 
 **Advantages:**
 - Single file deployment
@@ -109,7 +105,7 @@ Array of permission strings.
 | `storage.write` | `storage_open(O_WRITE/APPEND)`, `storage_delete()` |
 | `network.*` | All `net_*()` TCP/UDP socket functions |
 | `ipc` | All `msg_*()` publish/subscribe functions |
-| `app.control` | `app_start()`, `app_stop()`, `app_list()` |
+| `app.control` | `app_start()`, `app_stop()`, `app_list()`, `app_get_status()`, `app_get_self_name()` |
 | `app.switch` | `app_switch()` |
 | `rf.transceive` | All `rf_*()` radio functions |
 | `uart` | All `uart_*()` functions |
@@ -117,6 +113,9 @@ Array of permission strings.
 | `pwm` | All `pwm_*()` functions |
 | `power.read` | `power_get_*()` |
 | `power.control` | `power_set_*()`, `power_wake_*()` |
+| `memory` | `mem_alloc()`, `mem_free()` |
+| `app.info` | `app_get_status()`, `app_list()`, `app_get_self_name()` (read-only) |
+| `input.write` | Inject synthetic input events |
 
 `printf()` and `delay()` are always available and require no capability declaration.
 
@@ -126,6 +125,31 @@ Array of permission strings.
   "capabilities": ["display.write", "input.read"]
 }
 ```
+
+#### Capability Aliases & Wildcards
+
+The following group aliases are recognized and expand to all capabilities of that subsystem:
+
+| Alias | Equivalent To |
+|-------|---------------|
+| `display.*` | `display.write` |
+| `input.*` | `input.read` + `input.write` |
+| `sensor.*` | `sensor.read` |
+| `rf.*` | `rf.transceive` |
+| `storage.*` | `storage.read` + `storage.write` |
+| `gpio.*` | `gpio.read` + `gpio.write` |
+| `bt.*` | `ble` + `hid` |
+| `hw.*` | `timer` + `uart` + `i2c` + `pwm` |
+| `power.*` | `power.read` + `power.control` |
+| `*` | All capabilities |
+
+**Legacy / alternate names also accepted:**
+
+| Alias | Resolves To |
+|-------|-------------|
+| `bt.shell` | `ble` |
+| `display.read` | `display.write` |
+| `memory.alloc` | `memory` |
 
 ---
 
@@ -139,9 +163,10 @@ Per-app memory limit in bytes.
 }
 ```
 
-**Default:** 64KB (65536 bytes)  
-**Maximum:** 128KB (131072 bytes)  
-**Minimum:** 16KB (16384 bytes)
+**Default:** No limit (unlimited heap) — omitting this field or setting it to `0` disables quota enforcement entirely.
+**Recommended maximum:** 128KB (131072 bytes)
+
+> **Note:** The runtime applies quota enforcement only when `memory_quota > 0`. There is no enforced minimum or maximum; the parser accepts any integer value as-is. The previously documented defaults of 64KB / min 16KB / max 128KB are not enforced by the runtime.
 
 **Guidelines:**
 - Simple apps: 32-64KB
@@ -164,6 +189,8 @@ Human-readable app description.
 
 Max length: 256 characters
 
+> **Runtime note:** This field is parsed from the manifest but is not stored in the runtime manifest struct. It has no effect on app execution and is currently informational only.
+
 ---
 
 ### `author` (Optional)
@@ -175,6 +202,8 @@ Developer or organization name.
   "author": "AkiraOS Team"
 }
 ```
+
+> **Runtime note:** This field is parsed from the manifest but is not stored in the runtime manifest struct. It has no effect on app execution.
 
 ---
 
@@ -192,6 +221,8 @@ Auto-start app on boot.
 
 **Note:** Only one app can have `autostart: true`
 
+> **Runtime note:** This field is currently parsed but silently ignored — it is not stored in the runtime manifest struct and has no effect on boot behavior.
+
 ---
 
 ### `priority` (Optional)
@@ -206,6 +237,8 @@ Execution priority hint (future use).
 
 **Range:** 1 (lowest) to 10 (highest)  
 **Default:** 5
+
+> **Runtime note:** This field is parsed but silently ignored at runtime — it is not stored in the runtime manifest struct and currently has no effect on scheduling.
 
 ---
 
@@ -287,27 +320,22 @@ Apps can combine capabilities based on use case:
 
 ## Manifest Loading Priority
 
-1. **Embedded custom section** (`akira-manifest`)
+1. **Embedded custom section** (`.akira.manifest`)
 2. **External JSON** (`<app_name>.json`)
-3. **Default fallback** (minimal capabilities)
+3. **No manifest** — app loads with zero capabilities (`cap_mask = 0`) and no memory quota limit
+
+> **Note:** There is no built-in default-capability fallback. If neither source is found, `manifest_parse_with_fallback()` returns `-ENOENT` and the app is granted no capabilities.
 
 ---
 
 ## Validation Rules
 
 Runtime validates manifests and rejects apps that:
-- Exceed max name length (31 chars)
-- Request undefined capabilities
-- Request quota > 128KB
-- Have invalid version format
-- Missing required fields
+- Exceed max name length (31 chars) — `name` is truncated to 31 characters
+- Have malformed JSON — returns `-EINVAL`
+- Provide a malformed `capabilities` value (not an array) — returns `-EINVAL`
 
-**Error Handling:**
-```bash
-AkiraOS:~$ wasm load /apps/bad_app.wasm
-[ERR] Manifest validation failed: unknown capability 'admin'
-[ERR] Failed to load app
-```
+> **Note:** Unknown capability strings (e.g. `"admin"`) are **not** rejected — `akira_capability_str_to_mask()` silently returns `0` for unrecognised strings, which are simply OR-ed into the mask with no effect. Invalid version strings and quota values outside any range are accepted without error.
 
 ---
 
@@ -337,7 +365,7 @@ Before installing an app, review its manifest:
 
 ```bash
 # Extract manifest from WASM
-wasm-objdump -x app.wasm | grep akira-manifest
+wasm-objdump -x app.wasm | grep .akira.manifest
 
 # Or check JSON
 cat app.json
@@ -359,18 +387,18 @@ cat app.json
 cargo install wasm-tools
 
 # Add custom section
-wasm-tools custom app.wasm --add-section akira-manifest=manifest.txt
+wasm-tools custom app.wasm --add-section .akira.manifest=manifest.txt
 ```
 
 ### Using WAT (WebAssembly Text Format)
 
 ```wat
 (module
-  (custom "akira-manifest"
-    (data "name: my_app\nversion: 1.0.0\ncapabilities: display\n")
+  (custom ".akira.manifest"
+    (data "{\"name\":\"my_app\",\"version\":\"1.0.0\",\"capabilities\":[\"display.write\"]}")
   )
   
-  (import "akira" "display_clear" (func $display_clear (param i32) (result i32)))
+  (import "env" "display_clear" (func $display_clear (param i32) (result i32)))
   
   (func (export "_start")
     i32.const 0

@@ -343,5 +343,5 @@ CONFIG_SPIRAM_SPEED_80M=y  # or 120M if stable
 
 - [Platform Overview](index.md) - All platforms
 - [Installation Guide](../getting-started/installation.md) - Environment setup
-- [Hardware Specs](../hardware/) - Custom hardware designs
+- [Hardware Specs](../hardware) - Custom hardware designs
 - [Troubleshooting](../getting-started/troubleshooting.md) - Common issues

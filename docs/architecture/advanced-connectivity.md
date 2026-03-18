@@ -1,6 +1,6 @@
 # Advanced Connectivity Layer
 
-> **Status:** Matter, Thread, and AkiraMesh are planned/optional features. They require additional west.yml modules and are not enabled in the default `prj.conf`. Standard WiFi and BLE connectivity is documented in [Connectivity Layer](connectivity.md).
+> **Status:** Matter, Thread, and AkiraMesh are implemented but under active development, use with caution. They require additional west.yml modules and are not enabled in the default `prj.conf`. Standard WiFi and BLE connectivity is documented in [Connectivity Layer](connectivity.md).
 
 Hardware-agnostic implementation of Matter, Thread, and AkiraMesh protocols for AkiraOS.
 
@@ -123,7 +123,7 @@ CONFIG_AKIRA_MESH_TRANSPORT_802154=y
 - **Node discovery** - Periodic beacon broadcasts
 - **Automatic routing** - Route discovery/maintenance  
 - **Mesh OTA** - Distribute WASM apps to all nodes
-- **Low overhead** - Minimal header (16 bytes)
+- **Low overhead** - Minimal header (21 bytes: version, msg_type, ttl, src_id[8], dest_id[8], seq_num)
 
 ## Shell Commands
 
@@ -252,16 +252,20 @@ akira_mesh_broadcast(announcement, size, 3);  // Max 3 hops
 ## Integration with Existing Systems
 
 ### OTA Updates
-All three protocols integrate with the existing OTA manager:
-- **Matter:** Matter OTA cluster → `ota_matter.c` → `ota_manager.c`
-- **Thread:** Thread multicast → `ota_thread.c` → `ota_manager.c`  
-- **AkiraMesh:** Chunk-based transfer → `ota_mesh.c` → `ota_manager.c`
+All three protocols integrate with the existing OTA manager through the generic transport interface:
+- **Matter:** Matter OTA cluster routes to OTA manager via transport interface
+- **Thread:** Thread multicast routes to OTA manager via transport interface
+- **AkiraMesh:** Chunk-based transfer routes to OTA manager via `akira_mesh_distribute_app()`
+
+> **Note:** Protocol-specific OTA transport adapters (`ota_matter.c`, `ota_thread.c`, `ota_mesh.c`) are planned for future implementation. Current OTA transports: BLE, HTTP, Cloud, USB.
 
 ### WASM Native API
-Protocols expose APIs to WASM applications:
-- `akira_matter_api.c` - Set/get cluster attributes
-- `akira_thread_api.c` - Send/receive IPv6 packets
-- `akira_mesh_api.c` - Mesh send/broadcast
+Protocol integration with WASM applications is planned:
+- Matter cluster attribute access (planned)
+- Thread IPv6 socket operations (planned)
+- AkiraMesh send/broadcast operations (planned)
+
+> **Note:** WASM native API bindings for advanced connectivity protocols are under development. Currently available transports use existing network APIs.
 
 ### Transport Interface
 Radio layer integrates with existing `transport_interface.c`:
@@ -293,20 +297,6 @@ transport_register_handler(TRANSPORT_DATA_FIRMWARE,
 - **RAM:** ~4KB + (nodes × 80 bytes)
 - **Discovery:** <5 seconds for 10 nodes
 - **Hop latency:** ~20ms per hop (BLE), ~5ms (802.15.4)
-
-## Future Enhancements
-
-### v2.1 Planned
-- [ ] Matter fabric synchronization
-- [ ] Thread border router NAT64/DNS64
-- [ ] AkiraMesh route optimization (ETX metric)
-- [ ] Unified commissioning UI on display
-
-### v2.2 Planned
-- [ ] Matter-over-Thread simultaneous operation
-- [ ] Thread SRP (Service Registration Protocol)
-- [ ] AkiraMesh ACK-based reliability
-- [ ] LoRaWAN radio backend
 
 ## Troubleshooting
 

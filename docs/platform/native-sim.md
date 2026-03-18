@@ -229,4 +229,4 @@ Native sim runs much faster than embedded hardware:
 
 - [Platform Overview](index.md) - All platforms
 - [Installation Guide](../getting-started/installation.md) - Setup
-- [Development Guide](../development/) - Advanced usage
+- [Development Guide](../development) - Advanced usage

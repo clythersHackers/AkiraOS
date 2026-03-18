@@ -14,6 +14,8 @@ AkiraOS includes AOT (Ahead-of-Time) compilation support through WAMR, enabling 
 
 **Key Point:** AOT is a **compilation option**, not a runtime mode. The system can load both .wasm (interpreted) and .aot (native) files.
 
+**Note:** While compiling AOT application you lose cross-platform so carefull consideration of using this option is needed.
+
 ---
 
 ## Performance Comparison
@@ -220,38 +222,6 @@ wamrc --target=x86-64 \
 
 ## Runtime Loading (Developer View)
 
-### Current Implementation
-
-```c
-// src/runtime/akira_runtime.c (simplified)
-
-int akira_load_app(const char *name, const char *file_path) {
-    // Step 1: Check if .aot file exists
-    char aot_path[128];
-    snprintf(aot_path, sizeof(aot_path), "/lfs/%s_%s.aot", name, ARCH_NAME);
-    
-    bool is_aot = false;
-    if (fs_exists(aot_path)) {
-        file_path = aot_path;
-        is_aot = true;
-    }
-    
-    // Step 2: Load file into buffer
-    uint8_t *buffer;
-    uint32_t size;
-    load_file_chunked(file_path, &buffer, &size);
-    
-    // Step 3: Load module (WAMR auto-detects .aot vs .wasm)
-    wasm_module_t module = wasm_runtime_load(buffer, size, error_buf, sizeof(error_buf));
-    
-    // Step 4: Instantiate and run
-    wasm_module_inst_t instance = wasm_runtime_instantiate(module, stack_size, heap_size, ...);
-    
-    LOG_INF("Loaded %s in %s mode", name, is_aot ? "AOT" : "interpreter");
-    return 0;
-}
-```
-
 **Key Points:**
 - WAMR auto-detects file format (magic bytes differ)
 - `.wasm` files: `0x00 0x61 0x73 0x6D` (WASM bytecode)
@@ -339,42 +309,6 @@ deploy: app.wasm app_esp32s3.aot
 
 ---
 
-## Future Enhancements
-
-### Planned Features
-
-1. **Auto-Detection Script**
-   ```bash
-   # akira_compile.sh
-   # Detects target platforms and compiles all variants
-   ```
-
-2. **Multi-Arch Bundles**
-   ```
-   app.akira (ZIP container)
-   ├── manifest.json
-   ├── app.wasm
-   ├── esp32s3.aot
-   ├── stm32.aot
-   └── nrf54.aot
-   ```
-
-3. **OTA AOT Updates**
-   - Download AOT binary for current architecture
-   - Verify signature + hash
-   - Hot-swap without reboot
-
-4. **Runtime Performance Metrics**
-   ```c
-   // Expose via shell
-   akira> perf app_name
-   Execution mode: AOT (xtensa)
-   Avg instruction time: 2.3ns
-   Cache hit rate: 94%
-   ```
-
----
-
 ## Best Practices
 
 ### Development Workflow
@@ -385,16 +319,6 @@ deploy: app.wasm app_esp32s3.aot
 4. **Benchmark** (compare interpreter vs AOT performance)
 5. **Deploy hybrid** (AOT + .wasm fallback)
 
-### Deployment Checklist
-
-- [ ] `.wasm` compiled with optimizations (`-O3`)
-- [ ] `.wasm` stripped of debug info (`wasm-strip`)
-- [ ] `.aot` compiled for target architecture
-- [ ] `.aot` size-optimized (`--size-level=3`)
-- [ ] Both files tested on actual hardware
-- [ ] Fallback to .wasm verified
-- [ ] Performance metrics captured
-
 ---
 
 ## Related Documentation
@@ -402,7 +326,7 @@ deploy: app.wasm app_esp32s3.aot
 - [AkiraRuntime Architecture](runtime.md) - Runtime internals
 - [Building WASM Apps](../development/building-apps.md) - Compilation workflow
 - [Performance Benchmarks](../resources/performance.md) - Real-world metrics
-- [Platform Guides](../platform/) - Architecture-specific notes
+- [Platform Guides](../platform) - Architecture-specific notes
 
 ---
 

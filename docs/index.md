@@ -30,10 +30,10 @@ New to AkiraOS? Get up and running in under 15 minutes:
 4. [Troubleshooting](getting-started/troubleshooting.md) — Common issues and fixes
 
 Already familiar? Jump to:
-- [Architecture Documentation](architecture/) — System design deep dive
-- [API Reference](api-reference/) — Complete WASM API docs
+- [Architecture Documentation](architecture) — System design deep dive
+- [API Reference](api-reference) — Complete WASM API docs
 - [SDK API Reference](development/sdk-api-reference.md) — Full Akira SDK function reference
-- [Platform Guides](platform/) — Board-specific setup
+- [Platform Guides](platform) — Board-specific setup
 
 ---
 
@@ -61,13 +61,13 @@ AkiraOS is a production-ready embedded operating system that enables **secure, d
 | Memory per app | 64–256 KB configurable |
 | Boot time | ~500 ms (ESP32-S3) |
 
-[Learn more about the architecture](architecture/)
+[Learn more about the architecture](architecture)
 
 ---
 
 ## Documentation Sections
 
-### [Getting Started](getting-started/)
+### [Getting Started](getting-started)
 
 Install, build, and deploy your first WASM application.
 
@@ -77,7 +77,7 @@ Install, build, and deploy your first WASM application.
 
 ---
 
-### [Architecture](architecture/)
+### [Architecture](architecture)
 
 Deep dive into system design, components, and data flows.
 
@@ -90,18 +90,18 @@ Deep dive into system design, components, and data flows.
 
 ---
 
-### [API Reference](api-reference/)
+### [API Reference](api-reference)
 
 Complete native API documentation for WASM applications.
 
-- [API Overview](api-reference/) — Quick reference
+- [API Overview](api-reference) — Quick reference
 - [Native API](api-reference/native-api.md) — All functions
 - [Manifest Format](api-reference/manifest-format.md) — App metadata
 - [Error Codes](api-reference/error-codes.md) — Return values
 
 ---
 
-### [SDK Developer Guide](development/)
+### [SDK Developer Guide](development)
 
 Complete Akira SDK documentation for WASM app development.
 
@@ -114,11 +114,11 @@ Complete Akira SDK documentation for WASM app development.
 
 ---
 
-### [Platform Guides](platform/)
+### [Platform Guides](platform)
 
 Board-specific setup and configuration.
 
-- [Platform Overview](platform/) — Supported platforms
+- [Platform Overview](platform) — Supported platforms
 - [ESP32-S3 Guide](platform/esp32-s3.md) — Primary platform
 - [ESP32-C3 Guide](platform/esp32-c3.md) — RISC-V variant
 - [Native Simulation](platform/native-sim.md) — Host PC testing
@@ -127,15 +127,15 @@ Board-specific setup and configuration.
 
 ---
 
-### [Hardware](hardware/)
+### [Hardware](hardware)
 
 Custom hardware designs and schematics.
 
-- [AkiraConsole & AkiraMicro](hardware/) — Custom hardware platforms
+- [AkiraConsole & AkiraMicro](hardware) — Custom hardware platforms
 
 ---
 
-### [Resources](resources/)
+### [Resources](resources)
 
 Additional learning materials and references.
 

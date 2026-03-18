@@ -25,7 +25,7 @@ sequenceDiagram
 
     Client->>HTTP: POST /upload (multipart)
     HTTP->>HTTP: Parse boundary
-    HTTP->>Transport: transport_notify(WASM_APP, data, len)
+    HTTP->>Transport: transport_notify(TRANSPORT_DATA_WASM_APP, data, len)
     Transport->>Loader: callback(data, len)
     Loader->>FS: fs_write("/apps/new_app.wasm")
     FS-->>Loader: Written
@@ -52,35 +52,44 @@ sequenceDiagram
 - Runtime chunk: 16KB (temporary)
 - Peak: ~22KB
 
+**Transport Flags:**
+- `TRANSPORT_FLAG_CHUNK_START` - Marks first chunk of transfer
+- `TRANSPORT_FLAG_CHUNK_END` - Marks final chunk, triggers installation
+- `TRANSPORT_FLAG_ABORT` - Cancels transfer, discards data
+
 ---
 
 ## Firmware Update Flow (OTA)
 
-### Network → Flash → MCUboot
+### Network → Transport → OTA Manager → Flash → MCUboot
 
 ```mermaid
 sequenceDiagram
     participant Client as HTTP Client
     participant HTTP as HTTP Server
+    participant Transport as Transport Interface
     participant OTA as OTA Manager
     participant Flash as Flash Driver
     participant MCU as MCUboot
 
     Client->>HTTP: POST /ota/upload
-    HTTP->>OTA: ota_manager_start()
+    HTTP->>Transport: transport_begin(FIRMWARE)
+    Transport->>OTA: ota_data_callback(CHUNK_START)
     OTA->>Flash: Open secondary slot
     
     loop For each chunk
         Client->>HTTP: Send data chunk
-        HTTP->>OTA: write_chunk(data, len)
+        HTTP->>Transport: transport_notify(data, len)
+        Transport->>OTA: ota_data_callback(data)
         OTA->>OTA: Buffer (4KB alignment)
         OTA->>Flash: Write aligned block
     end
     
     Client->>HTTP: Upload complete
-    HTTP->>OTA: ota_manager_finalize()
-    OTA->>OTA: Verify checksum
-    OTA->>Flash: Mark pending
+    HTTP->>Transport: transport_notify(CHUNK_END)
+    Transport->>OTA: ota_data_callback(CHUNK_END)
+    OTA->>OTA: Validate image header
+    OTA->>Flash: Mark pending (boot_request_upgrade)
     OTA-->>HTTP: 200 OK
     HTTP-->>Client: OTA complete
     
@@ -92,12 +101,13 @@ sequenceDiagram
 ```
 
 **Characteristics:**
+- Callback-based via transport interface (no direct HTTP→OTA coupling)
 - Direct flash writes (no message queue overhead)
-- 2 data copies (reduced from 4)
+- 4KB alignment buffering
 - <10 s for 1.1 MB firmware
 - Configurable socket timeout
 
-**Data Copies:** 2 (network buffer → HTTP buffer → flash buffer → flash)
+**Data Copies:** 3 stages (network buffer → HTTP multipart parser → OTA alignment buffer → flash)
 
 **Memory Usage:**
 - HTTP buffer: 1.5KB
@@ -137,11 +147,13 @@ sequenceDiagram
     end
 ```
 
-**Performance:**
-- Hash lookup: ~20ns
-- Capability check: ~10ns (inline)
-- HAL call: ~30ns
+**Performance (estimated):**
+- Hash lookup: ~20ns (WAMR native function resolution)
+- Capability check: ~10ns (inline bitmask check)
+- HAL call: ~30ns (function call overhead)
 - **Total overhead:** ~60ns
+
+> **Note:** These are estimated values. Actual performance depends on hardware, compiler optimization, and cache behavior.
 
 ---
 
@@ -197,11 +209,13 @@ graph LR
 **Call Stack:**
 ```
 wasm_app_code()
-  └─ akira_native_sensor_read()         [~60ns overhead]
+  └─ akira_native_sensor_read()         [~60ns overhead*]
       └─ platform_sensor_read()          [HAL layer]
           └─ i2c_burst_read()             [Zephyr driver]
-              └─ Hardware I2C transaction [~500μs]
+              └─ Hardware I2C transaction [~500μs*]
 ```
+
+> **Note:** Performance metrics marked with * are estimates based on typical embedded system performance. Actual values may vary by hardware and configuration.
 
 ---
 
@@ -231,10 +245,13 @@ sequenceDiagram
     end
 ```
 
-**Quota Limits:**
-- Default: 64KB per app
-- Maximum: 128KB per app
-- Total pool: 256KB PSRAM
+**Quota Configuration:**
+- Per-instance heap: 64KB (WAMR default)
+- Manifest-defined quota: Configurable per app (no hardcoded maximum)
+- Total WAMR heap: 512KB default (configurable)
+- Quota enforcement: Atomic tracking in `akira_wasm_malloc/free`
+
+> **Note:** Memory quotas are specified in app manifests via `memory_quota` field. Apps without quotas use WAMR instance heap limits only.
 
 ---
 
@@ -261,12 +278,16 @@ graph TB
 
 **Write Path:**
 1. `wasm_app_write()` - WASM calls native FS API
-2. Capability check - `CAP_FS_WRITE` verified
-3. Path validation - Restrict to `/data/<app_name>/`
-4. LittleFS write - Wear leveling, journaling
-5. Flash write - Sector erase + program
+2. Capability check - `AKIRA_CAP_STORAGE_WRITE` verified
+3. Path sandboxing - Restrict to app-specific paths:
+   - `/SD:/apps/<app_name>/` (SD card)
+   - `/lfs/apps/<app_name>/` (LittleFS flash)
+   - `/ram/apps/<app_name>/` (RAM filesystem)
+4. Path traversal protection - Reject ".." sequences
+5. LittleFS write - Wear leveling, journaling
+6. Flash write - Sector erase + program
 
-**Read Path:** Similar but checks `CAP_FS_READ`
+**Read Path:** Similar but checks `AKIRA_CAP_STORAGE_READ`
 
 ---
 
@@ -276,10 +297,12 @@ graph TB
 |------|--------|-------------|--------|-------------|---------|
 | **App Upload** | HTTP | File System | 2 | ~22KB | ~200ms (100KB) |
 | **OTA Update** | HTTP | Flash | 2 | ~6KB | ~10s (1.1MB) |
-| **Native Call** | WASM | Hardware | 0 | N/A | ~60ns |
-| **BLE Input** | HID | WASM | 1 | 64B | <5ms |
-| **Sensor Read** | I2C | WASM | 1 | ~16B | ~500μs |
+| **Native Call** | WASM | Hardware | 0 | N/A | ~60ns* |
+| **HID Output** | WASM | BLE Host | 1 | 8-64B | ~5-10ms* |
+| **Sensor Read** | I2C | WASM | 1 | ~16B | ~500μs* |
 | **File Write** | WASM | Flash | 2 | ~4KB | ~10ms |
+
+> **Note:** Latency values marked with * are estimates. Actual performance varies.
 
 ---
 
@@ -288,11 +311,11 @@ graph TB
 ### Current Bottlenecks
 1. **HTTP → FS:** 2 copies (network → HTTP → FS)
 2. **WASM Loading:** File-based (need network streaming)
-3. **Native Calls:** WAMR hash lookup (~20ns)
+3. **Native Calls:** WAMR hash lookup (~20ns estimated overhead)
 
 ### Planned Improvements
 - **Zero-copy networking:** Stream directly to PSRAM
-- **Static jump table:** Remove hash lookup (<50ns calls)
+- **Static jump table:** Remove hash lookup (<50ns calls estimated)
 - **Network streaming:** Load WASM directly from HTTP
 
 

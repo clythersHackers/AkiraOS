@@ -46,6 +46,6 @@ See [CONTRIBUTING.md](../../CONTRIBUTING.md) for contribution guidelines.
 
 ## Related Documentation
 
-- [Architecture](../architecture/) - System design
-- [API Reference](../api-reference/) - Low-level native APIs
+- [Architecture](../architecture) - System design
+- [API Reference](../api-reference) - Low-level native APIs
 - [Troubleshooting](../getting-started/troubleshooting.md) - Build and flash issues

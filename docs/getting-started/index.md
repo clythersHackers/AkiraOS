@@ -53,7 +53,7 @@ graph LR
 | nRF54L15 | Supported | J-Link/SWD | BLE + sensors |
 | STM32 | Experimental | SWD | Limited testing |
 
-[Detailed platform guides →](../platform/)
+[Detailed platform guides →](../platform)
 
 ## Typical Timeline
 
@@ -67,17 +67,17 @@ graph LR
 
 1. **New Users:** Start with [Installation Guide](installation.md)
 2. **Hardware Ready:** Jump to [First App Tutorial](first-app.md)
-3. **Experienced Users:** Check [API Reference](../api-reference/)
+3. **Experienced Users:** Check [API Reference](../api-reference)
 
 ## Getting Help
 
-- **Documentation:** Browse the full [architecture docs](../architecture/)
+- **Documentation:** Browse the full [architecture docs](../architecture)
 - **Issues:** Check [troubleshooting guide](troubleshooting.md)
 - **Community:** GitHub Issues & Discussions
 
 ## Related Documentation
 
-- [System Architecture](../architecture/) - Deep dive into design
-- [API Reference](../api-reference/) - WASM application APIs
-- [Platform Guides](../platform/) - Board-specific setup
-- [Development Guide](../development/) - Advanced topics
+- [System Architecture](../architecture) - Deep dive into design
+- [API Reference](../api-reference) - WASM application APIs
+- [Platform Guides](../platform) - Board-specific setup
+- [Development Guide](../development) - Advanced topics

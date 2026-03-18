@@ -43,12 +43,14 @@ AkiraOS is a high-performance embedded operating system combining **Zephyr RTOS*
 - **Max Concurrent:** 2 running app instances (default via `CONFIG_AKIRA_APP_MAX_RUNNING`)
 - **Max Installed:** 8 apps locally stored (default via `CONFIG_AKIRA_APP_MAX_INSTALLED`)
 - **Languages:** C, Rust, AssemblyScript (compiled to WASM)
-- **APIs:** Display, Input, Sensors, RF, Serial/Pins, IPC
+- **Native APIs:** 18 modules providing hardware and system access - see [AkiraSDK API Reference](../../AkiraSDK/docs/API_REFERENCE.md) for complete API documentation covering BLE, Display, GPIO, HID, I2C, IPC, Lifecycle, Memory, Net (sockets), Power, PWM, RF, Sensors, Storage, Timer, UART, and common utilities
 
 ### Additional System Frameworks
-- **Settings System (NVS):** Binary non-volatile key-value registry storing system configurations (`settings.c`), optionally encrypted. The storage backend is selectable at runtime: internal flash NVS (`AKIRA_SETTINGS_STORAGE_FLASH`), SD card (`AKIRA_SETTINGS_STORAGE_SD`), or auto-detected (`AKIRA_SETTINGS_STORAGE_AUTO`). Values persist across reboots and can be queried via the shell (`settings get <key>`, `settings set <key> <value>`). 
-- **Native UI Framework:** Lightweight widget-based embedded windowing system (`ui_framework.c`) handling screens, rendering dirty-states, and widgets. **This is a native C-only framework and is not exported to WASM.** WASM applications interact with the display exclusively through the [Display API](../../AkiraSDK/docs/API_REFERENCE.md#display-api). 
+- **Settings System (NVS):** Binary non-volatile key-value registry storing system configurations (`settings.c`), optionally encrypted. The storage backend is selectable at runtime: internal flash NVS (`CONFIG_AKIRA_SETTINGS_STORAGE_TYPE_FLASH`), SD card (`CONFIG_AKIRA_SETTINGS_STORAGE_TYPE_SD`), or auto-detected (`CONFIG_AKIRA_SETTINGS_STORAGE_TYPE_AUTO`). Values persist across reboots and can be queried via the shell (`settings get <key>`, `settings set <key> <value>`).
+- **Native UI Framework:** Lightweight widget-based embedded windowing system (`ui_framework.c`) handling screens, rendering dirty-states, and widgets. **This is a native C-only framework and is not exported to WASM.** WASM applications interact with the display exclusively through the [Display API](../../AkiraSDK/docs/API_REFERENCE.md#display-api).
 - **Interactive Shell (CLI):** Advanced UART debugging console (`akira_shell.c`) with namespaces for Network, Storage, RF, and direct Display testing.
+- **Driver Registry:** Dynamic driver registration system (`driver_registry.c`) enabling type-based driver lookup and hot-plugging of hardware components.
+- **Error Codes System:** Standardized error code framework (`error_codes.h`) with errno conventions and domain-specific codes (AKIRA_ERR_BASE=1000) for consistent error handling across APIs.
 - **Core Libraries:** Integrated utilities including `simple_json` avoiding the need for heavy external parsing payloads.
 - **Storage Subsystem:** LittleFS flash partitioning with external SPI/SDMMC SD-Card mounts (`sd_card.c`).
 
@@ -58,8 +60,8 @@ AkiraOS uses a **Thread-per-App Polling Model** rather than an event-loop system
 
 | Thread | Stack Size | Priority | Purpose |
 |--------|------------|----------|---------|
-| Main | 4KB | 5 | App manager, WASM execution |
-| App Threads | Dynamic | 6 | Individual WASM app instances |
+| Main | 4KB | 5 | App manager, system init |
+| App Threads | 8KB (CONFIG_AKIRA_WASM_APP_STACK_SIZE) | 14 | Individual WASM app instances |
 | System Workq | 1KB | - | Kernel background work tasks |
 | HTTP Server | 4KB | 7 | Network requests |
 | OTA/Net Sockets | 4KB | 6 | Firmware updates & Streams |
@@ -111,7 +113,9 @@ WASM thread stacks **MUST** live in internal SRAM, never PSRAM. On ESP32-S3 and 
 3. **FS Mount** - Mount LittleFS partition
 4. **Connectivity** - Start HTTP server, BT advertising
 5. **Runtime Init** - Initialize WAMR, register native functions
-6. **Autostart Apps** - Load configured apps from `/apps/`
+6. **App Manager Ready** - System ready for manual app installation and execution
+
+*Note: Automatic app loading at boot is not currently implemented. Apps must be installed via HTTP/OTA or manually loaded through the runtime API.*
 
 ## Network Stack
 
@@ -160,15 +164,23 @@ graph TB
 ## File System Layout
 
 ```
-/
-├── apps/              # WASM applications
+/lfs/                  # LittleFS (internal flash)
+├── apps/              # WASM applications on flash
 │   ├── app1.wasm
-│   ├── app2.wasm
-│   └── ...
+│   └── app2.wasm
 └── data/              # App persistent data (sandboxed per-app)
     ├── app1/
     └── app2/
+
+/SD:/                  # SD card mount (if available)
+├── apps/              # WASM applications on SD
+└── data/              # SD-based app data
+
+/ram/                  # RAM filesystem (volatile)
+└── apps/              # Temporary WASM apps
 ```
+
+*Note: The system abstracts storage paths - apps access `/apps/` which resolves to the appropriate mount point (`/lfs/apps/`, `/SD:/apps/`, or `/ram/apps/`) based on storage availability and configuration.*
 
 > **System configuration is not stored as files.** WiFi credentials, Bluetooth settings, and other system parameters live in a binary **NVS (Non-Volatile Storage)** key-value registry implemented in `src/settings/settings.c`. There are no `/config/wifi.json` or `/config/bt.json` files on the filesystem.
 
@@ -179,19 +191,21 @@ graph TB
 | `wifi/ssid` | WiFi network name |
 | `wifi/psk` | WiFi pre-shared key (PSK) |
 
-Applications read and write these entries via the shell commands (`wifi set`, `wifi get`) or indirectly through system APIs. Values can optionally be encrypted at rest. The storage backend auto-selects between internal flash NVS (`AKIRA_SETTINGS_STORAGE_FLASH`) and SD card (`AKIRA_SETTINGS_STORAGE_SD`), or detects the best available medium automatically (`AKIRA_SETTINGS_STORAGE_AUTO`).
+Applications read and write these entries via the shell commands (`wifi set`, `wifi get`) or indirectly through system APIs. Values can optionally be encrypted at rest. The storage backend auto-selects between internal flash NVS (`CONFIG_AKIRA_SETTINGS_STORAGE_TYPE_FLASH`) and SD card (`CONFIG_AKIRA_SETTINGS_STORAGE_TYPE_SD`), or detects the best available medium automatically (`CONFIG_AKIRA_SETTINGS_STORAGE_TYPE_AUTO`).
 
 ## Power Management
 
 - **Active Mode:** Full speed (240MHz, WiFi on)
 - **Light Sleep:** CPU halted, peripherals on
-- **Deep Sleep:** Only RTC active (future)
+- **Deep Sleep:** Only RTC active (CONFIG_AKIRA_POWER_DEEP_SLEEP - API implemented, board-dependent support)
 - **Modem Sleep:** WiFi power save mode
 
 ## Real-Time Constraints
 
-| Operation | Deadline | Actual |
-|-----------|----------|--------|
+*Performance estimates based on ESP32-S3 @ 240MHz. Actual values are board and workload dependent.*
+
+| Operation | Deadline | Actual (estimated) |
+|-----------|----------|-----------------|
 | HID Input Event | <5ms | ~2ms |
 | Display Refresh | <16ms (60fps) | ~10ms |
 | Sensor Sampling | <10ms | ~5ms |
@@ -202,9 +216,9 @@ Applications read and write these entries via the shell commands (`wifi set`, `w
 | Metric | Current | Theoretical Max |
 |--------|---------|-----------------|
 | Concurrent Apps | 2 (running) | 8 (memory limited) |
-| WASM File Size | 200KB | 512KB (flash limited) |
-| HTTP Clients | 5 | 16 (Zephyr TCP stack limited) |
-| BLE Connections | 1 | 3 (Zephyr limit) |
+| WASM File Size | 200KB typical | Board-dependent (flash/RAM limited) |
+| HTTP Clients | 4 | 4 (CONFIG limit) |
+| BLE Connections | 1 | 3 (Zephyr BLE stack limit) |
 
 ## Comparison with Alternatives
 
