@@ -282,19 +282,46 @@ config AKIRA_HID
       Enable unified HID (Human Interface Device) subsystem.
       Allows AkiraOS to act as a keyboard, gamepad, or other HID device.
 
-config AKIRA_HID_KEYBOARD
-    bool "Enable keyboard HID profile"
-    default n
-    depends on AKIRA_HID
+if AKIRA_HID
+
+choice AKIRA_HID_MODE
+    prompt "HID device mode"
+    default AKIRA_HID_MODE_KB_MOUSE
     help
-      Enable USB/BLE keyboard HID profile.
+      Select what HID device type to expose over BLE and USB.
+
+config AKIRA_HID_MODE_KB_MOUSE
+    bool "Keyboard + Mouse + Consumer"
+    help
+      Expose keyboard, mouse, and consumer (media keys) reports.
+      Compatible with iOS, macOS, Windows, Android.
+
+config AKIRA_HID_MODE_GAMEPAD
+    bool "Gamepad"
+    help
+      Expose a gamepad with axes, buttons, and hat switch.
+      Not compatible with iOS HOGP — use USB or dedicated gamepad profile.
+
+endchoice
+
+# Derived symbols
+config AKIRA_HID_KEYBOARD
+    bool
+    default y if AKIRA_HID_MODE_KB_MOUSE
+
+config AKIRA_HID_MOUSE
+    bool
+    default y if AKIRA_HID_MODE_KB_MOUSE
 
 config AKIRA_HID_GAMEPAD
-    bool "Enable gamepad HID profile"
-    default n
-    depends on AKIRA_HID
-    help
-      Enable USB/BLE gamepad HID profile.
+    bool
+    default y if AKIRA_HID_MODE_GAMEPAD
+
+config AKIRA_HID_CONSUMER
+    bool
+    default y if AKIRA_HID_MODE_KB_MOUSE
+
+endif # AKIRA_HID
 
 config AKIRA_BT_HID
     bool "Enable Bluetooth HID"
@@ -444,7 +471,7 @@ config BT_RECONNECT_DELAY_MS
 config AKIRA_USB_HID
     bool "Enable USB HID"
     default y
-    depends on AKIRA_HID && AKIRA_USB
+    depends on AKIRA_HID && AKIRA_USB && AKIRA_HID_MODE_KB_MOUSE
     help
       Enable HID over USB.
 

@@ -281,11 +281,11 @@
     
     hid_dev_0: hid_dev_0 {
         compatible = "zephyr,hid-device";
-        protocol-code = "keyboard";
-        in-polling-period-us = <10000>;
-        out-polling-period-us = <10000>;
-        in-report-size = <64>;
-        out-report-size = <64>;
+        protocol-code = "none";
+        in-polling-period-us = <1000>;
+        out-polling-period-us = <1000>;
+        in-report-size = <9>;
+        out-report-size = <2>;
     };
 };
 
