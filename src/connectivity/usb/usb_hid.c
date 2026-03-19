@@ -32,44 +32,45 @@ LOG_MODULE_REGISTER(usb_hid, CONFIG_LOG_DEFAULT_LEVEL);
  * - Byte 1: Reserved (always 0)
  * - Bytes 2-7: Up to 6 simultaneous key codes
  */
-static const uint8_t hid_kbd_report_desc[] = {
-    0x05, 0x01,        /* Usage Page (Generic Desktop) */
-    0x09, 0x06,        /* Usage (Keyboard) */
-    0xA1, 0x01,        /* Collection (Application) */
-    
-    /* Modifier Byte - 8 bits for Ctrl/Shift/Alt/GUI */
-    0x05, 0x07,        /*   Usage Page (Key Codes) */
-    0x19, 0xE0,        /*   Usage Minimum (Left Ctrl) */
-    0x29, 0xE7,        /*   Usage Maximum (Right GUI) */
-    0x15, 0x00,        /*   Logical Minimum (0) */
-    0x25, 0x01,        /*   Logical Maximum (1) */
-    0x75, 0x01,        /*   Report Size (1 bit) */
-    0x95, 0x08,        /*   Report Count (8 bits) */
-    0x81, 0x02,        /*   Input (Data, Variable, Absolute) */
-    
-    /* Reserved Byte */
-    0x75, 0x08,        /*   Report Size (8 bits) */
-    0x95, 0x01,        /*   Report Count (1) */
-    0x81, 0x01,        /*   Input (Constant) */
-    
-    /* Key Array - 6 simultaneous keys */
-    0x05, 0x07,        /*   Usage Page (Key Codes) */
-    0x19, 0x00,        /*   Usage Minimum (0) */
-    0x29, 0x65,        /*   Usage Maximum (101) */
-    0x15, 0x00,        /*   Logical Minimum (0) */
-    0x25, 0x65,        /*   Logical Maximum (101) */
-    0x75, 0x08,        /*   Report Size (8 bits) */
-    0x95, 0x06,        /*   Report Count (6) */
-    0x81, 0x00,        /*   Input (Data, Array) */
-    
-    0xC0               /* End Collection */
+static const uint8_t hid_report_desc[] = {
+   /* Keyboard — Report ID 1 */
+    0x05, 0x01, 0x09, 0x06, 0xA1, 0x01,
+    0x85, 0x01,                          /* Report ID (1) */
+    0x05, 0x07, 0x19, 0xE0, 0x29, 0xE7,
+    0x15, 0x00, 0x25, 0x01,
+    0x75, 0x01, 0x95, 0x08, 0x81, 0x02, /* Modifiers */
+    0x75, 0x08, 0x95, 0x01, 0x81, 0x01, /* Reserved */
+    0x05, 0x08, 0x19, 0x01, 0x29, 0x05, /* LED output */
+    0x75, 0x01, 0x95, 0x05, 0x91, 0x02,
+    0x75, 0x03, 0x95, 0x01, 0x91, 0x01,
+    0x05, 0x07, 0x19, 0x00, 0x29, 0x65,
+    0x15, 0x00, 0x25, 0x65,
+    0x75, 0x08, 0x95, 0x06, 0x81, 0x00, /* Keys */
+    0xC0,
+
+    /* Mouse — Report ID 2 */
+    0x05, 0x01, 0x09, 0x02, 0xA1, 0x01,
+    0x85, 0x02,                          /* Report ID (2) */
+    0x09, 0x01, 0xA1, 0x00,
+    0x05, 0x09, 0x19, 0x01, 0x29, 0x05, /* 5 buttons */
+    0x15, 0x00, 0x25, 0x01,
+    0x75, 0x01, 0x95, 0x05, 0x81, 0x02,
+    0x75, 0x03, 0x95, 0x01, 0x81, 0x01, /* padding */
+    0x05, 0x01, 0x09, 0x30, 0x09, 0x31, /* X, Y */
+    0x15, 0x81, 0x25, 0x7F,
+    0x75, 0x08, 0x95, 0x02, 0x81, 0x06,
+    0x09, 0x38,                          /* Wheel */
+    0x15, 0x81, 0x25, 0x7F,
+    0x75, 0x08, 0x95, 0x01, 0x81, 0x06,
+    0xC0, 0xC0,
 };
 
 /*===========================================================================*/
 /* Constants                                                                  */
 /*===========================================================================*/
 
-#define USB_HID_KEYBOARD_REPORT_SIZE    8
+#define USB_HID_KEYBOARD_REPORT_SIZE    9
+#define USB_HID_MOUSE_REPORT_SIZE       5
 #define USB_HID_PROTOCOL_BOOT           0
 #define USB_HID_PROTOCOL_REPORT         1
 
@@ -143,18 +144,23 @@ static int usb_hid_get_report(const struct device *dev,
     ARG_UNUSED(dev);
     ARG_UNUSED(id);
     
-    if (type != HID_REPORT_TYPE_INPUT) {
-        return -ENOTSUP;
+    if (type != HID_REPORT_TYPE_INPUT) return -ENOTSUP;
+
+    if (id == 1) {
+        if (len < USB_HID_KEYBOARD_REPORT_SIZE){
+            return -ENOBUFS;
+        }
+        memset(buf, 0, USB_HID_KEYBOARD_REPORT_SIZE);
+        return USB_HID_KEYBOARD_REPORT_SIZE;
+    } else if (id == 2) {
+        if (len < USB_HID_MOUSE_REPORT_SIZE){
+            return -ENOBUFS;
+        }
+        memset(buf, 0, USB_HID_MOUSE_REPORT_SIZE);
+        return USB_HID_MOUSE_REPORT_SIZE;
     }
-    
-    if (len < USB_HID_KEYBOARD_REPORT_SIZE) {
-        return -ENOBUFS;
-    }
-    
-    /* Return current keyboard state - all zeros for now */
-    memset(buf, 0, USB_HID_KEYBOARD_REPORT_SIZE);
-    
-    return USB_HID_KEYBOARD_REPORT_SIZE;
+
+    return -ENOTSUP;
 }
 
 /**
@@ -331,8 +337,8 @@ static int usb_hid_transport_init_fn(hid_device_type_t device_types)
     
     /* Register HID device with report descriptor and callbacks */
     ret = hid_device_register(usb_hid_ctx.hid_dev,
-                              hid_kbd_report_desc,
-                              sizeof(hid_kbd_report_desc),
+                              hid_report_desc,
+                              sizeof(hid_report_desc),
                               &usb_hid_ops);
     if (ret) {
         LOG_ERR("Failed to register HID device: %d", ret);
@@ -439,7 +445,7 @@ static bool usb_hid_transport_is_connected(void)
 static int usb_hid_transport_send_keyboard(const hid_keyboard_report_t *report)
 {
     int ret;
-    uint8_t report_buf[USB_HID_KEYBOARD_REPORT_SIZE];
+    static uint8_t __aligned(4) report_buf[USB_HID_KEYBOARD_REPORT_SIZE];
     
     if (!usb_hid_ctx.initialized || !report) {
         return -EINVAL;
@@ -459,9 +465,10 @@ static int usb_hid_transport_send_keyboard(const hid_keyboard_report_t *report)
     }
     
     /* Build HID keyboard report */
-    report_buf[0] = report->modifiers;      /* Modifier byte */
-    report_buf[1] = 0;                      /* Reserved byte */
-    memcpy(&report_buf[2], report->keys, HID_MAX_KEYS);  /* Key array (6 bytes) */
+    report_buf[0] = 0x01;
+    report_buf[1] = report->modifiers; 
+    report_buf[2] = 0;
+    memcpy(&report_buf[3], report->keys, HID_MAX_KEYS);  /* Key array (6 bytes) */
     
     k_mutex_unlock(&usb_hid_ctx.mutex);
     
@@ -474,8 +481,8 @@ static int usb_hid_transport_send_keyboard(const hid_keyboard_report_t *report)
     
     /* Send report via USB HID */
     ret = hid_device_submit_report(usb_hid_ctx.hid_dev, 
-                                   USB_HID_KEYBOARD_REPORT_SIZE,
-                                   report_buf);
+                                    USB_HID_KEYBOARD_REPORT_SIZE,
+                                    report_buf);
     
     if (ret) {
         k_sem_give(&usb_hid_ctx.report_sem);
@@ -493,10 +500,74 @@ static int usb_hid_transport_send_keyboard(const hid_keyboard_report_t *report)
     return 0;
 }
 
+
+/**
+ * @brief Send mouse report via USB HID
+ * 
+ * @param report Pointer to mouse report structure
+ * @return 0 on success, negative error code on failure
+ */
+static int usb_hid_transport_send_mouse(const hid_mouse_report_t *report)
+{
+    int ret;
+    static uint8_t __aligned(4) report_buf[USB_HID_MOUSE_REPORT_SIZE];
+    
+    if (!usb_hid_ctx.initialized || !report) {
+        return -EINVAL;
+    }
+    
+    k_mutex_lock(&usb_hid_ctx.mutex, K_FOREVER);
+    
+    /* Check if we can send reports */
+    if (!usb_hid_ctx.enabled) {
+        k_mutex_unlock(&usb_hid_ctx.mutex);
+        return -EAGAIN;
+    }
+    
+    if (!usb_hid_ctx.interface_ready) {
+        k_mutex_unlock(&usb_hid_ctx.mutex);
+        return -EAGAIN;
+    }
+    
+    /* Build HID mouse report */
+    report_buf[0] = 0x02;
+    report_buf[1] = report->buttons;      /* Button byte */
+    report_buf[2] = report->dx;           /* X movement */
+    report_buf[3] = report->dy;           /* Y movement */
+    report_buf[4] = report->wheel;        /* Wheel movement */
+    
+    k_mutex_unlock(&usb_hid_ctx.mutex);
+    
+    /* Wait for previous report to complete (non-blocking with timeout) */
+    ret = k_sem_take(&usb_hid_ctx.report_sem, K_MSEC(100));
+    if (ret) {
+        LOG_WRN("Timeout waiting for previous report to complete");
+        return -EBUSY;
+    }
+    
+    /* Send report via USB HID */
+    ret = hid_device_submit_report(usb_hid_ctx.hid_dev, 
+                                   USB_HID_MOUSE_REPORT_SIZE,
+                                   report_buf);
+    
+    if (ret) {
+        k_sem_give(&usb_hid_ctx.report_sem);
+        LOG_ERR("Failed to send mouse report: %d", ret);
+        return ret;
+    }
+    
+    LOG_INF("Sent mouse report: buttons=0x%02x dx=%d dy=%d wheel=%d",
+            report->buttons, report->dx, report->dy, report->wheel);
+    
+    /* Semaphore will be released in input_report_done callback */
+    
+    return 0;
+}
+
 /**
  * @brief Send gamepad report via USB HID
  * 
- * @note Currently not implemented - keyboard only
+ * @note Currently not implemented - keyboard and mouse supported only
  */
 static int usb_hid_transport_send_gamepad(const hid_gamepad_report_t *report)
 {
@@ -513,6 +584,7 @@ static const hid_transport_ops_t usb_hid_transport_ops = {
     .enable = usb_hid_transport_enable,
     .disable = usb_hid_transport_disable,
     .is_connected = usb_hid_transport_is_connected,
+    .send_mouse = usb_hid_transport_send_mouse,
     .send_keyboard = usb_hid_transport_send_keyboard,
     .send_gamepad = usb_hid_transport_send_gamepad,
 };
