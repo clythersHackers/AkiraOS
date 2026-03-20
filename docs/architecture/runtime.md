@@ -131,6 +131,7 @@ Load WASM binaries from LittleFS with reduced memory footprint.
 
 **Loading Flow:**
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'signalColor': '#ffffff', 'signalTextColor': '#ffffff', 'labelTextColor': '#ffffff', 'noteBkgColor': '#2d2d2d', 'noteTextColor': '#ffffff', 'activationBkgColor': '#4A90E2', 'sequenceNumberColor': '#ffffff'}}}%%
 sequenceDiagram
     participant APP as App Manager
     participant FS as File System
