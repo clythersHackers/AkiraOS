@@ -42,7 +42,7 @@
     status = "okay";
     pinctrl-0 = <&spim2_default>;
     pinctrl-names = "default";
-    clock-frequency = <80000000>; // 20 MHz for display (LR1121 will override with its own max)
+    clock-frequency = <1600000000>; // For display (LR1121 will override with its own max)
     
     // CS GPIO array: GPIO38 for LR1121, GPIO10 for ST7789, GPIO14 for SD card
     cs-gpios = <&gpio1 6 GPIO_ACTIVE_LOW>,  // CS0: GPIO38 for LR1121
@@ -127,7 +127,7 @@
 
         st7789v_akiraconsole: st7789v@1 {
             compatible = "sitronix,st7789v";
-            mipi-max-frequency = <60000000>;
+            mipi-max-frequency = <1600000000>;
             reg = <1>;
             width = <320>;
             height = <240>;

@@ -326,6 +326,46 @@ config AKIRA_USB
     help
       Enable Akira USB Manager for MASS and USB HID
 
+config AKIRA_USB_CDC_SERIAL
+    bool "Enable USB CDC serial JSON-RPC transport"
+    default n
+    depends on AKIRA_USB && USB_CDC_ACM
+    select BASE64
+    help
+      Expose the AkiraOS management API over a USB CDC ACM virtual COM port
+      using newline-delimited JSON-RPC 2.0.  Allows a browser running the
+      hosted web UI (e.g. lab.akiraos.io) to manage the device over USB
+      via the Web Serial API without requiring WiFi connectivity.
+
+      Requires CONFIG_USB_CDC_ACM=y and a DT chosen node
+      zephyr,cdc-acm-uart pointing to the CDC UART instance.
+
+config AKIRA_USB_CDC_SERIAL_STACK_SIZE
+    int "CDC serial RX thread stack size (bytes)"
+    default 2048
+    depends on AKIRA_USB_CDC_SERIAL
+    help
+      Stack size for the JSON-RPC reader thread.
+      Increase if handler callbacks perform deep call chains.
+
+config AKIRA_USB_CDC_SERIAL_RX_BUF_SIZE
+    int "CDC serial RX ring buffer size (bytes)"
+    default 2048
+    range 512 8192
+    depends on AKIRA_USB_CDC_SERIAL
+    help
+      Size of the ring buffer that holds bytes received from the USB host
+      before the reader thread can process them.
+
+config AKIRA_USB_CDC_SERIAL_TX_BUF_SIZE
+    int "CDC serial TX ring buffer size (bytes)"
+    default 4096
+    range 1024 16384
+    depends on AKIRA_USB_CDC_SERIAL
+    help
+      Size of the ring buffer that queues outgoing JSON-RPC responses and
+      event notifications on their way to the USB host.
+
 config AKIRA_MODULE_WIFI
     bool "Enable Akira Connectivity module (WiFi/BLE/Cloud)"
     default n
@@ -396,6 +436,43 @@ config AKIRA_BT_ECHO
       Enable a small developer GATT Echo service. The service receives writes
       and echoes the payload back via notifications. Useful for testing and
       debugging BT connectivity. Can also be toggled at runtime via shell.
+
+config AKIRA_BT_COMPANION
+    bool "Enable Bluetooth Companion Service"
+    default n
+    depends on BT && BT_PERIPHERAL && BT_GATT_DYNAMIC_DB
+    help
+      Enable the AkiraOS Companion GATT service used by the AkiraApp mobile
+      application (Android / iOS).  Provides BLE-based remote management:
+      app install/uninstall, OTA firmware update, settings read/write, device
+      status notifications, shell command passthrough, and LittleFS file
+      browser.
+
+      Mutually exclusive with BT_MODE_HID — only one BLE mode may be active
+      at a time.  The active mode is selected from the Settings menu or via
+      the shell command 'bt mode companion'.
+
+      Requires BT_MAX_CONN >= 1 and BT_GATT_DYNAMIC_DB=y.
+
+config AKIRA_BT_COMPANION_STATUS_INTERVAL_MS
+    int "Companion status notification interval (ms)"
+    default 60000
+    range 5000 300000
+    depends on AKIRA_BT_COMPANION
+    help
+      How often the device pushes an unsolicited device.status notification
+      to a connected companion app.  Default 60 seconds matches the cloud
+      heartbeat interval.
+
+config AKIRA_BT_COMPANION_MAX_TRANSFER_KB
+    int "Maximum BLE file/app transfer size (kB)"
+    default 512
+    range 16 2048
+    depends on AKIRA_BT_COMPANION
+    help
+      Maximum size of a single file or app binary transferred over BLE.
+      Affects the size of the staging buffer allocated at transfer start.
+      Ensure adequate heap is available (PSRAM recommended).
 
 menu "Advanced Connectivity"
 
