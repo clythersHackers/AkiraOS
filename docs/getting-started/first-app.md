@@ -12,10 +12,10 @@ Create, build, and deploy a "Hello World" WebAssembly application on AkiraOS.
 ## Prerequisites
 
 - AkiraOS firmware flashed and running on a device (or `native_sim` built)
-- WASI SDK installed (see below)
+- WASI SDK installed as build toolchain (see below — provides clang/lld, not WASI runtime)
 - Basic C programming knowledge
 
-## Install WASI SDK
+## Install WASI SDK (build toolchain)
 
 ```bash
 WASI_VERSION=24
@@ -24,7 +24,7 @@ sudo tar xvf wasi-sdk-${WASI_VERSION}.0-x86_64-linux.tar.gz -C /opt
 sudo ln -sf /opt/wasi-sdk-${WASI_VERSION}.0 /opt/wasi-sdk
 ```
 
-> **Note:** Install to `/opt/wasi-sdk` (the default path all sample Makefiles expect) or set `WASI_SDK=/your/path`.
+> **Note:** The WASI SDK is used as a compiler toolchain only (clang + lld targeting `wasm32-unknown-unknown`). AkiraOS apps do **not** use WASI interfaces at runtime — install to `/opt/wasi-sdk` (the default path all sample Makefiles expect) or set `WASI_SDK=/your/path`.
 
 ---
 

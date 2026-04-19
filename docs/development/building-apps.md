@@ -4,7 +4,9 @@ Complete guide to developing WebAssembly applications for AkiraOS.
 
 ## Toolchain Setup
 
-### WASI SDK (Recommended)
+### WASI SDK (build toolchain only)
+
+The WASI SDK provides the clang/lld toolchain used to compile `.wasm` binaries. AkiraOS apps target `wasm32-unknown-unknown` — **not** the WASI runtime. No WASI system calls are used at runtime.
 
 ```bash
 cd ~
