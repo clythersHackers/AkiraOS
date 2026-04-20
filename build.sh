@@ -37,7 +37,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
 
-
 # Defaults
 BOARD="native_sim"
 BUILD_BOOTLOADER=""       # "", "y" (with app), "o" (only)
@@ -46,12 +45,8 @@ ERASE_FLASH=false
 GENERATE_SBOM=false
 CLEAN_BUILD=false
 FULL_CLEAN=false
-RUN_TESTS=false
-USE_PLATFORM=false
-AKIRA_PLATFORM_PATH=""
 PORT=""
 BAUD="921600"
-WEST_RUNNER=""          # "", or a west runner name e.g. "openocd", "jlink"
 
 # Version (read from VERSION file)
 _ver_file="$SCRIPT_DIR/VERSION"
@@ -147,13 +142,9 @@ ${BOLD}OPTIONS:${NC}
     -e              Erase flash before flashing
     -s              Generate SBOM (Software Bill of Materials)
     -c              Clean build artifacts for selected board
-    --test          Build and run ztest suite on native_sim (ignores -b flag)
-    --platform      Include AkiraPlatform commercial overlay in the build.
-                    Optional: --platform /custom/path (default: ../AkiraPlatform)
     --full-clean    Reset to pristine state (remove ALL build dirs)
     -p <port>       Serial port for flashing (default: auto-detect)
     --baud <rate>   Baud rate for flashing (default: 921600)
-    --runner <r>    Override west flash runner (e.g. openocd, jlink, stm32cubeprogrammer)
     -h, --help      Show this help message
 
 EOF
@@ -190,12 +181,6 @@ ${BOLD}EXAMPLES:${NC}
 
     ./build.sh --full-clean
         Remove all build directories
-
-    ./build.sh -b akiraconsole --platform
-        Build AkiraOS + AkiraPlatform overlay (auto-detected at ../AkiraPlatform)
-
-    ./build.sh -b akiraconsole --platform /opt/akira/platform
-        Build with AkiraPlatform at a custom path
 
 ${BOLD}FLASH ADDRESSES (ESP32):${NC}
     MCUboot:     0x1000
@@ -288,26 +273,10 @@ build_mcuboot() {
     # EXTRA_DTC_OVERLAY_FILE mirrors what sysbuild does automatically — it
     # ensures MCUboot's compiled-in partition layout matches the app's layout.
     local extra_cmake="-DBOARD_ROOT=$SCRIPT_DIR -DDTS_ROOT=$SCRIPT_DIR"
-    # Prefer a board-specific MCUboot overlay (boards/<board>.mcuboot.overlay) so
-    # MCUboot can diverge from the app overlay (e.g. IWDG disabled in MCUboot to
-    # avoid a reset loop during slow RSA-2048 signature verification).
-    # Fall back to the regular app overlay so partition layout always matches.
-    local mcuboot_overlay="$SCRIPT_DIR/boards/${BOARD}.mcuboot.overlay"
     local board_overlay="$SCRIPT_DIR/boards/${BOARD}.overlay"
-    if [[ -f "$mcuboot_overlay" ]]; then
-        # Merge: base app overlay first (partitions/chosen), then MCUboot overrides
-        extra_cmake+=" -DEXTRA_DTC_OVERLAY_FILE='${board_overlay};${mcuboot_overlay}'"
-        print_info "MCUboot overlay: $board_overlay + $mcuboot_overlay"
-    elif [[ -f "$board_overlay" ]]; then
+    if [[ -f "$board_overlay" ]]; then
         extra_cmake+=" -DEXTRA_DTC_OVERLAY_FILE=$board_overlay"
         print_info "MCUboot overlay: $board_overlay"
-    fi
-
-    # Board-specific MCUboot Kconfig overrides (e.g. RTT console, logging)
-    local mcuboot_conf="$SCRIPT_DIR/boards/${BOARD}.mcuboot.conf"
-    if [[ -f "$mcuboot_conf" ]]; then
-        extra_cmake+=" -DEXTRA_CONF_FILE=$mcuboot_conf"
-        print_info "MCUboot conf: $mcuboot_conf"
     fi
 
     cd "$WORKSPACE_ROOT"
@@ -333,21 +302,7 @@ build_application() {
     cd "$WORKSPACE_ROOT"
     unset ZEPHYR_BASE
     
-    local platform_cmake=""
-    if [[ "$USE_PLATFORM" == true ]]; then
-        # Resolve path: explicit --platform <path>, or default sibling directory
-        if [[ -z "$AKIRA_PLATFORM_PATH" ]]; then
-            AKIRA_PLATFORM_PATH="$(dirname "$WORKSPACE_ROOT")/AkiraPlatform"
-        fi
-        if [[ ! -d "$AKIRA_PLATFORM_PATH" ]]; then
-            print_error "AkiraPlatform not found at: $AKIRA_PLATFORM_PATH"
-            exit 1
-        fi
-        platform_cmake=" -DZEPHYR_EXTRA_MODULES=$AKIRA_PLATFORM_PATH"
-        print_info "AkiraPlatform: $AKIRA_PLATFORM_PATH"
-    fi
-
-    if west build --pristine -b "$zephyr_board" AkiraOS -d "$build_dir" -- -DMODULE_EXT_ROOT="$WORKSPACE_ROOT/AkiraOS"$platform_cmake; then
+    if west build --pristine -b "$zephyr_board" AkiraOS -d "$build_dir" -- -DMODULE_EXT_ROOT="$WORKSPACE_ROOT/AkiraOS"; then
         print_success "AkiraOS build complete!"
         print_info "Binary: $build_dir/zephyr/zephyr.bin"
         
@@ -368,40 +323,14 @@ build_application() {
 run_native_sim() {
     local build_dir=$(get_build_dir)
     local exe="$build_dir/zephyr/zephyr.exe"
-
+    
     if [[ ! -f "$exe" ]]; then
         print_error "Executable not found: $exe"
         print_info "Run build first: ./build.sh"
         exit 1
     fi
-
+    
     print_step "Running AkiraOS native simulator..."
-    echo ""
-    "$exe"
-}
-
-run_tests() {
-    local test_build_dir="$WORKSPACE_ROOT/build-tests"
-
-    print_step "Building test suite (native_sim)..."
-    cd "$WORKSPACE_ROOT"
-    unset ZEPHYR_BASE
-
-    if west build --pristine -b native_sim AkiraOS/tests -d "$test_build_dir" -- \
-        -DMODULE_EXT_ROOT="$WORKSPACE_ROOT/AkiraOS"; then
-        print_success "Test build complete!"
-    else
-        print_error "Test build failed!"
-        exit 1
-    fi
-
-    local exe="$test_build_dir/zephyr/zephyr.exe"
-    if [[ ! -f "$exe" ]]; then
-        print_error "Test binary not found: $exe"
-        exit 1
-    fi
-
-    print_step "Running ztest suite..."
     echo ""
     "$exe"
 }
@@ -462,43 +391,8 @@ flash_esp32() {
         erase_flash
     fi
     
-    # Flash bootloader and/or application.
-    # Both are written in a SINGLE esptool invocation when flashing "all" to
-    # avoid the chip booting into MCUboot between two separate connections
-    # (which causes "Wrong boot mode detected" on the second connect).
-    if [[ "$FLASH_TARGET" == "all" ]]; then
-        local bootloader_bin="$mcuboot_dir/zephyr/zephyr.bin"
-        local app_bin="$build_dir/zephyr/zephyr.signed.bin"
-        if [[ ! -f "$app_bin" ]]; then
-            app_bin="$build_dir/zephyr/zephyr.bin"
-        fi
-
-        if [[ ! -f "$bootloader_bin" ]]; then
-            print_error "MCUboot binary not found: $bootloader_bin"
-            print_info "Build bootloader first: ./build.sh -b $BOARD -bl o"
-            exit 1
-        fi
-        if [[ ! -f "$app_bin" ]]; then
-            print_error "Application binary not found in $build_dir/zephyr/"
-            print_info "Build application first: ./build.sh -b $BOARD"
-            exit 1
-        fi
-
-        local bootloader_offset="0x0"
-        if [[ "$chip" == "esp32" ]]; then
-            bootloader_offset="0x1000"
-        fi
-
-        print_step "Flashing MCUboot ($bootloader_offset) + AkiraOS (0x20000) in one pass"
-        esptool --chip "$chip" --port "$PORT" --baud "$BAUD" \
-            write_flash "$bootloader_offset" "$bootloader_bin" \
-                        0x20000              "$app_bin"
-        print_success "MCUboot + AkiraOS flashed!"
-        return
-    fi
-
-    # Flash bootloader only
-    if [[ "$FLASH_TARGET" == "b" ]]; then
+    # Flash bootloader
+    if [[ "$FLASH_TARGET" == "b" || "$FLASH_TARGET" == "all" ]]; then
         local bootloader_bin="$mcuboot_dir/zephyr/zephyr.bin"
         
         if [[ ! -f "$bootloader_bin" ]]; then
@@ -518,8 +412,8 @@ flash_esp32() {
         print_success "MCUboot flashed!"
     fi
     
-    # Flash application only
-    if [[ "$FLASH_TARGET" == "a" ]]; then
+    # Flash application
+    if [[ "$FLASH_TARGET" == "a" || "$FLASH_TARGET" == "all" ]]; then
         # Try signed binary first, fall back to unsigned
         local app_bin="$build_dir/zephyr/zephyr.signed.bin"
         if [[ ! -f "$app_bin" ]]; then
@@ -566,23 +460,6 @@ flash_stm32() {
     [[ -f "$app_hex" ]] || app_hex="$build_dir/zephyr/zephyr.hex"
     local mcuboot_hex="$mcuboot_dir/zephyr/zephyr.hex"
 
-    # Build west flash runner args. A board-specific openocd cfg in boards/ is
-    # automatically injected when the openocd runner is selected (or defaulted to).
-    local runner_args=()
-    local effective_runner="${WEST_RUNNER}"
-    local board_openocd_cfg="$SCRIPT_DIR/boards/${BOARD}.openocd.cfg"
-    if [[ -z "$effective_runner" && -f "$board_openocd_cfg" ]]; then
-        # Board has a custom OpenOCD config (e.g. J-Link) — switch from default runner
-        effective_runner="openocd"
-        print_info "Board-specific OpenOCD config found — using openocd runner"
-    fi
-    if [[ -n "$effective_runner" ]]; then
-        runner_args+=(--runner "$effective_runner")
-    fi
-    if [[ "$effective_runner" == "openocd" && -f "$board_openocd_cfg" ]]; then
-        runner_args+=(-- --config "$board_openocd_cfg")
-    fi
-
     # STM32CubeProgrammer (default runner for this board) passes --erase to the CLI,
     # which does a FULL chip erase.  Calling west flash twice therefore erases MCUboot
     # when the app is subsequently flashed.  Merge both hex files into a single file
@@ -591,64 +468,12 @@ flash_stm32() {
         local hex1="$1" hex2="$2" out="$3"
         python3 - "$hex1" "$hex2" "$out" << 'PYEOF'
 import sys
-
-def checksum(byte_vals):
-    return (256 - (sum(byte_vals) & 0xFF)) & 0xFF
-
-def parse_hex(filename):
-    """Parse Intel HEX file into a list of (abs_address, bytes) chunks."""
-    chunks = []
-    ela = 0
-    with open(filename) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line[0] != ':':
-                continue
-            byte_count = int(line[1:3], 16)
-            addr16     = int(line[3:7], 16)
-            rec_type   = int(line[7:9], 16)
-            data       = bytes.fromhex(line[9:9 + byte_count * 2])
-            if rec_type == 0:   # Data
-                chunks.append((ela | addr16, data))
-            elif rec_type == 1:  # EOF
-                break
-            elif rec_type == 2:  # Extended Segment Address
-                ela = ((data[0] << 8) | data[1]) << 4
-            elif rec_type == 4:  # Extended Linear Address
-                ela = ((data[0] << 8) | data[1]) << 16
-    return chunks
-
-def write_hex(chunks, filename):
-    """Write chunks sorted by address as a clean Intel HEX file."""
-    chunks.sort(key=lambda c: c[0])
-    current_ela = None
-    lines = []
-    for abs_addr, data in chunks:
-        offset = 0
-        while offset < len(data):
-            row_addr = abs_addr + offset
-            ela      = row_addr >> 16
-            low      = row_addr & 0xFFFF
-            if ela != current_ela:
-                ela_hi, ela_lo = (ela >> 8) & 0xFF, ela & 0xFF
-                cs = checksum([0x02, 0x00, 0x00, 0x04, ela_hi, ela_lo])
-                lines.append(f':02000004{ela_hi:02X}{ela_lo:02X}{cs:02X}')
-                current_ela = ela
-            row     = data[offset:offset + 16]
-            n       = len(row)
-            addr_hi = (low >> 8) & 0xFF
-            addr_lo = low & 0xFF
-            cs = checksum([n, addr_hi, addr_lo, 0x00] + list(row))
-            lines.append(f':{n:02X}{addr_hi:02X}{addr_lo:02X}00'
-                         + ''.join(f'{b:02X}' for b in row)
-                         + f'{cs:02X}')
-            offset += 16
-    lines.append(':00000001FF')
-    with open(filename, 'w') as f:
-        f.write('\n'.join(lines) + '\n')
-
-chunks = parse_hex(sys.argv[1]) + parse_hex(sys.argv[2])
-write_hex(chunks, sys.argv[3])
+lines1 = open(sys.argv[1]).read().strip().splitlines()
+lines2 = open(sys.argv[2]).read().strip().splitlines()
+# Strip EOF record from first file; keep EOF only at the very end
+lines1 = [l for l in lines1 if l.strip() != ':00000001FF']
+with open(sys.argv[3], 'w') as f:
+    f.write('\n'.join(lines1 + lines2) + '\n')
 PYEOF
     }
 
@@ -668,13 +493,13 @@ PYEOF
         print_info "Merging MCUboot + AkiraOS hex files..."
         stm32_merge_hex "$mcuboot_hex" "$app_hex" "$merged_hex"
         print_step "Flashing MCUboot + AkiraOS (STM32, single-pass)..."
-        west flash -d "$mcuboot_dir" "${runner_args[@]}" --hex-file "$merged_hex"
+        west flash -d "$mcuboot_dir" --hex-file "$merged_hex"
         rm -f "$merged_hex"
         print_success "MCUboot + AkiraOS flashed!"
 
     elif [[ "$FLASH_TARGET" == "b" ]]; then
         print_step "Flashing MCUboot (STM32)..."
-        west flash -d "$mcuboot_dir" "${runner_args[@]}"
+        west flash -d "$mcuboot_dir"
         print_success "MCUboot flashed!"
 
     elif [[ "$FLASH_TARGET" == "a" ]]; then
@@ -684,11 +509,11 @@ PYEOF
             merged_hex="$(mktemp /tmp/akira_merged_XXXXXX.hex)"
             print_info "Preserving MCUboot — merging before flash..."
             stm32_merge_hex "$mcuboot_hex" "$app_hex" "$merged_hex"
-            west flash -d "$mcuboot_dir" "${runner_args[@]}" --hex-file "$merged_hex"
+            west flash -d "$mcuboot_dir" --hex-file "$merged_hex"
             rm -f "$merged_hex"
         else
             print_warning "MCUboot not built — flashing app alone (MCUboot will be erased!)"
-            west flash -d "$build_dir" "${runner_args[@]}"
+            west flash -d "$build_dir"
         fi
         print_success "AkiraOS flashed!"
     fi
@@ -734,7 +559,11 @@ generate_sbom() {
         cat > "$sbom_file" << EOF
 {
     "name": "AkiraOS",
+<<<<<<< HEAD
+    "version": "1.5.x",
+=======
     "version": "${AKIRA_VERSION}",
+>>>>>>> 36047f5 (feat(boards): add nucleo_l476rg board support)
     "board": "$BOARD",
     "zephyr_board": "${BOARD_MAP[$BOARD]}",
     "build_date": "$(date -Iseconds)",
@@ -794,29 +623,12 @@ parse_args() {
                 CLEAN_BUILD=true
                 shift
                 ;;
-            --test)
-                RUN_TESTS=true
-                shift
-                ;;
-            --platform)
-                USE_PLATFORM=true
-                # Optional next argument: custom path (if not another flag)
-                if [[ $# -gt 1 && "$2" != -* ]]; then
-                    AKIRA_PLATFORM_PATH="$2"
-                    shift
-                fi
-                shift
-                ;;
             -p)
                 PORT="$2"
                 shift 2
                 ;;
             --baud)
                 BAUD="$2"
-                shift 2
-                ;;
-            --runner)
-                WEST_RUNNER="$2"
                 shift 2
                 ;;
             -h|--help)
@@ -837,14 +649,9 @@ parse_args() {
 # =============================================================================
 main() {
     parse_args "$@"
-
+    
     show_banner
-
-    if [[ "$RUN_TESTS" == true ]]; then
-        run_tests
-        exit 0
-    fi
-
+    
     # Validate board
     validate_board
     check_tools
@@ -854,7 +661,6 @@ main() {
     echo "  Zephyr:      ${BOARD_MAP[$BOARD]}"
     echo "  Bootloader:  ${BUILD_BOOTLOADER:-no}"
     echo "  Flash:       ${FLASH_TARGET:-no}"
-    echo "  Runner:      ${WEST_RUNNER:-auto}"
     echo "  Erase:       $ERASE_FLASH"
     echo "  SBOM:        $GENERATE_SBOM"
     echo "  Clean:       $CLEAN_BUILD"
