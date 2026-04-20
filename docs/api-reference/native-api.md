@@ -4,7 +4,7 @@ Complete reference for all AkiraOS native functions callable from WASM.
 
 > **Note:** This is a custom API, **not WASI**. It's designed specifically for embedded systems and real-time constraints.
 > 
-> For the full, up-to-date function list with examples, see the canonical **[AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/API_REFERENCE.md)**.  
+> For the full, up-to-date function list with examples, see the canonical **[AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.5.x/docs/API_REFERENCE.md)**.  
 > Use `#include "akira_api.h"` from `AkiraSDK/include/` — it declares all exports, color constants, and `SENSOR_CHAN_*` defines.
 
 ## Import Declaration
@@ -107,13 +107,13 @@ Flush framebuffer to physical display. An auto-flush fires 50 ms after the last 
 extern int display_flush(void);
 ```
 
-> Full display API (20+ functions: `display_line`, `display_circle`, `display_bitmap`, `display_progress_bar`, `display_rounded_rect`, etc.) — see [AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/API_REFERENCE.md#display-api).
+> Full display API (20+ functions: `display_line`, `display_circle`, `display_bitmap`, `display_progress_bar`, `display_rounded_rect`, etc.) — see [AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.5.x/docs/API_REFERENCE.md#display-api).
 
 ---
 
 ## Input Functions
 
-> `input_read_buttons`, `input_read_touch`, and `input_read_analog` are not registered native exports in the current runtime (`src/api/akira_export_api.c`). Check [AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/API_REFERENCE.md) for the current input API.
+> `input_read_buttons`, `input_read_touch`, and `input_read_analog` are not registered native exports in the current runtime (`src/api/akira_export_api.c`). Check [AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.5.x/docs/API_REFERENCE.md) for the current input API.
 
 ---
 
@@ -183,7 +183,7 @@ extern int sensor_list(uint32_t *buffer, uint32_t max_count);
 > **Work In Progress:** The RF module is implemented but still under active development. Use with caution in production environments.
 
 > **Available only when `CONFIG_AKIRA_RF_FRAMEWORK=y`.**  
-> See [AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/API_REFERENCE.md#rf-api) for full RF reference.
+> See [AkiraSDK API_REFERENCE.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.5.x/docs/API_REFERENCE.md#rf-api) for full RF reference.
 
 ### `rf_send(data, length)`
 

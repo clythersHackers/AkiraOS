@@ -48,6 +48,15 @@ FULL_CLEAN=false
 PORT=""
 BAUD="921600"
 
+# Version (read from VERSION file)
+_ver_file="$SCRIPT_DIR/VERSION"
+AKIRA_VERSION="$(
+    major=$(grep 'VERSION_MAJOR' "$_ver_file" | sed 's/.*= *//')
+    minor=$(grep 'VERSION_MINOR' "$_ver_file" | sed 's/.*= *//')
+    patch=$(grep 'PATCHLEVEL'    "$_ver_file" | sed 's/.*= *//')
+    echo "${major}.${minor}.${patch}"
+)"
+
 # Colors
 RED=$'\033[0;31m'
 GREEN=$'\033[0;32m'
@@ -105,14 +114,14 @@ print_step()    { echo -e "${CYAN}${BOLD}==> $1${NC}"; }
 
 show_banner() {
     echo -e "${CYAN}"
-    cat << 'EOF'
+    cat << EOF
      _    _    _           ___  ____  
     / \  | | _(_)_ __ __ _/ _ \/ ___| 
-   / _ \ | |/ / | '__/ _` | | | \___ \ 
+   / _ \ | |/ / | '__/ _\` | | | \___ \ 
   / ___ \|   <| | | | (_| | |_| |___) |
  /_/   \_\_|\_\_|_|  \__,_|\___/|____/ 
                                        
-         Unified Build System v1.4.x
+         Unified Build System v${AKIRA_VERSION}
 EOF
     echo -e "${NC}"
 }
@@ -550,7 +559,7 @@ generate_sbom() {
         cat > "$sbom_file" << EOF
 {
     "name": "AkiraOS",
-    "version": "1.4.x",
+    "version": "${AKIRA_VERSION}",
     "board": "$BOARD",
     "zephyr_board": "${BOARD_MAP[$BOARD]}",
     "build_date": "$(date -Iseconds)",
