@@ -222,6 +222,18 @@ bool sandbox_exec_timed_out(sandbox_ctx_t *ctx)
     return (elapsed > (int64_t)ctx->exec_timeout_ms);
 }
 
+void sandbox_watchdog_kill(sandbox_ctx_t *ctx, const char *app_name)
+{
+    if (!ctx) return;
+
+    ctx->exec_active = false;
+    ctx->watchdog_kills++;
+
+    sandbox_audit_log(AUDIT_EVENT_WATCHDOG_KILL,
+                      app_name ? app_name : "unknown",
+                      ctx->exec_timeout_ms);
+}
+
 void sandbox_audit_log(audit_event_type_t type, const char *app_name,
                        uint32_t detail)
 {

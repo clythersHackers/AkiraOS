@@ -515,14 +515,23 @@ config AKIRA_HTTP_PORT
     help
       TCP port for HTTP server to listen on.
 
+config AKIRA_HTTP_UPLOAD_TOKEN
+    string "Bearer token for HTTP upload endpoint"
+    default ""
+    depends on AKIRA_HTTP_SERVER
+    help
+      Static Bearer token required on POST /upload and POST /api/apps/install.
+      Clients must send: Authorization: Bearer <token>
+      An empty string disables token checking (not recommended for production).
+
 config AKIRA_EMBEDDED_WEB
     bool "Enable embedded HTML Web UI"
-    default y
+    default n
     depends on AKIRA_HTTP_SERVER
     help
       Enable the embedded HTML web UI server hosted directly on the device.
-      Disabling this saves memory when the device connects to a centrally
-      hosted web server and doesnt need to serve pages locally.
+      Deprecated: replaced by the AkiraHub app store in Phase 2.
+      Disabling this saves memory; use akira-cli for device management.
 
 endmenu
 
@@ -965,11 +974,20 @@ config AKIRA_CAPABILITY_SYSTEM
 
 config AKIRA_APP_SIGNING
     bool "Enable app signature verification"
-    default n
+    default y
     depends on AKIRA_CAPABILITY_SYSTEM && MBEDTLS
     help
       Require cryptographic signature verification for apps.
       Uses mbedTLS SHA-256 + RSA-2048 or Ed25519.
+
+config AKIRA_ALLOW_UNSIGNED_APPS
+    bool "Allow unsigned WASM apps (development only)"
+    default n
+    depends on !AKIRA_APP_SIGNING
+    help
+      Opt-in to allow installation and execution of unsigned WASM
+      apps when signature verification is disabled. Never enable
+      this in a production firmware build.
 
 config AKIRA_SANDBOX
     bool "Enable runtime sandbox"

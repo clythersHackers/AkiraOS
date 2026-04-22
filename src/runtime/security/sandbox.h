@@ -194,6 +194,19 @@ void sandbox_exec_end(sandbox_ctx_t *ctx);
 bool sandbox_exec_timed_out(sandbox_ctx_t *ctx);
 
 /**
+ * @brief Record a watchdog kill and emit the audit event.
+ *
+ * Must be called by the runtime whenever it terminates a WASM app due to an
+ * execution timeout detected via sandbox_exec_timed_out().  Increments
+ * ctx->watchdog_kills and emits AUDIT_EVENT_WATCHDOG_KILL so the event is
+ * visible in the audit ring buffer and the security log.
+ *
+ * @param ctx       Sandbox context of the killed app
+ * @param app_name  App name (for audit record)
+ */
+void sandbox_watchdog_kill(sandbox_ctx_t *ctx, const char *app_name);
+
+/**
  * @brief Record a security audit event
  *
  * @param type      Event type

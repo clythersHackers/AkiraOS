@@ -8,7 +8,7 @@
 
 Every app is a sandboxed `.wasm` module. Deploy over-the-air. No firmware flash required.
 
-[![Version](https://img.shields.io/badge/version-1.5.0-7f5af0?style=flat-square)](https://github.com/ArturR0k3r/AkiraOS/releases)
+[![Version](https://img.shields.io/badge/version-1.5.x-7f5af0?style=flat-square)](https://github.com/ArturR0k3r/AkiraOS/releases)
 [![Zephyr](https://img.shields.io/badge/Zephyr-4.3.0-3b82f6?style=flat-square)](https://zephyrproject.org)
 [![WAMR](https://img.shields.io/badge/WAMR-2.x-22c55e?style=flat-square)](https://github.com/bytecodealliance/wasm-micro-runtime)
 [![License](https://img.shields.io/badge/license-Apache%202.0-22c55e?style=flat-square)](LICENSE)
@@ -124,7 +124,7 @@ Full setup guide → [QUICKSTART.md](QUICKSTART.md)
 
 ## WASM App Development
 
-Install the [WASI SDK](https://github.com/WebAssembly/wasi-sdk/releases) (used as a build toolchain only — AkiraOS apps use a custom native API, not the WASI runtime), then:
+Install the [AkiraSDK toolchain](AkiraSDK/README.md) (clang/wasi-sdk used as a cross-compiler only — AkiraOS apps target the AkiraZ native API, not a WASI runtime), then:
 
 ```bash
 # Build your first app
@@ -185,7 +185,7 @@ Rev A.2 · Engineering samples in production · CrowdSupply campaign coming soon
 
 ---
 
-## What's in v1.4.9 "Gl1tch"
+## What's in v1.5.x
 
 125 commits · 350 files · ~40,600 lines of changes
 

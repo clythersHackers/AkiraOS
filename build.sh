@@ -468,12 +468,64 @@ flash_stm32() {
         local hex1="$1" hex2="$2" out="$3"
         python3 - "$hex1" "$hex2" "$out" << 'PYEOF'
 import sys
-lines1 = open(sys.argv[1]).read().strip().splitlines()
-lines2 = open(sys.argv[2]).read().strip().splitlines()
-# Strip EOF record from first file; keep EOF only at the very end
-lines1 = [l for l in lines1 if l.strip() != ':00000001FF']
-with open(sys.argv[3], 'w') as f:
-    f.write('\n'.join(lines1 + lines2) + '\n')
+
+def checksum(byte_vals):
+    return (256 - (sum(byte_vals) & 0xFF)) & 0xFF
+
+def parse_hex(filename):
+    """Parse Intel HEX file into a list of (abs_address, bytes) chunks."""
+    chunks = []
+    ela = 0
+    with open(filename) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line[0] != ':':
+                continue
+            byte_count = int(line[1:3], 16)
+            addr16     = int(line[3:7], 16)
+            rec_type   = int(line[7:9], 16)
+            data       = bytes.fromhex(line[9:9 + byte_count * 2])
+            if rec_type == 0:   # Data
+                chunks.append((ela | addr16, data))
+            elif rec_type == 1:  # EOF
+                break
+            elif rec_type == 2:  # Extended Segment Address
+                ela = ((data[0] << 8) | data[1]) << 4
+            elif rec_type == 4:  # Extended Linear Address
+                ela = ((data[0] << 8) | data[1]) << 16
+    return chunks
+
+def write_hex(chunks, filename):
+    """Write chunks sorted by address as a clean Intel HEX file."""
+    chunks.sort(key=lambda c: c[0])
+    current_ela = None
+    lines = []
+    for abs_addr, data in chunks:
+        offset = 0
+        while offset < len(data):
+            row_addr = abs_addr + offset
+            ela      = row_addr >> 16
+            low      = row_addr & 0xFFFF
+            if ela != current_ela:
+                ela_hi, ela_lo = (ela >> 8) & 0xFF, ela & 0xFF
+                cs = checksum([0x02, 0x00, 0x00, 0x04, ela_hi, ela_lo])
+                lines.append(f':02000004{ela_hi:02X}{ela_lo:02X}{cs:02X}')
+                current_ela = ela
+            row     = data[offset:offset + 16]
+            n       = len(row)
+            addr_hi = (low >> 8) & 0xFF
+            addr_lo = low & 0xFF
+            cs = checksum([n, addr_hi, addr_lo, 0x00] + list(row))
+            lines.append(f':{n:02X}{addr_hi:02X}{addr_lo:02X}00'
+                         + ''.join(f'{b:02X}' for b in row)
+                         + f'{cs:02X}')
+            offset += 16
+    lines.append(':00000001FF')
+    with open(filename, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+
+chunks = parse_hex(sys.argv[1]) + parse_hex(sys.argv[2])
+write_hex(chunks, sys.argv[3])
 PYEOF
     }
 
