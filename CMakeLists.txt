@@ -14,73 +14,38 @@ list(APPEND BOARD_ROOT ${CMAKE_CURRENT_LIST_DIR})
 # DTS_ROOT should point to directory that CONTAINS a 'dts/bindings' subdirectory
 list(APPEND DTS_ROOT ${CMAKE_CURRENT_LIST_DIR})
 
-# ---------------------------------------------------------------------------
-# Append board-specific ILI9341 overlay via EXTRA_DTC_OVERLAY_FILE.
+# Append board-selected device-tree overlays early so Zephyr's DTC sees them.
+# We cannot rely on Kconfig symbols being available at configure-time for the
+# devicetree preprocessing step, so we inspect the board .conf directly.
 #
-# When CONFIG_AKIRA_ILI9341_DRIVER=y is set in a board's .conf file, look for
-# boards/<board_base>/<board_safe>_ili9341.overlay and append it automatically.
-# This keeps all ILI9341 DTS config in its own file, one per board, and works
-# for every board without any #ifdef guards in overlay files.
-# ---------------------------------------------------------------------------
+# This block is modular: it works for any board that has a matching .conf under
+# boards/ and a *<board>*ili9341*.overlay anywhere under boards/.
+# BOARD may be in flat form (akiraconsole_esp32s3_procpu) or qualified form
+# (akiraconsole/esp32s3/procpu); normalise it to the flat filename form.
 if(DEFINED BOARD)
-  string(REPLACE "/" "_" _akira_board_safe "${BOARD}")
-  string(REPLACE "/" ";" _akira_board_parts "${BOARD}")
-  list(GET _akira_board_parts 0 _akira_board_base)
-
-  set(_akira_bconf "${CMAKE_CURRENT_LIST_DIR}/boards/${_akira_board_safe}.conf")
-  if(NOT EXISTS "${_akira_bconf}")
-    set(_akira_bconf "${CMAKE_CURRENT_LIST_DIR}/boards/${_akira_board_base}.conf")
-  endif()
-
-  if(EXISTS "${_akira_bconf}")
-    file(READ "${_akira_bconf}" _akira_board_conf_text)
-    if(_akira_board_conf_text MATCHES
-       "(^|\n)[ \t]*CONFIG_AKIRA_ILI9341_DRIVER[ \t]*=[ \t]*y([ \t\n]|$)")
-      set(_akira_ili_overlay
-          "${CMAKE_CURRENT_LIST_DIR}/boards/${_akira_board_base}/${_akira_board_safe}_ili9341.overlay")
-      if(EXISTS "${_akira_ili_overlay}")
-        list(APPEND EXTRA_DTC_OVERLAY_FILE "${_akira_ili_overlay}")
-        message(STATUS "AkiraOS: ILI9341 overlay → ${_akira_ili_overlay}")
-      else()
-        message(WARNING
-          "AkiraOS: CONFIG_AKIRA_ILI9341_DRIVER=y but overlay not found: ${_akira_ili_overlay}")
-      endif()
+    string(REPLACE "/" "_" _board_flat "${BOARD}")
+    set(_board_conf_file "${CMAKE_CURRENT_LIST_DIR}/boards/${_board_flat}.conf")
+    if(EXISTS "${_board_conf_file}")
+        file(READ "${_board_conf_file}" _board_conf)
+        string(REGEX MATCH "(^|\n)[ \t]*CONFIG_AKIRA_ILI9341_DRIVER[ \t]*=[ \t]*y[ \t]*(\n|$)" _ili_match "${_board_conf}")
+        if(_ili_match)
+            file(GLOB_RECURSE _ili9341_overlays
+                "${CMAKE_CURRENT_LIST_DIR}/boards/*${_board_flat}*ili9341*.overlay"
+                "${CMAKE_CURRENT_LIST_DIR}/boards/*${_board_flat}*ILI9341*.overlay"
+            )
+            if(_ili9341_overlays)
+                list(GET _ili9341_overlays 0 _ili9341_overlay)
+                list(APPEND EXTRA_DTC_OVERLAY_FILE "${_ili9341_overlay}")
+                message(STATUS "AkiraOS: Appending ILI9341 overlay for board '${_board_flat}': ${_ili9341_overlay}")
+            else()
+                message(WARNING "AkiraOS: CONFIG_AKIRA_ILI9341_DRIVER=y for board '${_board_flat}' but no *ili9341*.overlay found under boards/")
+            endif()
+        endif()
     endif()
-    if(_akira_board_conf_text MATCHES
-       "(^|\n)[ \t]*CONFIG_AKIRA_SHARP_DISPLAY[ \t]*=[ \t]*y([ \t\n]|$)")
-      set(_akira_sharp_overlay
-          "${CMAKE_CURRENT_LIST_DIR}/boards/${_akira_board_base}/${_akira_board_safe}_sharp.overlay")
-      if(EXISTS "${_akira_sharp_overlay}")
-        list(APPEND EXTRA_DTC_OVERLAY_FILE "${_akira_sharp_overlay}")
-        message(STATUS "AkiraOS: Sharp overlay → ${_akira_sharp_overlay}")
-      else()
-        message(WARNING
-          "AkiraOS: CONFIG_AKIRA_SHARP_DISPLAY=y but overlay not found: ${_akira_sharp_overlay}")
-      endif()
-    endif()
-  endif()
 endif()
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(akira_os VERSION 1.5.6)
-
-# When this repository is present as a west module, MCUboot bootloader builds
-# also evaluate this CMakeLists. In that context (CONFIG_MCUBOOT=y), pulling
-# Akira application sources into the bootloader image causes unresolved symbols.
-if(CONFIG_MCUBOOT)
-    message(STATUS "AkiraOS module: MCUboot image detected, skipping app sources")
-    return()
-endif()
-
-# When AkiraOS is included as a Zephyr module (cmake: . in zephyr/module.yml)
-# for an *external* application (e.g. multicore_bench), skip adding AkiraOS
-# application sources.  The module still contributes board_root and dts_root
-# via module.yml settings; this guard only prevents double-compiling the full
-# AkiraOS runtime into a host app that doesn't need it.
-if(NOT "${APPLICATION_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_LIST_DIR}")
-    message(STATUS "AkiraOS module: external app '${APPLICATION_SOURCE_DIR}' detected, skipping AkiraOS sources")
-    return()
-endif()
+project(akira_os VERSION 1.4.9)
 
 
 
@@ -138,11 +103,6 @@ if(CONFIG_AKIRA_WASM_RUNTIME)
     endif()
 
     set(WAMR_BUILD_INTERP 1)
-    # Mini-loader: skips redundant module-level validation already handled by
-    # akira_runtime (SHA-256 integrity check + sandbox capability audit).
-    # Reduces WAMR flash footprint by ~20-30 KB. Disable if loading untrusted
-    # binaries directly from WAMR without AkiraOS's own security layer.
-    set(WAMR_BUILD_MINI_LOADER 1)
     # Check user configuration for AOT support
     if(CONFIG_WAMR_AOT_SUPPORT)
         set(WAMR_BUILD_AOT 1)
@@ -214,7 +174,6 @@ endif()
 # Add source files
 target_sources(app PRIVATE
     src/main.c
-    src/akira_platform_stubs.c
     
     # Core drivers and shell
 
@@ -281,7 +240,6 @@ target_sources(app PRIVATE
     src/lib/error_codes.c
     src/lib/simple_json.c
     src/lib/mem_helper.c
-    src/lib/akpkg.c
 )
 
 # ===== Akira Core (kernel, HAL) =====
@@ -383,6 +341,10 @@ if(CONFIG_AKIRA_WASM_HID)
     target_sources(app PRIVATE src/api/akira_hid_api.c)
 endif()
 
+if(CONFIG_AKIRA_WASM_INPUT)
+    target_sources(app PRIVATE src/api/akira_input_api.c)
+endif()
+
 if(CONFIG_AKIRA_SYSTEM_API)
     target_sources(app PRIVATE src/api/akira_system_api.c)
 endif()
@@ -398,41 +360,6 @@ if(CONFIG_AKIRA_WASM_IPC)
     )
 endif()
 
-# Track B — new WASM native APIs
-if(CONFIG_AKIRA_WASM_FS)
-    target_sources(app PRIVATE src/api/akira_fs_api.c)
-endif()
-
-if(CONFIG_AKIRA_WASM_CRYPTO)
-    target_sources(app PRIVATE src/api/akira_crypto_api.c)
-endif()
-
-if(CONFIG_AKIRA_WASM_RTC)
-    target_sources(app PRIVATE src/api/akira_rtc_api.c)
-endif()
-
-if(CONFIG_AKIRA_WASM_OTA)
-    target_sources(app PRIVATE src/api/akira_ota_api.c)
-endif()
-
-# Track A — OTA extensions
-if(CONFIG_AKIRA_BOOT_GUARD)
-    target_sources(app PRIVATE src/runtime/akira_boot_guard.c)
-endif()
-
-if(CONFIG_AKIRA_OTA_DELTA)
-    target_sources(app PRIVATE src/lib/akira_delta.c)
-endif()
-
-# Track D — DX: telemetry, panic handler, runtime shell commands
-if(CONFIG_AKIRA_TELEMETRY)
-    target_sources(app PRIVATE src/lib/akira_telemetry.c)
-endif()
-
-if(CONFIG_AKIRA_PANIC)
-    target_sources(app PRIVATE src/lib/akira_panic.c)
-endif()
-
 # Keep connectivity and drivers as before (use module gating further below)
 
 # Akira shell commands
@@ -441,9 +368,7 @@ if(CONFIG_SHELL)
     if(CONFIG_AKIRA_HID)
         target_sources(app PRIVATE src/shell/hid_shell.c)
     endif()
-
-    target_sources(app PRIVATE src/shell/akira_runtime_cmds.c)
-
+    
     if(CONFIG_AKIRA_MODULE_RF)
         target_sources(app PRIVATE src/shell/shell_rf.c)
     endif()
@@ -474,10 +399,6 @@ if(CONFIG_AKIRA_MODULE_RF)
     if(CONFIG_AKIRA_CC1101)
         target_sources(app PRIVATE src/drivers/rf/cc1101.c)
     endif()
-
-    if(CONFIG_AKIRA_CC1121)
-        target_sources(app PRIVATE src/drivers/rf/cc1121.c)
-    endif()
 endif()
 
 # Custom drivers for peripherals not covered by Zephyr upstream drivers
@@ -497,20 +418,8 @@ if(CONFIG_AKIRA_ILI9341_DRIVER)
     target_sources(app PRIVATE src/drivers/display/akira_ili9341.c)
 endif()
 
-if(CONFIG_CHARGER_BQ25601)
-    target_sources(app PRIVATE src/drivers/charger/bq25601.c)
-endif()
-
-if(CONFIG_AKIRA_ST25DV)
-    target_sources(app PRIVATE src/drivers/nfc/st25dv.c)
-endif()
-
-if(CONFIG_AKIRA_PWM_DIAL)
-    target_sources(app PRIVATE src/drivers/input/akira_pwm_dial.c)
-endif()
-
 # Conditional OTA manager based on flash availability
-if(CONFIG_AKIRA_OTA AND CONFIG_FLASH_MAP AND CONFIG_BOOTLOADER_MCUBOOT)
+if(CONFIG_FLASH_MAP AND CONFIG_BOOTLOADER_MCUBOOT)
     target_sources(app PRIVATE 
         src/connectivity/transport_interface.c
         src/connectivity/ota/ota_manager.c
@@ -518,7 +427,7 @@ if(CONFIG_AKIRA_OTA AND CONFIG_FLASH_MAP AND CONFIG_BOOTLOADER_MCUBOOT)
 endif()
 
 # Shared buffer pool for connectivity (HTTP uploads, OTA, etc.)
-if(CONFIG_AKIRA_HTTP_SERVER OR CONFIG_AKIRA_OTA)
+if(CONFIG_AKIRA_EMBEDDED_WEB OR CONFIG_AKIRA_OTA)
     target_sources(app PRIVATE src/connectivity/buf_pool.c)
 endif()
 
@@ -545,12 +454,7 @@ endif()
 
 # ===== Connectivity Layer =====
 
-# WiFi event notifier — always compiled when WiFi is enabled.
-# Listens for NET_EVENT_IPV4_ADDR_ADD (DHCP done) and calls the
-# __weak akira_on_wifi_connected() hook so Platform can react.
-if(CONFIG_WIFI)
-    target_sources(app PRIVATE src/connectivity/radio/wifi_notify.c)
-endif()
+# WiFi uses Zephyr's native stack - no wrapper needed
 
 # HID Manager (when enabled)
 if(CONFIG_AKIRA_HID)
@@ -562,12 +466,12 @@ if(CONFIG_AKIRA_HID)
     endif()
 endif()
 
-# HTTP Server — generic route-based server + API routes + shell commands
+# HTTP Server — includes the web server (upload endpoint) and shell commands
 if(CONFIG_AKIRA_HTTP_SERVER)
     target_sources(app PRIVATE
+        src/connectivity/ota/web_server.c
         src/connectivity/http/http_server.c
-        src/connectivity/http/http_routes.c
-        src/shell/shell_http.c
+        src/shell/shell_web.c
     )
 endif()
 
@@ -603,16 +507,6 @@ if(CONFIG_AKIRA_USB_HID)
     target_sources(app PRIVATE
         src/connectivity/usb/usb_hid.c
     )
-endif()
-
-# HID app command handler (Report ID 3 — WebHID protocol)
-if(CONFIG_AKIRA_HID_APP_HANDLER)
-    target_sources(app PRIVATE src/connectivity/hid/hid_app_handler.c)
-endif()
-
-# mDNS / DNS-SD device advertisement
-if(CONFIG_AKIRA_MDNS)
-    target_sources(app PRIVATE src/connectivity/net/mdns_service.c)
 endif()
 
 # ===== Client Connectivity =====
@@ -723,6 +617,28 @@ if(CONFIG_AKIRA_APP_SOURCE_BLE)
     target_sources(app PRIVATE src/connectivity/bluetooth/bt_app_transfer.c)
 endif()
 
+# ===== Native OS Shell (akira_display_* framebuffer renderer) =====
+if(CONFIG_AKIRA_OS_SHELL)
+    target_sources(app PRIVATE
+        src/console_shell/akira_os_shell.c
+        src/console_shell/display_ownership.c
+        src/console_shell/home_screen.c
+        src/console_shell/shell_theme.c
+        src/console_shell/sd_install_screen.c
+        src/console_shell/install_progress_screen.c
+        src/console_shell/settings_screen.c
+        src/console_shell/settings/wifi_screen.c
+        src/console_shell/settings/display_screen.c
+        src/console_shell/settings/ble_screen.c
+        src/console_shell/settings/power_screen.c
+        src/console_shell/settings/ota_screen.c
+        src/console_shell/settings/datetime_screen.c
+        src/console_shell/settings/apps_screen.c
+        src/console_shell/settings/devmode_screen.c
+    )
+    target_include_directories(app PRIVATE src/console_shell)
+endif()
+
 # Include directories
 target_include_directories(app PRIVATE
     include/
@@ -762,6 +678,6 @@ target_include_directories(app PRIVATE
 # Compile definitions
 target_compile_definitions(app PRIVATE
     AKIRA_VERSION_MAJOR=1
-    AKIRA_VERSION_MINOR=5
-    AKIRA_VERSION_PATCH=6
+    AKIRA_VERSION_MINOR=4
+    AKIRA_VERSION_PATCH=9
 )
