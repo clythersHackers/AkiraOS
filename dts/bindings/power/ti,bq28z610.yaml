@@ -1,0 +1,8 @@
+# Copyright (c) 2026 AkiraOS Project
+# SPDX-License-Identifier: Apache-2.0
+
+description: BQ28Z610 1-cell Li-Ion battery fuel gauge + protection (TI)
+
+compatible: "ti,bq28z610"
+
+include: i2c-device.yaml

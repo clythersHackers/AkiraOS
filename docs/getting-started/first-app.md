@@ -104,7 +104,23 @@ file bin/hello_world.wasm     # "WebAssembly (wasm) binary module"
 
 ## Deploy to Hardware
 
-### Upload via HTTP (recommended)
+Three methods are available; SD card is the simplest for development.
+
+### Option 1: SD Card (simplest)
+
+Prepare a FAT32-formatted microSD card (see [SD Card Setup](../hardware/sd-card.md)), copy your `.wasm` into the `apps/` directory, insert the card, and scan:
+
+```bash
+# On your PC — copy the app to the SD card
+cp bin/hello_world.wasm /media/$USER/AKIRA/apps/
+
+# On the device shell
+AkiraOS:~$ app scan sd
+AkiraOS:~$ app install hello_world
+AkiraOS:~$ app run hello_world
+```
+
+### Option 2: HTTP Upload (over WiFi)
 
 The device must be connected to WiFi. Find its IP from the serial console (`net iface`).
 
@@ -112,16 +128,6 @@ The device must be connected to WiFi. Find its IP from the serial console (`net 
 curl -X POST -F "file=@bin/hello_world.wasm" http://<device-ip>/upload
 ```
 
-### Run from the shell
-
-```bash
-# Connect to serial console
-west espmonitor
-
-# In the shell:
-AkiraOS:~$ wasm load /apps/hello_world.wasm
-AkiraOS:~$ wasm start hello_world
-```
 
 Expected output:
 ```

@@ -47,6 +47,7 @@ CLEAN_BUILD=false
 FULL_CLEAN=false
 PORT=""
 BAUD="921600"
+WEST_RUNNER=""          # "", or a west runner name e.g. "openocd", "jlink"
 
 # Version (read from VERSION file)
 _ver_file="$SCRIPT_DIR/VERSION"
@@ -145,6 +146,7 @@ ${BOLD}OPTIONS:${NC}
     --full-clean    Reset to pristine state (remove ALL build dirs)
     -p <port>       Serial port for flashing (default: auto-detect)
     --baud <rate>   Baud rate for flashing (default: 921600)
+    --runner <r>    Override west flash runner (e.g. openocd, jlink, stm32cubeprogrammer)
     -h, --help      Show this help message
 
 EOF
@@ -273,8 +275,17 @@ build_mcuboot() {
     # EXTRA_DTC_OVERLAY_FILE mirrors what sysbuild does automatically — it
     # ensures MCUboot's compiled-in partition layout matches the app's layout.
     local extra_cmake="-DBOARD_ROOT=$SCRIPT_DIR -DDTS_ROOT=$SCRIPT_DIR"
+    # Prefer a board-specific MCUboot overlay (boards/<board>.mcuboot.overlay) so
+    # MCUboot can diverge from the app overlay (e.g. IWDG disabled in MCUboot to
+    # avoid a reset loop during slow RSA-2048 signature verification).
+    # Fall back to the regular app overlay so partition layout always matches.
+    local mcuboot_overlay="$SCRIPT_DIR/boards/${BOARD}.mcuboot.overlay"
     local board_overlay="$SCRIPT_DIR/boards/${BOARD}.overlay"
-    if [[ -f "$board_overlay" ]]; then
+    if [[ -f "$mcuboot_overlay" ]]; then
+        # Merge: base app overlay first (partitions/chosen), then MCUboot overrides
+        extra_cmake+=" -DEXTRA_DTC_OVERLAY_FILE='${board_overlay};${mcuboot_overlay}'"
+        print_info "MCUboot overlay: $board_overlay + $mcuboot_overlay"
+    elif [[ -f "$board_overlay" ]]; then
         extra_cmake+=" -DEXTRA_DTC_OVERLAY_FILE=$board_overlay"
         print_info "MCUboot overlay: $board_overlay"
     fi
@@ -460,6 +471,23 @@ flash_stm32() {
     [[ -f "$app_hex" ]] || app_hex="$build_dir/zephyr/zephyr.hex"
     local mcuboot_hex="$mcuboot_dir/zephyr/zephyr.hex"
 
+    # Build west flash runner args. A board-specific openocd cfg in boards/ is
+    # automatically injected when the openocd runner is selected (or defaulted to).
+    local runner_args=()
+    local effective_runner="${WEST_RUNNER}"
+    local board_openocd_cfg="$SCRIPT_DIR/boards/${BOARD}.openocd.cfg"
+    if [[ -z "$effective_runner" && -f "$board_openocd_cfg" ]]; then
+        # Board has a custom OpenOCD config (e.g. J-Link) — switch from default runner
+        effective_runner="openocd"
+        print_info "Board-specific OpenOCD config found — using openocd runner"
+    fi
+    if [[ -n "$effective_runner" ]]; then
+        runner_args+=(--runner "$effective_runner")
+    fi
+    if [[ "$effective_runner" == "openocd" && -f "$board_openocd_cfg" ]]; then
+        runner_args+=(-- --config "$board_openocd_cfg")
+    fi
+
     # STM32CubeProgrammer (default runner for this board) passes --erase to the CLI,
     # which does a FULL chip erase.  Calling west flash twice therefore erases MCUboot
     # when the app is subsequently flashed.  Merge both hex files into a single file
@@ -545,13 +573,13 @@ PYEOF
         print_info "Merging MCUboot + AkiraOS hex files..."
         stm32_merge_hex "$mcuboot_hex" "$app_hex" "$merged_hex"
         print_step "Flashing MCUboot + AkiraOS (STM32, single-pass)..."
-        west flash -d "$mcuboot_dir" --hex-file "$merged_hex"
+        west flash -d "$mcuboot_dir" "${runner_args[@]}" --hex-file "$merged_hex"
         rm -f "$merged_hex"
         print_success "MCUboot + AkiraOS flashed!"
 
     elif [[ "$FLASH_TARGET" == "b" ]]; then
         print_step "Flashing MCUboot (STM32)..."
-        west flash -d "$mcuboot_dir"
+        west flash -d "$mcuboot_dir" "${runner_args[@]}"
         print_success "MCUboot flashed!"
 
     elif [[ "$FLASH_TARGET" == "a" ]]; then
@@ -561,11 +589,11 @@ PYEOF
             merged_hex="$(mktemp /tmp/akira_merged_XXXXXX.hex)"
             print_info "Preserving MCUboot — merging before flash..."
             stm32_merge_hex "$mcuboot_hex" "$app_hex" "$merged_hex"
-            west flash -d "$mcuboot_dir" --hex-file "$merged_hex"
+            west flash -d "$mcuboot_dir" "${runner_args[@]}" --hex-file "$merged_hex"
             rm -f "$merged_hex"
         else
             print_warning "MCUboot not built — flashing app alone (MCUboot will be erased!)"
-            west flash -d "$build_dir"
+            west flash -d "$build_dir" "${runner_args[@]}"
         fi
         print_success "AkiraOS flashed!"
     fi
@@ -679,6 +707,10 @@ parse_args() {
                 BAUD="$2"
                 shift 2
                 ;;
+            --runner)
+                WEST_RUNNER="$2"
+                shift 2
+                ;;
             -h|--help)
                 show_help
                 exit 0
@@ -709,6 +741,7 @@ main() {
     echo "  Zephyr:      ${BOARD_MAP[$BOARD]}"
     echo "  Bootloader:  ${BUILD_BOOTLOADER:-no}"
     echo "  Flash:       ${FLASH_TARGET:-no}"
+    echo "  Runner:      ${WEST_RUNNER:-auto}"
     echo "  Erase:       $ERASE_FLASH"
     echo "  SBOM:        $GENERATE_SBOM"
     echo "  Clean:       $CLEAN_BUILD"

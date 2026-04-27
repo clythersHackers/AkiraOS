@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: Apache-2.0
+// AkiraConsole Production — pin-control definitions
+// All assignments derived from HWAkiraConsole schematic Rev A.2 (2026-03-10).
+
+#include <zephyr/dt-bindings/pinctrl/esp-pinctrl-common.h>
+#include <dt-bindings/pinctrl/esp32s3-pinctrl.h>
+#include <zephyr/dt-bindings/pinctrl/esp32s3-gpio-sigmap.h>
+
+&pinctrl {
+
+	// -------------------------------------------------------------------------
+	// UART0 — debug serial / shell
+	// TX = GPIO43 (U0TXD), RX = GPIO44 (U0RXD)
+	// Also bridged to CP2102N (U15) on J3 USB-UART connector.
+	// -------------------------------------------------------------------------
+	uart0_default: uart0_default {
+		group1 {
+			pinmux = <UART0_TX_GPIO43>;
+			output-high;
+		};
+		group2 {
+			pinmux = <UART0_RX_GPIO44>;
+			bias-pull-up;
+		};
+	};
+
+	// -------------------------------------------------------------------------
+	// SPI2 — shared peripheral bus
+	// MOSI = GPIO11 (SPI2.MOSI)
+	// CLK  = GPIO12 (SPI2.CLK, via R93 0R — default populated)
+	// MISO = GPIO13 (SPI2.MISO)
+	//
+	// CS lines are NOT listed here; they are controlled via cs-gpios in &spi2:
+	//   CS0 (LR_CS)  — TCA6408 P4 (I2C GPIO expander)
+	//   CS1 (TFT_CS) — GPIO10 (direct)
+	//   CS2 (SD_CS)  — GPIO14 (direct)
+	//   CS3 (CC_CS)  — TCA6408 P1 (I2C GPIO expander)
+	// -------------------------------------------------------------------------
+	spim2_default: spim2_default {
+		group1 {
+			pinmux = <SPIM2_MISO_GPIO13>,
+			         <SPIM2_MOSI_GPIO11>,
+			         <SPIM2_SCLK_GPIO12>;
+		};
+	};
+
+	// -------------------------------------------------------------------------
+	// I2C0 — all internal I2C peripherals
+	// SDA = GPIO8  (I2C.SDA)
+	// SCL = GPIO18 (I2C.SCL)
+	//
+	// Devices on bus (7-bit addresses):
+	//   0x21  TCA6408ARSV — GPIO expander (WRITE=0x42, READ=0x43)
+	//   0x22  FUSB302BMPX — USB-C PD controller
+	//   0x55  BQ28Z610DRZ — fuel gauge / protection IC
+	//   0x6A  LSM6DS3     — 6-axis IMU (SDO/SA0 → GND)
+	//   0x6B  BQ25601RTW  — Li-Ion charger
+	//   0x53  ST25DV64K   — NFC dynamic tag (user memory)
+	//   0x57  ST25DV64K   — NFC dynamic tag (system memory)
+	//   0x77  BME280      — env sensor (CSB → HIGH)
+	// Pull-up resistors R26 (4.7k) and R27 (4.7k) on PCB.
+	// -------------------------------------------------------------------------
+	i2cm0_default: i2cm0_default {
+		group1 {
+			pinmux = <I2C0_SDA_GPIO8>,
+			         <I2C0_SCL_GPIO18>;
+			bias-pull-up;
+			drive-open-drain;
+		};
+	};
+};

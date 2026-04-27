@@ -1,0 +1,21 @@
+# Copyright (c) 2026 AkiraOS Project
+# SPDX-License-Identifier: Apache-2.0
+
+description: CC1121 high-performance Sub-GHz RF transceiver (TI)
+
+compatible: "ti,cc1121"
+
+include: spi-device.yaml
+
+properties:
+  reset-gpios:
+    type: phandle-array
+    required: false
+    description: |
+      GPIO connected to RESET_N pin (active low).
+      Shared with LR2021 RF_RST on AkiraConsole Production.
+
+  spi-max-frequency:
+    type: int
+    required: true
+    description: Maximum SPI clock frequency in Hz (max 10 MHz).

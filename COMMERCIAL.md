@@ -1,23 +1,22 @@
 # Commercial Licensing
 
-## Dual License Model
+## Build Products That Last
 
-AkiraOS is distributed under a **dual license** — the same model used by FreeRTOS (before AWS) and ThreadX (before Microsoft):
+AkiraOS is a production-grade embedded OS built on Zephyr RTOS, designed for teams who need more than a prototype — real hardware, real deployments, real scale. It brings a WebAssembly application runtime, over-the-air update infrastructure, hardware abstraction across dozens of boards, and a full connectivity stack to your firmware, so your team can focus on the product rather than the platform.
 
-| Use case | License |
-|----------|---------|
-| Open-source products, research, personal projects | [Apache License 2.0](LICENSE) — free, no fee |
-| Commercial / OEM products that cannot comply with Apache 2.0 attribution, or that require AkiraHub SaaS, signing services, or an enterprise SLA | **AkiraOS Commercial License** — contact below |
-
-Under the **Apache 2.0** tier you may use, modify, and distribute AkiraOS freely provided you retain copyright notices and the `NOTICE` file in any distribution.  Your application code (including WASM apps) remains fully proprietary — Apache 2.0 is not a copyleft license.
-
-Under the **Commercial License** tier all open-source obligations are replaced by a paid agreement that additionally grants access to platform services, legal indemnification, and enterprise support.  See tiers below.
+AkiraOS is **open source under the Apache License 2.0**, which means you can evaluate it, build with it, and ship open-source products at no cost. For commercial products that need enterprise support, the AkiraHub managed platform, or simplified compliance, a commercial license is the right path.
 
 ---
 
-AkiraOS is open source under the **Apache License 2.0**, which permits free use for personal projects, research, and open source products.
+## Why AkiraOS
 
-If you are building a **commercial product** — embedded firmware, an OEM device, or a managed IoT service — a commercial license removes the attribution requirements and adds enterprise support, legal indemnification, and access to the Akira Platform.
+**Ship faster.** A WASM runtime means your application logic is decoupled from firmware. Update app logic over the air — no reflashing. Your release cadence is no longer gated by firmware deployment windows.
+
+**Run anywhere.** Supported hardware spans ESP32 variants, Nordic nRF54, STM32, and native simulation, with a board overlay system designed for easy porting. One codebase, many targets.
+
+**Stay secure.** Built-in NVS encryption, MCUboot secure boot, PSA Certified-aligned security model, and a structured module isolation architecture — security is designed in, not bolted on.
+
+**Own your stack.** AkiraOS is not a cloud-locked SDK. Your firmware runs on your hardware. AkiraHub is an optional managed layer, not a dependency.
 
 ---
 
@@ -25,62 +24,87 @@ If you are building a **commercial product** — embedded firmware, an OEM devic
 
 ### Community — Free (Apache 2.0)
 
-For makers, students, open source projects, and startups evaluating the platform.
+The full AkiraOS platform, no restrictions, no fees. Start building today.
 
-- Full AkiraOS runtime and all WASM APIs
-- AkiraSDK with sample applications
+- Complete AkiraOS runtime and WASM API surface
+- AkiraSDK with production-ready sample applications
+- All supported hardware targets
 - Community support via GitHub Issues and Discussions
-- No restrictions on hardware targets
-- No fees
+- No device limits, no license keys
 
-### Startup OEM — €3,000 / year per product line
+**Ideal for:** makers, students, open-source projects, and teams evaluating the platform.
 
-For small hardware companies shipping up to 1,000 devices.
+---
 
-- Commercial license (no open-source obligations for your firmware)
+### Startup OEM
+
+For small hardware companies taking their first product to market.
+
+- **Commercial license** — removes Apache 2.0 attribution obligations from your firmware distribution
 - Access to **AkiraHub** hosted SaaS — device registry, app catalogue, remote install
-- `akira-cli` signing service — sign and distribute `.akpkg` apps
-- Email support (48-hour response SLO)
-- 1 product line definition
+- `akira-cli` signing service — sign and distribute `.akpkg` apps to your fleet
+- Email support with a defined response SLO
+- One product line definition
 
-### Professional OEM — €15,000 / year per product line
+**Ideal for:** hardware startups shipping their first OEM product.
 
-For established hardware companies with active deployments.
+> Pricing on request — [contact us](mailto:enterprise@pen.engineering)
+
+---
+
+### Professional OEM
+
+For established hardware companies with active deployments and growing teams.
 
 Everything in Startup, plus:
 
 - Unlimited devices under one product line
 - App signing portal — publish apps to your own branded store
-- Priority support (8-hour response SLO)
+- Priority support with faster response SLO
 - One BSP porting consultation session included
 - Compliance documentation pack (security model, SBOM export)
 - Quarterly roadmap preview calls
 
-### Enterprise — Custom pricing
+**Ideal for:** hardware companies with production deployments who need scalability and compliance support.
 
-For industrial, medical, automotive, and large-scale IoT deployments.
+> Pricing on request — [contact us](mailto:enterprise@pen.engineering)
+
+---
+
+### Enterprise
+
+For industrial, medical, automotive, and large-scale IoT deployments where reliability, compliance, and control are non-negotiable.
 
 Everything in Professional, plus:
 
-- **Self-hosted AkiraHub** — on-premise or private cloud deployment
+- **Self-hosted AkiraHub** — on-premise or private cloud deployment, fully under your control
 - Advanced security module — NVS encryption, HSM/secure element integration
 - Full compliance documentation — PSA Certified, IEC 62443, CycloneDX SBOM
-- White-label SDK — rename and rebrand the API surface for your developer program
-- SLA: 4-hour critical / 24-hour standard response
+- White-label SDK — rename and rebrand the API surface for your own developer program
+- SLA-backed support: critical response within hours, dedicated escalation path
 - Dedicated Slack channel with direct engineering access
 - Custom feature and driver development (time and materials)
 - Patent license and legal indemnification
 
+**Ideal for:** regulated industries, large IoT fleet operators, and teams building critical infrastructure.
+
+> Pricing on request — [contact us](mailto:enterprise@pen.engineering)
+
 ---
 
-## One-Time Services
+## Professional Services
 
-| Service | Price |
-|---------|-------|
-| BSP porting to new hardware | €5,000 – €20,000 |
-| Custom driver development | Project rate |
-| PSA Certified preparation consulting | €10,000 – €30,000 |
-| On-site integration support (per day) | €1,500 |
+We work directly with your engineering team on scoped engagements:
+
+| Service | Description |
+|---------|-------------|
+| **BSP Porting** | Bring AkiraOS to your custom hardware or unsupported SoC |
+| **Custom Driver Development** | Hardware-specific drivers integrated into the AkiraOS module system |
+| **PSA Certified Preparation** | Consulting and documentation to support your certification process |
+| **On-Site Integration Support** | Hands-on engineering support at your facility |
+| **Security Review** | Threat model review and security hardening for your firmware configuration |
+
+All services are scoped and quoted per engagement. [Reach out](mailto:enterprise@pen.engineering) to discuss your requirements.
 
 ---
 
@@ -88,35 +112,39 @@ Everything in Professional, plus:
 
 **Do I need a commercial license to sell a product that runs AkiraOS?**
 
-If you distribute your product with AkiraOS source code or binaries and comply with the Apache 2.0 attribution requirements, no commercial license is required. If you want to remove those obligations, or if you need AkiraHub, enterprise security features, or an SLA, a commercial license is the right path.
+No — if you comply with the Apache 2.0 attribution requirements (retain copyright notices and the `NOTICE` file), you can ship commercial products under the Community tier at no cost. A commercial license is for teams who need to remove those obligations, access AkiraHub, or require enterprise SLAs.
 
 **Does Apache 2.0 require me to open-source my application code?**
 
-No. Apache 2.0 is a permissive license. Your WASM applications and your product-specific code remain proprietary. Only modifications to AkiraOS itself must be attributed.
+No. Apache 2.0 is a permissive license — your WASM applications and product-specific code remain fully proprietary. Only modifications to AkiraOS itself must be attributed.
 
 **What is a "product line"?**
 
-A product line is a single firmware configuration targeting a family of hardware variants that share the same AkiraOS build (same `prj.conf` + board overlays). Multiple SKUs of the same product count as one product line.
+A product line is a single firmware configuration targeting a family of hardware variants sharing the same AkiraOS build (`prj.conf` + board overlays). Multiple SKUs of the same product count as one product line.
 
-**Can I evaluate enterprise features before purchasing?**
+**Can I evaluate commercial features before committing?**
 
-Yes. Contact us for a 30-day evaluation license for the Akira Platform enterprise modules.
+Yes. Contact us for a time-limited evaluation of AkiraHub and the enterprise security modules — no commitment required.
 
-**Is there a volume discount for large device fleets?**
+**How does pricing work for large device fleets?**
 
-Yes. Enterprise pricing is negotiated based on deployed device count, support requirements, and contract length. Contact us.
+Pricing is negotiated based on your fleet size, support requirements, and contract structure. We do not publish fixed per-device rates — contact us for a conversation.
+
+**Can AkiraOS run without AkiraHub?**
+
+Yes. AkiraHub is an optional managed layer for device registry, remote app deployment, and signing. AkiraOS runs fully standalone — you own your stack.
 
 ---
 
 ## Contact
 
-To purchase a license or discuss your requirements:
+To discuss licensing, services, or a trial:
 
 **Email:** enterprise@pen.engineering  
 **Website:** [akiraos.dev/enterprise](https://akiraos.dev/enterprise)  
 **Company:** PenEngineering S.R.L
 
-Response time: 1 business day.
+We respond within one business day.
 
 ---
 

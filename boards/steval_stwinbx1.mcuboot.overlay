@@ -1,0 +1,13 @@
+/*
+ * MCUboot-specific overlay for steval_stwinbx1.
+ *
+ * IWDG is disabled here because MCUBOOT_WATCHDOG_SETUP() starts the hardware
+ * watchdog before RSA-2048 image verification, which can take >500ms on a
+ * Cortex-M33 at 160MHz.  The single wdt_feed() in MCUboot main.c does not
+ * cover that window, causing a reset loop.  The app overlay re-enables IWDG
+ * so the running application is still protected.
+ */
+
+&iwdg {
+    status = "disabled";
+};

@@ -30,38 +30,63 @@
     pinctrl-0 = <&spim2_default>;
     pinctrl-names = "default";
     cs-gpios = <&gpio0 10 GPIO_ACTIVE_LOW>; // Manual CS control
+    cs-gpios = <&gpio0 10 GPIO_ACTIVE_LOW>; // Manual CS control
 };
 
-//// Display disabled — no display hardware on generic ESP32-S3 DevKitM
-//&gpio0
-//{
-//    status = "okay";
-//    
-//    // ILI9341 Display Control Pins
-//    ili9341_cs: ili9341_cs {
-//        gpio-hog;
-//        gpios = <10 GPIO_ACTIVE_LOW>; // CS - GPIO10
-//        output-high;                   // CS idle high
-//    };
-//
-//    ili9341_dc: ili9341_dc {
-//        gpio-hog;
-//        gpios = <21 GPIO_ACTIVE_HIGH>; // DC - GPIO21
-//        output-low;                    // DC starts low (command mode)
-//    };
-//
-//    ili9341_reset: ili9341_reset {
-//        gpio-hog;
-//        gpios = <18 GPIO_ACTIVE_HIGH>; // RESET - GPIO18
-//        output-high;                   // RESET idle high
-//    };
-//
-//    ili9341_bl: ili9341_bl {
-//        gpio-hog;
-//        gpios = <6 GPIO_ACTIVE_HIGH>;  // Backlight - GPIO6
-//        output-high;                   // Backlight on
-//    };
-//};
+&gpio0
+{
+    status = "okay";
+    
+    // ILI9341 Display Control Pins
+    ili9341_cs: ili9341_cs {
+        gpio-hog;
+        gpios = <10 GPIO_ACTIVE_LOW>; // CS - GPIO10
+        output-high;                   // CS idle high
+    };
+
+    ili9341_dc: ili9341_dc {
+        gpio-hog;
+        gpios = <21 GPIO_ACTIVE_HIGH>; // DC - GPIO21
+        output-low;                    // DC starts low (command mode)
+    };
+
+    ili9341_reset: ili9341_reset {
+        gpio-hog;
+        gpios = <18 GPIO_ACTIVE_HIGH>; // RESET - GPIO18
+        output-high;                   // RESET idle high
+    };
+
+    ili9341_bl: ili9341_bl {
+        gpio-hog;
+        gpios = <6 GPIO_ACTIVE_HIGH>;  // Backlight - GPIO6
+        output-high;                   // Backlight on
+    };
+    
+    // ILI9341 Display Control Pins
+    ili9341_cs: ili9341_cs {
+        gpio-hog;
+        gpios = <10 GPIO_ACTIVE_LOW>; // CS - GPIO10
+        output-high;                   // CS idle high
+    };
+
+    ili9341_dc: ili9341_dc {
+        gpio-hog;
+        gpios = <21 GPIO_ACTIVE_HIGH>; // DC - GPIO21
+        output-low;                    // DC starts low (command mode)
+    };
+
+    ili9341_reset: ili9341_reset {
+        gpio-hog;
+        gpios = <18 GPIO_ACTIVE_HIGH>; // RESET - GPIO18
+        output-high;                   // RESET idle high
+    };
+
+    ili9341_bl: ili9341_bl {
+        gpio-hog;
+        gpios = <6 GPIO_ACTIVE_HIGH>;  // Backlight - GPIO6
+        output-high;                   // Backlight on
+    };
+};
 
 // WiFi configuration
 &wifi

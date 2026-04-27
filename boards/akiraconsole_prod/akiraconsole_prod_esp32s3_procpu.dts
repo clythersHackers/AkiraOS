@@ -1,0 +1,477 @@
+/dts-v1/;
+
+// Base SoC DTSI — ESP32-S3-WROOM-1-N8 pin-compatible with N16R8.
+// Flash size override (16MB) applied via CONFIG_ESPTOOLPY_FLASHSIZE_16MB in .conf.
+#include <espressif/esp32s3/esp32s3_mini_n8.dtsi>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
+#include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
+#include <espressif/partitions_0x0_amp.dtsi>
+#include "akiraconsole_prod-pinctrl.dtsi"
+
+/ {
+	model = "AkiraConsole Production";
+	compatible = "penengineering,akiraconsole-prod", "espressif,esp32s3";
+
+	aliases {
+		i2c-0     = &i2c0;
+		watchdog0 = &wdt0;
+		sw0       = &btn_ok;
+		akira-led = &led_act;
+	};
+
+	chosen {
+		zephyr,sram           = &sram1;
+		zephyr,console        = &uart0;
+		zephyr,shell-uart     = &uart0;
+		zephyr,flash          = &flash0;
+		zephyr,code-partition = &slot0_partition;
+		zephyr,bt-hci         = &esp32_bt_hci;
+		zephyr,display        = &st7789v_prod;
+	};
+
+	// =========================================================================
+	// Buttons — direct ESP32-S3 GPIO connections
+	//
+	// D-pad + face: active-high, 100Ω series + 10k pull-up on PCB;
+	//   GPIO input configured with pull-down for noise immunity.
+	// BTN.OK (SW10 / GPIO0): active-low pull-up — also the BOOT mode trigger.
+	//
+	// zephyr,code maps to AKIRA_BTN_* (akira_input.h):
+	//   INPUT_KEY_0=OK  2=UP 3=DOWN 4=LEFT 5=RIGHT 6=A 7=B 8=X 9=Y
+	// =========================================================================
+	gpio_keys {
+		compatible = "gpio-keys";
+
+		btn_ok: btn_ok {
+			gpios = <&gpio0 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			label = "BTN OK (BOOT / SW10)";
+			zephyr,code = <INPUT_KEY_0>;
+		};
+		btn_up: btn_up {
+			gpios = <&gpio0 4 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+			label = "BTN Up (SW5)";
+			zephyr,code = <2>;
+		};
+		btn_down: btn_down {
+			gpios = <&gpio0 5 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+			label = "BTN Down (SW6)";
+			zephyr,code = <3>;
+		};
+		btn_left: btn_left {
+			gpios = <&gpio0 6 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+			label = "BTN Left (SW7)";
+			zephyr,code = <4>;
+		};
+		btn_right: btn_right {
+			gpios = <&gpio0 7 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+			label = "BTN Right (SW8)";
+			zephyr,code = <5>;
+		};
+		btn_a: btn_a {
+			gpios = <&gpio0 16 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+			label = "BTN A (SW2)";
+			zephyr,code = <6>;
+		};
+		btn_b: btn_b {
+			gpios = <&gpio0 15 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+			label = "BTN B (SW3)";
+			zephyr,code = <7>;
+		};
+		btn_x: btn_x {
+			gpios = <&gpio0 17 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+			label = "BTN X (SW4)";
+			zephyr,code = <8>;
+		};
+		btn_y: btn_y {
+			gpios = <&gpio1 9 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>; // GPIO41
+			label = "BTN Y (SW1)";
+			zephyr,code = <9>;
+		};
+	};
+
+	// =========================================================================
+	// LEDs
+	// D9 — LED.ACT (green, LTST-S270KGKT), GPIO42, 270Ω series resistor.
+	// D8 — power indicator (yellow, LTST-S270KSKT) driven by power rail, no GPIO.
+	// D10 — charge indicator (yellow, LTST-S270KSKT) driven by BQ25601 STAT pin.
+	// =========================================================================
+	leds {
+		compatible = "gpio-leds";
+		led_act: led_act {
+			gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>; // GPIO42
+			label = "Activity LED (green, D9)";
+		};
+	};
+
+	// =========================================================================
+	// MIPI DBI SPI controller — ST7789V (J7, XF2M-4015-1A, 40-pin FFC)
+	//
+	// DC   = GPIO9  (TFT_DC)
+	// RST  = GPIO45 (TFT_RST, via R94 0Ω — default populated)
+	// CS   = SPI2 cs-gpios[1] = GPIO10 (TFT_CS, active low)
+	//
+	// Disable this node and enable akira_ili9341_prod (in overlay) for ILI9341.
+	// Disable and enable ls027b7dh01 + CONFIG_AKIRA_SHARP_DISPLAY for Sharp LCD.
+	// =========================================================================
+	mipi_dbi_prod: mipi_dbi_prod {
+		compatible  = "zephyr,mipi-dbi-spi";
+		spi-dev     = <&spi2>;
+		dc-gpios    = <&gpio0 9  GPIO_ACTIVE_HIGH>; // TFT_DC  = GPIO9
+		reset-gpios = <&gpio1 13 GPIO_ACTIVE_LOW>;  // TFT_RST = GPIO45 (gpio1 pin 13)
+		write-only;
+		#address-cells = <1>;
+		#size-cells    = <0>;
+
+		// -----------------------------------------------------------------
+		// ST7789V — 2.8" IPS TFT LCD, 320×240
+		// Target parts: HS280S030RX / YT280S030 / ZK028-240320FS02-C45
+		// Connector: J7 (XF2M-4015-1A, 40-pin FFC, 0.5mm top-contact)
+		// AP2502 (U22) 4-LED backlight driver; EN controlled by PWM (GPIO48)
+		// -----------------------------------------------------------------
+		st7789v_prod: st7789v@1 {
+			compatible         = "sitronix,st7789v";
+			reg                = <1>;           // SPI2 cs-gpios[1] = GPIO10
+			mipi-max-frequency = <60000000>;
+			width              = <320>;
+			height             = <240>;
+			x-offset           = <0>;
+			y-offset           = <0>;
+			inversion-off;
+			vcom          = <0x19>;
+			gctrl         = <0x35>;
+			vrhs          = <0x12>;
+			vdvs          = <0x20>;
+			mdac          = <0x68>;
+			gamma         = <0x01>;
+			colmod        = <0x55>;
+			lcm           = <0x2c>;
+			porch-param   = [0c 0c 00 33 33];
+			cmd2en-param  = [5a 69 02 01];
+			pwctrl1-param = [a4 a1];
+			pvgam-param   = [D0 04 0D 11 13 2B 3F 54 4C 18 0D 0B 1F 23];
+			nvgam-param   = [D0 04 0C 11 13 2C 3F 44 51 2F 1F 1F 20 23];
+			ram-param     = [00 F0];
+			rgb-param     = [CD 08 14];
+			mipi-mode     = "MIPI_DBI_MODE_SPI_4WIRE";
+			status        = "okay";
+		};
+	};
+};
+
+// =============================================================================
+// UART0 — shell / debug / CP2102N (U15) → J3 (USB-C debug port, VBUS2)
+// TX = GPIO43 (U0TXD), RX = GPIO44 (U0RXD) — standard WROOM-1 UART0 pins.
+// =============================================================================
+&uart0 {
+	status        = "okay";
+	current-speed = <115200>;
+	pinctrl-0     = <&uart0_default>;
+	pinctrl-names = "default";
+};
+
+// =============================================================================
+// GPIO banks
+// =============================================================================
+&gpio0 { status = "okay"; };
+&gpio1 { status = "okay"; };
+
+// =============================================================================
+// ADC — ESP32-S3 SAR ADC (adc1)
+// =============================================================================
+&adc1 { status = "okay"; };
+
+// =============================================================================
+// I2C0 — all internal I2C peripherals
+// SDA = GPIO8, SCL = GPIO18
+// External 4.7kΩ pull-ups R26 + R27 on PCB.
+// Fast mode (400kHz) — all listed devices support it.
+//
+// IMPORTANT: TCA6408 must initialise before SPI2 devices that reference its
+// GPIO pins as chip-selects.  Zephyr's device model resolves this dependency
+// automatically via the GPIO phandle in cs-gpios.
+// =============================================================================
+&i2c0 {
+	status        = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+	pinctrl-0     = <&i2cm0_default>;
+	pinctrl-names = "default";
+
+	// -------------------------------------------------------------------------
+	// TCA6408ARSV — 8-bit I2C GPIO expander (U6)
+	// 7-bit addr 0x21 (ADDR → GND; 8-bit WRITE=0x42, READ=0x43)
+	// ~INT → IO_INT → GPIO46 (gpio1 pin 14): fires on any input-pin change.
+	// ~RESET → +3.3V (always deasserted; hardware reset not used in firmware).
+	//
+	// Pin map (from MCU schematic, sheet 2/7):
+	//   P0 = OTG_EN   output — enables TPS61023 5V boost for USB OTG host
+	//   P1 = CC_CS    output — CC1121 SPI chip select (active low)
+	//   P2 = RF_RST   output — LR2021 + CC1121 combined reset (active low)
+	//   P3 = LR_BUSY  input  — LR2021 BUSY (high = chip busy / resetting)
+	//   P4 = LR_CS    output — LR2021 SPI chip select (active low)
+	//   P5 = SD_DET   input  — microSD card detect, DET_A (active low = present)
+	//   P6 = USB_INT  input  — FUSB302 INT_N (active low, routed via IO_INT)
+	//   P7 = (spare)
+	// -------------------------------------------------------------------------
+	tca6408: tca6408@21 {
+		// TCA6408ARSV is register-compatible with PCAL6408A for basic I/O.
+		// nxp,pcal6408a auto-selects GPIO_PCAL64XXA via DT_HAS_NXP_PCAL6408A_ENABLED.
+		// status = "disabled" here so MCUboot (which also gets this DTS) does NOT
+		// auto-compile the driver — MCUboot lacks kernel semaphores needed by I2C.
+		// The app overlay enables it under #ifndef CONFIG_MCUBOOT.
+		compatible    = "nxp,pcal6408a";
+		reg           = <0x21>;
+		gpio-controller;
+		#gpio-cells   = <2>;
+		ngpios        = <8>;
+		int-gpios     = <&gpio1 14 GPIO_ACTIVE_LOW>; // IO_INT = GPIO46
+		status        = "disabled"; // enabled in overlay for app build only
+	};
+
+	// -------------------------------------------------------------------------
+	// BQ25601RTW — Li-Ion battery charger up to 3A (U17)
+	// 7-bit addr 0x6B (8-bit WRITE=0xD6, READ=0xD7)
+	// PSEL → +3.3V (500mA input current limit by default; raise via register).
+	// QON → floating (internal pull-up; exits ship mode on adapter).
+	// ~INT / STAT → PWR_INT → GPIO3.
+	// Thermistor: 3435K NTC on TS pin.
+	// -------------------------------------------------------------------------
+	bq25601: bq25601@6b {
+		compatible = "ti,bq25601";
+		reg        = <0x6b>;
+		constant-charge-current-max-microamp  = <1000000>;
+		constant-charge-voltage-max-microvolt = <4200000>;
+		int-gpios  = <&gpio0 3 GPIO_ACTIVE_LOW>; // PWR_INT = GPIO3
+		status     = "okay";
+	};
+
+	// -------------------------------------------------------------------------
+	// BQ28Z610DRZ — 1-cell fuel gauge + protection IC (U7)
+	// 7-bit addr 0x55 (8-bit WRITE=0xAA, READ=0xAB)
+	// Sense resistor: 1mΩ (R16, 0603 PA0603FRP7W0R001L).
+	// Single-cell: VC1 tied to VC2. Dual back-to-back NFETs AO3400A (Q4/Q5).
+	// Battery connector J8 (B3B-PH-SM4-TB): pin1=PACK, pin2=BAT, pin3=GND.
+	// -------------------------------------------------------------------------
+	bq28z610: bq28z610@55 {
+		compatible = "ti,bq28z610";
+		reg        = <0x55>;
+		status     = "okay";
+	};
+
+	// -------------------------------------------------------------------------
+	// FUSB302BMPX — USB-C PD controller (U8), J2 OTG port
+	// 7-bit addr 0x22 (8-bit WRITE=0x44, READ=0x45)
+	// Both VCONN pins tied to +3.3V (valid: 3.0–5.5V).
+	// INT_N → USB_INT → TCA6408 P6 → triggers IO_INT on GPIO46.
+	// -------------------------------------------------------------------------
+	fusb302: fusb302@22 {
+		compatible = "fcs,fusb302";
+		reg        = <0x22>;
+		status     = "okay";
+	};
+
+	// -------------------------------------------------------------------------
+	// LSM6DS3 — 6-axis IMU: accel + gyro (U3)
+	// 7-bit addr 0x6A (SDO/SA0 → GND; 8-bit WRITE=0xD4, READ=0xD5)
+	// CS → +3.3V (I2C mode). INT1 → IMU_INT → GPIO1.
+	// INT2 unused. Free-fall + activity routable to INT1 via register config.
+	// Used for: tilt-based gaming input, drop-protection.
+	// -------------------------------------------------------------------------
+	lsm6ds3: lsm6ds3@6a {
+		compatible = "akira,lsm6ds3";
+		reg        = <0x6a>;
+		irq-gpios  = <&gpio0 1 GPIO_ACTIVE_HIGH>; // IMU_INT = GPIO1
+		status     = "okay";
+	};
+
+	// -------------------------------------------------------------------------
+	// BME280 — temperature / pressure / humidity (U2, optional)
+	// 7-bit addr 0x77 (CSB → +3.3V; 8-bit WRITE=0xEE, READ=0xEF)
+	// Marked "BME280 Optional" in product spec — may not be populated.
+	// -------------------------------------------------------------------------
+	bme280: bme280@77 {
+		// bosch,bme280 auto-selects the BME280 driver (I2C-dependent).
+		// Disabled here for MCUboot; enabled by app overlay.
+		compatible = "bosch,bme280";
+		reg        = <0x77>;
+		status     = "disabled"; // enabled in overlay for app build only
+	};
+
+	// -------------------------------------------------------------------------
+	// ST25DV64K-IER8C3 — Dynamic NFC Tag + EEPROM (U4)
+	// User/FTM memory: 7-bit 0x53 (8-bit WRITE=0xA6, READ=0xA7)
+	// System memory:   7-bit 0x57 (8-bit WRITE=0xAE, READ=0xAF)
+	// GPO interrupt → NFC_INT → GPIO21.
+	// NOTE: NFC loop antenna NOT routed on base board (insufficient PCB space
+	// at original dimensions). Pads J6 (Conn_01x05_MountingPin) available
+	// for external antenna pigtail / coil.
+	// -------------------------------------------------------------------------
+	st25dv_user: st25dv@53 {
+		compatible = "st,st25dv64k";
+		reg        = <0x53>;
+		gpo-gpios  = <&gpio0 21 GPIO_ACTIVE_LOW>; // NFC_INT = GPIO21
+		status     = "okay";
+	};
+
+	st25dv_sys: st25dv@57 {
+		compatible = "st,st25dv64k";
+		reg        = <0x57>;
+		status     = "okay";
+	};
+};
+
+// =============================================================================
+// SPI2 — shared high-speed peripheral bus
+// MOSI = GPIO11, CLK = GPIO12 (R93 0Ω, default), MISO = GPIO13
+//
+// CS-GPIO map (index → signal → chip):
+//   [0] TCA6408 P4 — LR_CS   — LR2021IMLTRT LoRa/FSK transceiver
+//   [1] GPIO10     — TFT_CS  — ST7789V / ILI9341 display (J7)
+//                            — Sharp LS027B7DH01 SCS (J4) when CONFIG_AKIRA_SHARP_DISPLAY=y
+//   [2] GPIO14     — SD_CS   — microSD card (Molex 503398-1892, J1)
+//   [3] TCA6408 P1 — CC_CS   — CC1121RHB Sub-GHz transceiver
+//
+// The Sharp Memory LCD SCS is active-HIGH (unusual). When using Sharp (J4)
+// instead of TFT (J7), the overlay overrides cs-gpios[1] to GPIO_ACTIVE_HIGH
+// via CONFIG_AKIRA_SHARP_DISPLAY.
+// =============================================================================
+&spi2 {
+	status        = "okay";
+	pinctrl-0     = <&spim2_default>;
+	pinctrl-names = "default";
+	clock-frequency = <80000000>;
+	#address-cells = <1>;
+	#size-cells    = <0>;
+
+	cs-gpios =
+		<&tca6408 4 GPIO_ACTIVE_LOW>,  // [0] LR_CS  (TCA6408 P4) — LR2021
+		<&gpio0 10 GPIO_ACTIVE_LOW>,   // [1] TFT_CS (GPIO10)     — ST7789V/ILI9341
+		<&gpio0 14 GPIO_ACTIVE_LOW>,   // [2] SD_CS  (GPIO14)     — microSD
+		<&tca6408 1 GPIO_ACTIVE_LOW>;  // [3] CC_CS  (TCA6408 P1) — CC1121
+
+	// -------------------------------------------------------------------------
+	// LR2021IMLTRT (Semtech LR1121 core) — multi-band LoRa/FSK transceiver (U12)
+	//
+	// SPI  → shared SPI2 bus (MOSI/CLK/MISO)
+	// CS   → TCA6408 P4 (LR_CS)         [cs-gpios index 0]
+	// RST  → TCA6408 P2 (RF_RST)        shared with CC1121
+	// BUSY → TCA6408 P3 (LR_BUSY)       input — high while chip is busy
+	// IRQ  → GPIO47     (LR_INT = DIO5) direct GPIO — 40kΩ internal pull-up
+	// VBAT → 3.3V rail  (1.8–3.7V OK; TX power derates below 2.2V)
+	//
+	// Primary:   868MHz LoRa (AkiraOS mesh network)
+	// Secondary: 2.4GHz (PCB inverted-F antenna)
+	// -------------------------------------------------------------------------
+	lr2021: lr2021@0 {
+		compatible        = "semtech,lr1121";
+		reg               = <0>;
+		spi-max-frequency = <10000000>;
+		cs-gpios          = <&tca6408 4 GPIO_ACTIVE_LOW>;   // LR_CS via P4
+		reset-gpios       = <&tca6408 2 GPIO_ACTIVE_LOW>;   // RF_RST via P2
+		busy-gpios        = <&tca6408 3 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>; // LR_BUSY via P3
+		irq-gpios         = <&gpio1 15 GPIO_ACTIVE_HIGH>;   // LR_INT = GPIO47
+		status            = "okay";
+	};
+
+	// -------------------------------------------------------------------------
+	// microSD card — SPI-SDHC (Molex 503398-1892, J1)
+	// CS     → GPIO14 (SD_CS)             [cs-gpios index 2]
+	// SD_DET → TCA6408 P5 (active low = card present)
+	// -------------------------------------------------------------------------
+	spi_sdhc0: sdhc@2 {
+		compatible        = "zephyr,sdhc-spi-slot";
+		reg               = <2>;
+		spi-max-frequency = <25000000>;
+		status            = "okay";
+		mmc {
+			compatible = "zephyr,sdmmc-disk";
+			disk-name  = "SD";
+			status     = "okay";
+		};
+	};
+
+	// -------------------------------------------------------------------------
+	// CC1121RHB — high-performance Sub-GHz transceiver (U16)
+	// SPI  → shared SPI2 bus
+	// CS   → TCA6408 P1 (CC_CS)           [cs-gpios index 3]
+	// RST  → TCA6408 P2 (RF_RST)          shared with LR2021
+	// EXT_XOSC → GND (onboard 32MHz XOSC on XOSC_Q1/Q2 used)
+	// Covers 433MHz and 868/915MHz bands (swap one matching component for band).
+	// -------------------------------------------------------------------------
+	cc1121: cc1121@3 {
+		compatible        = "ti,cc1121";
+		reg               = <3>;
+		spi-max-frequency = <10000000>;
+		reset-gpios       = <&tca6408 2 GPIO_ACTIVE_LOW>; // RF_RST via P2
+		status            = "okay";
+	};
+
+	// -------------------------------------------------------------------------
+	// Sharp LS027B7DH01 — 2.7" Memory LCD, 400×240 monochrome (J4, XF2M-1015-1A)
+	//
+	// DISABLED BY DEFAULT — only one display connector (J4 or J7) is populated.
+	// To use Sharp:
+	//   CONFIG_AKIRA_SHARP_DISPLAY=y in .conf
+	//   Overlay overrides cs-gpios[1] to GPIO_ACTIVE_HIGH (SCS is active HIGH)
+	//   and sets zephyr,display = &ls027b7dh01
+	//
+	// SPI  → shared SPI2 (MOSI only; no MISO used)
+	// SCS  → GPIO10 (TFT_CS = cs-gpios[1], active HIGH for Sharp)
+	// EXTCOMIN → not used (EXTMODE=LOW → COM inversion via serial command)
+	// DISP → pulled to +3.3V via R85 (10kΩ); MCU not controlling
+	// VDD/VDDA → +5V (LM2750 charge pump, U19)
+	// -------------------------------------------------------------------------
+	ls027b7dh01: ls027b7dh01@1 {
+		compatible        = "sharp,ls0xx";
+		reg               = <1>;           // cs-gpios[1] = GPIO10 (needs ACTIVE_HIGH override)
+		spi-max-frequency = <2000000>;
+		width             = <400>;
+		height            = <240>;
+		status            = "disabled";   // enable with CONFIG_AKIRA_SHARP_DISPLAY=y
+	};
+};
+
+// =============================================================================
+// PSRAM — 8MB OPI PSRAM inside ESP32-S3-WROOM-1-N16R8 module
+// =============================================================================
+&psram0 {
+	size   = <DT_SIZE_M(8)>;
+	status = "okay";
+};
+
+// =============================================================================
+// Watchdog
+// =============================================================================
+&wdt0 { status = "okay"; };
+
+// =============================================================================
+// TRNG
+// =============================================================================
+&trng0 { status = "okay"; };
+
+// =============================================================================
+// USB OTG — J2 (OTG/PD port, dual-role via FUSB302, U8)
+// Native USB_D+ = GPIO20, USB_D- = GPIO19
+// TS3USB221 (U21) mux: USB_SEL0=GPIO39, USB_SEL1=GPIO40
+// OTG host power: TCA6408 P0 (OTG_EN) enables TPS61023 5V boost (U9)
+// =============================================================================
+zephyr_udc0: &usb_otg { status = "okay"; };
+
+// =============================================================================
+// WiFi
+// =============================================================================
+&wifi { status = "okay"; };
+
+// =============================================================================
+// Bluetooth HCI
+// =============================================================================
+&esp32_bt_hci { status = "okay"; };
+
+// =============================================================================
+// Unused peripherals
+// =============================================================================
+&timer0 { status = "disabled"; };
+&timer1 { status = "disabled"; };
+&timer2 { status = "disabled"; };
+&timer3 { status = "disabled"; };

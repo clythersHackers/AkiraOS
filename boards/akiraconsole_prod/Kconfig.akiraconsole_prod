@@ -1,0 +1,6 @@
+# AkiraConsole Production board configuration
+# Copyright (c) 2026 AkiraOS
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_AKIRACONSOLE_PROD
+	select SOC_ESP32S3_MINI_N8

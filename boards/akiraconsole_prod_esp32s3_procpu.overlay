@@ -1,0 +1,206 @@
+// SPDX-License-Identifier: Apache-2.0
+// AkiraConsole Production — application-level DTS overlay
+// Hardware description lives in boards/akiraconsole_prod/*.dts
+// This file adds: flash partitions, settings, filesystem, USB HID, display overrides.
+
+#include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
+
+// =============================================================================
+// PSRAM
+// =============================================================================
+&psram0 {
+	size   = <DT_SIZE_M(8)>;
+	status = "okay";
+};
+
+// =============================================================================
+// Watchdog
+// =============================================================================
+&wdt0 { status = "okay"; };
+
+// =============================================================================
+// GPIO / WiFi / UART — safe for both app and MCUboot
+// =============================================================================
+&gpio0 { status = "okay"; };
+&gpio1 { status = "okay"; };
+&wifi  { status = "okay"; };
+&uart0 { status = "okay"; current-speed = <115200>; };
+
+// =============================================================================
+// SPI2 CS-GPIO override
+//
+// The board DTS routes LR_CS (reg=0) and CC_CS (reg=3) through TCA6408 pins.
+// When TCA6408 is not connected / disabled, those phandle references cause a
+// compile-time ordinal error (__device_dts_ord_N undeclared).
+//
+// Override: redirect disabled CS slots to GPIO2 (EXT_CS, spare line) so the
+// SPI2 driver compiles cleanly.  Re-wire to TCA6408 entries once fitted:
+//   cs-gpios[0] = <&tca6408 4 GPIO_ACTIVE_LOW>;  // LR_CS
+//   cs-gpios[3] = <&tca6408 1 GPIO_ACTIVE_LOW>;  // CC_CS
+// =============================================================================
+&spi2 {
+	cs-gpios =
+		<&gpio0 2  GPIO_ACTIVE_LOW>,   // [0] LR_CS  → GPIO2  (TCA6408 P4 when fitted)
+		<&gpio0 10 GPIO_ACTIVE_LOW>,   // [1] TFT_CS → GPIO10 (direct)
+		<&gpio0 14 GPIO_ACTIVE_LOW>,   // [2] SD_CS  → GPIO14 (direct)
+		<&gpio0 2  GPIO_ACTIVE_LOW>;   // [3] CC_CS  → GPIO2  (TCA6408 P1 when fitted)
+};
+
+// =============================================================================
+// I2C bus and devices.
+// nxp,pcal6408a (TCA6408) and bosch,bme280 disabled in board DTS for MCUboot.
+// Enable here for app build only.
+//
+// TCA6408: NOT CONNECTED — keep disabled until fitted.
+// BME280:  enabled below.
+// =============================================================================
+#ifndef CONFIG_MCUBOOT
+&i2c0 { status = "okay"; };
+
+// &tca6408 { status = "okay"; };  // NOT CONNECTED — uncomment when fitted
+&bme280  { status = "okay"; };  // bosch,bme280 (I2C addr 0x77)
+#endif /* !CONFIG_MCUBOOT */
+
+// =============================================================================
+// ADC alias
+// =============================================================================
+/ {
+	aliases {
+		akira-adc = &adc1;
+	};
+};
+
+// =============================================================================
+// Display option 1 (default): ST7789V TFT on J7 via MIPI DBI
+// zephyr,display already set to &st7789v_prod in board DTS.
+// =============================================================================
+
+// =============================================================================
+// Display option 2: AkiraOS ILI9341 direct-SPI driver on J7
+// Activate: CONFIG_AKIRA_ILI9341_DRIVER=y, drop CONFIG_ST7789V + MIPI_DBI_SPI.
+// DC=GPIO9, RST=GPIO45, CS=GPIO10 (cs-gpios[1], active low) — same hardware.
+// =============================================================================
+#ifdef CONFIG_AKIRA_ILI9341_DRIVER
+/ {
+	chosen {
+		zephyr,display = &akira_ili9341_prod;
+	};
+};
+
+&mipi_dbi_prod {
+	status = "disabled";
+};
+
+&spi2 {
+	akira_ili9341_prod: akira_ili9341@1 {
+		compatible        = "akira,ili9341";
+		reg               = <1>;                          // cs-gpios[1] = GPIO10
+		spi-max-frequency = <25000000>;
+		dc-gpios          = <&gpio0 9  GPIO_ACTIVE_HIGH>; // TFT_DC  = GPIO9
+		reset-gpios       = <&gpio1 13 GPIO_ACTIVE_LOW>;  // TFT_RST = GPIO45
+		width             = <320>;
+		height            = <240>;
+		status            = "okay";
+	};
+};
+#endif /* CONFIG_AKIRA_ILI9341_DRIVER */
+
+// =============================================================================
+// Display option 3: Sharp LS027B7DH01 Memory LCD on J4 (XF2M-1015-1A, 10-pin)
+// Activate: CONFIG_AKIRA_SHARP_DISPLAY=y, drop CONFIG_ST7789V + MIPI_DBI_SPI.
+//
+// KEY DIFFERENCE from TFT: Sharp SCS is ACTIVE HIGH (unusual SPI CS polarity).
+// This override replaces cs-gpios[1] polarity and enables the Sharp node.
+// VDD/VDDA require +5V from LM2750 charge pump (always running).
+// EXTMODE = LOW by default (R61 0Ω → GND): COM inversion via serial command.
+// =============================================================================
+#ifdef CONFIG_AKIRA_SHARP_DISPLAY
+/ {
+	chosen {
+		zephyr,display = &ls027b7dh01;
+	};
+};
+
+&mipi_dbi_prod {
+	status = "disabled";
+};
+
+&spi2 {
+	// Override cs-gpios: index [1] changes to ACTIVE_HIGH for Sharp SCS
+	cs-gpios =
+		<&tca6408 4 GPIO_ACTIVE_LOW>,   // [0] LR_CS  (unchanged)
+		<&gpio0 10 GPIO_ACTIVE_HIGH>,   // [1] SCS    — Sharp ACTIVE HIGH
+		<&gpio0 14 GPIO_ACTIVE_LOW>,    // [2] SD_CS  (unchanged)
+		<&tca6408 1 GPIO_ACTIVE_LOW>;   // [3] CC_CS  (unchanged)
+
+	ls027b7dh01 {
+		status = "okay";
+	};
+};
+#endif /* CONFIG_AKIRA_SHARP_DISPLAY */
+
+// =============================================================================
+// USB Device — HID interface
+// =============================================================================
+&zephyr_udc0 {
+	status = "okay";
+
+	hid_dev_0: hid_dev_0 {
+		compatible            = "zephyr,hid-device";
+		protocol-code         = "none";
+		in-polling-period-us  = <1000>;
+		out-polling-period-us = <1000>;
+		in-report-size        = <9>;
+		out-report-size       = <2>;
+	};
+};
+
+// =============================================================================
+// Flash partition layout — 16MB
+//
+//   0x000000–0x3FFFFF  MCUboot + slot0 + slot1 (partitions_0x0_amp.dtsi)
+//   0x400000–0x407FFF  NVS settings 32KB   ← BT bonds, Wi-Fi credentials
+//   0x408000–0x487FFF  LittleFS 512KB       ← app filesystem
+//
+// Partitions start at 0x400000 so OTA (slot1 at 0x170000–0x2BFFFF) never
+// overwrites user data.
+// =============================================================================
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells    = <1>;
+
+		akira_settings_nvs_partition: partition@400000 {
+			label = "akira_settings_nvs";
+			reg   = <0x00400000 DT_SIZE_K(32)>;
+		};
+
+		lfs1_partition: partition@408000 {
+			label = "lfs_storage";
+			reg   = <0x00408000 DT_SIZE_K(512)>;
+		};
+	};
+};
+
+/ {
+	chosen {
+		zephyr,settings-partition = &akira_settings_nvs_partition;
+	};
+
+	fstab {
+		compatible = "zephyr,fstab";
+
+		lfs1: lfs1 {
+			compatible     = "zephyr,fstab,littlefs";
+			read-size      = <1>;
+			prog-size      = <16>;
+			cache-size     = <256>;
+			lookahead-size = <32>;
+			block-cycles   = <512>;
+			partition      = <&lfs1_partition>;
+			mount-point    = "/lfs";
+		};
+	};
+};

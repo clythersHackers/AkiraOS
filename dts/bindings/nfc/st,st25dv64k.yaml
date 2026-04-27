@@ -1,0 +1,16 @@
+# Copyright (c) 2026 AkiraOS Project
+# SPDX-License-Identifier: Apache-2.0
+
+description: ST25DV64K Dynamic NFC/RFID Tag with EEPROM (STMicroelectronics)
+
+compatible: "st,st25dv64k"
+
+include: i2c-device.yaml
+
+properties:
+  gpo-gpios:
+    type: phandle-array
+    description: |
+      GPIO connected to the GPO pin (open-drain, active low).
+      Signals read completion, write completion, or RF field detection
+      depending on register configuration.

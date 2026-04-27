@@ -1,0 +1,13 @@
+# Copyright (c) 2026 AkiraOS Project
+# SPDX-License-Identifier: Apache-2.0
+
+description: FUSB302 USB Type-C PD controller (onsemi / Fairchild)
+
+compatible: "fcs,fusb302"
+
+include: i2c-device.yaml
+
+properties:
+  int-n-gpios:
+    type: phandle-array
+    description: GPIO connected to INT_N pin (active low interrupt).
