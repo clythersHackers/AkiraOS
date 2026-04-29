@@ -7,6 +7,7 @@
 #include <zephyr/dt-bindings/gpio/gpio.h>
 #include <zephyr/dt-bindings/i2c/i2c.h>
 #include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
 #include <espressif/partitions_0x0_amp.dtsi>
 #include "akiraconsole_prod-pinctrl.dtsi"
 
@@ -103,6 +104,48 @@
 			gpios = <&gpio1 10 GPIO_ACTIVE_HIGH>; // GPIO42
 			label = "Activity LED (green, D9)";
 		};
+	};
+
+	// =========================================================================
+	// Brightness wheel (RV1 = RK10J12R0A0B) + backlight (AP2502)
+	//
+	// Hardware circuit on GPIO48:
+	//   D2/D3 (BAT54J) + RV1 (10 kΩ rheostat, pin 1 ↔ 5) + C67 (10 nF)
+	//   form a relaxation oscillator: f ≈ 9 kHz, duty cycle = pot position.
+	//   → U5B → U5A (74LVC2G14 Schmitt triggers) → R63 → GPIO48 (INPUT)
+	//                                                   └→ AP2502 EN (direct)
+	//
+	// Two modes for GPIO48 (pinctrl-0 selects):
+	//   mcpwm0_default (default): MCPWM0 CAP0 input — reads duty cycle
+	//     → akira,brightness-wheel driver maps to 0-255 position value
+	//     → reported as INPUT_ABS_MISC axis (use like DPAD / joystick axis)
+	//   ledc0_default (override): LEDC CH0 output — MCU controls brightness
+	//     → backlight pwm-leds node; pwm_set_dt() controls duty cycle
+	//
+	// RV1 hardware range: 9 %–91 % (CW = dim, CCW = bright).
+	// Pot pin 1 shorted to pin 5 (rheostat wiring, not full voltage divider).
+	// =========================================================================
+	// Generic rotary dial input — reports INPUT_ABS_WHEEL (0-255).
+	// Apps read it the same way as buttons; no hardcoded "brightness" semantics.
+	dial0: dial0 {
+		compatible    = "akira,pwm-dial";
+		pwms          = <&mcpwm0 6 0 PWM_POLARITY_NORMAL>; /* CAP0 = ch 6 */
+		akira,min-pct = <9>;   /* CW stop  → axis 0   */
+		akira,max-pct = <91>;  /* CCW stop → axis 255 */
+		akira,poll-ms = <50>;
+	};
+
+	backlight: backlight {
+		compatible  = "pwm-leds";
+		bl_pwm: bl_pwm {
+			pwms  = <&ledc0 0 PWM_HZ(10000) PWM_POLARITY_NORMAL>;
+			label = "Display Backlight";
+		};
+	};
+
+	aliases {
+		dial0          = &dial0;        /* rotary input, same API as buttons */
+		pwm-backlight0 = &backlight;
 	};
 
 	// =========================================================================
@@ -307,17 +350,19 @@
 	// at original dimensions). Pads J6 (Conn_01x05_MountingPin) available
 	// for external antenna pigtail / coil.
 	// -------------------------------------------------------------------------
-	st25dv_user: st25dv@53 {
-		compatible = "st,st25dv64k";
-		reg        = <0x53>;
-		gpo-gpios  = <&gpio0 21 GPIO_ACTIVE_LOW>; // NFC_INT = GPIO21
-		status     = "okay";
-	};
-
-	st25dv_sys: st25dv@57 {
-		compatible = "st,st25dv64k";
-		reg        = <0x57>;
-		status     = "okay";
+	// ST25DV64K-IER8C3: user memory I2C address 0x53.
+	// The system configuration register space (0x57) is accessed internally
+	// by the driver via the system-reg property — no second DTS node needed.
+	// To change GPO behaviour for a different board, edit akira,gpo-sources
+	// without touching any C code.
+	st25dv: st25dv@53 {
+		compatible       = "st,st25dv64k";
+		reg              = <0x53>;
+		system-reg       = <0x57>; // system config registers (ST25DV fixed)
+		gpo-gpios        = <&gpio0 21 GPIO_ACTIVE_LOW>; // NFC_INT = GPIO21
+		// GPO_ENABLE(0x80) | GPO_FIELDRISING(0x08) | GPO_RFUSERWRITE(0x01)
+		akira,gpo-sources = <0x89>;
+		status           = "okay";
 	};
 };
 
@@ -399,12 +444,22 @@
 	// EXT_XOSC → GND (onboard 32MHz XOSC on XOSC_Q1/Q2 used)
 	// Covers 433MHz and 868/915MHz bands (swap one matching component for band).
 	// -------------------------------------------------------------------------
+	// CC1121RHB Sub-GHz transceiver.
+	// All radio parameters live here — change frequency, power, or bitrate
+	// by editing this node; no C driver changes required.
 	cc1121: cc1121@3 {
-		compatible        = "ti,cc1121";
-		reg               = <3>;
-		spi-max-frequency = <10000000>;
-		reset-gpios       = <&tca6408 2 GPIO_ACTIVE_LOW>; // RF_RST via P2
-		status            = "okay";
+		compatible              = "ti,cc1121";
+		reg                     = <3>;
+		spi-max-frequency       = <10000000>;
+		reset-gpios             = <&tca6408 2 GPIO_ACTIVE_LOW>; // RF_RST via P2
+		// AkiraConsole Production: 868 MHz Sub-GHz band
+		// Swap to <433000000> for 433 MHz (also swap antenna matching component)
+		// Swap to <915000000> for North American 915 MHz ISM band
+		akira,default-frequency-hz  = <868000000>;
+		akira,default-tx-power-dbm  = <14>;
+		akira,default-bitrate-bps   = <4800>;
+		akira,xosc-frequency-hz     = <32000000>; // Y1 crystal on PCB
+		status                      = "okay";
 	};
 
 	// -------------------------------------------------------------------------
@@ -467,6 +522,39 @@ zephyr_udc0: &usb_otg { status = "okay"; };
 // Bluetooth HCI
 // =============================================================================
 &esp32_bt_hci { status = "okay"; };
+
+// =============================================================================
+// MCPWM0 — brightness wheel capture (default GPIO48 mode)
+//
+// Captures the RC oscillator duty cycle from the RV1 potentiometer circuit.
+// prescale = 7 → capture counter clock = 80 MHz / 8 = 10 MHz (100 ns/tick).
+// At 9 kHz oscillator: period ≈ 1111 ticks — good resolution for 9%–91%.
+// Channel index 6 = capture unit 0 (per ESP32-S3 MCPWM channel numbering).
+// =============================================================================
+&mcpwm0 {
+	pinctrl-0    = <&mcpwm0_default>;
+	pinctrl-names = "default";
+	prescale     = <7>;
+	status       = "okay";
+};
+
+// =============================================================================
+// LEDC — optional software brightness override (alternate GPIO48 mode)
+// Disabled by default; enable by swapping pinctrl to ledc0_default and
+// uncommenting CONFIG_AKIRA_BACKLIGHT_SW_OVERRIDE=y in the board .conf.
+// =============================================================================
+&ledc0 {
+	pinctrl-0    = <&ledc0_default>;
+	pinctrl-names = "default";
+	status = "disabled";   /* default: GPIO48 in MCPWM capture mode */
+	#address-cells = <1>;
+	#size-cells    = <0>;
+
+	channel0@0 {
+		reg   = <0x0>;
+		timer = <0>;
+	};
+};
 
 // =============================================================================
 // Unused peripherals

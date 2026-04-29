@@ -290,6 +290,13 @@ build_mcuboot() {
         print_info "MCUboot overlay: $board_overlay"
     fi
 
+    # Board-specific MCUboot Kconfig overrides (e.g. RTT console, logging)
+    local mcuboot_conf="$SCRIPT_DIR/boards/${BOARD}.mcuboot.conf"
+    if [[ -f "$mcuboot_conf" ]]; then
+        extra_cmake+=" -DEXTRA_CONF_FILE=$mcuboot_conf"
+        print_info "MCUboot conf: $mcuboot_conf"
+    fi
+
     cd "$WORKSPACE_ROOT"
 
     if west build --pristine -b "$zephyr_board" bootloader/mcuboot/boot/zephyr -d "$build_dir" \

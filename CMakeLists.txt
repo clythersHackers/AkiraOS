@@ -358,6 +358,10 @@ if(CONFIG_AKIRA_MODULE_RF)
     if(CONFIG_AKIRA_CC1101)
         target_sources(app PRIVATE src/drivers/rf/cc1101.c)
     endif()
+
+    if(CONFIG_AKIRA_CC1121)
+        target_sources(app PRIVATE src/drivers/rf/cc1121.c)
+    endif()
 endif()
 
 # Custom drivers for peripherals not covered by Zephyr upstream drivers
@@ -375,6 +379,18 @@ endif()
 
 if(CONFIG_AKIRA_ILI9341_DRIVER)
     target_sources(app PRIVATE src/drivers/display/akira_ili9341.c)
+endif()
+
+if(CONFIG_CHARGER_BQ25601)
+    target_sources(app PRIVATE src/drivers/charger/bq25601.c)
+endif()
+
+if(CONFIG_AKIRA_ST25DV)
+    target_sources(app PRIVATE src/drivers/nfc/st25dv.c)
+endif()
+
+if(CONFIG_AKIRA_PWM_DIAL)
+    target_sources(app PRIVATE src/drivers/input/akira_pwm_dial.c)
 endif()
 
 # Conditional OTA manager based on flash availability

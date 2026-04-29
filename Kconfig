@@ -260,6 +260,50 @@ config AKIRA_CC1101
       Enable TI CC1101 Sub-GHz transceiver driver.
       Supports 300-928MHz frequency range.
 
+config AKIRA_CC1121
+    bool "Enable CC1121 Sub-GHz driver (AkiraConsole Production)"
+    default n
+    depends on SPI && GPIO && AKIRA_RF_FRAMEWORK
+    help
+      Enable TI CC1121RHB high-performance Sub-GHz transceiver driver.
+      Covers 315/433/868/915 MHz bands, narrowband FSK/OOK.
+      Used on AkiraConsole Production via TCA6408 GPIO expander CS.
+
+endmenu
+
+menu "Peripherals"
+
+config CHARGER_BQ25601
+    bool "Enable BQ25601 Li-Ion charger driver"
+    default y if DT_HAS_TI_BQ25601_ENABLED
+    depends on I2C && CHARGER
+    help
+      Enable TI BQ25601RTW Li-Ion battery charger driver.
+      Implements the Zephyr charger API.
+      Reports charge status, VBUS presence, faults.
+      Allows setting charge current (0–3000 mA) and voltage (3840–4608 mV).
+
+config AKIRA_PWM_DIAL
+    bool "Enable generic PWM-dial rotary input driver"
+    default y if DT_HAS_AKIRA_PWM_DIAL_ENABLED
+    depends on PWM && INPUT
+    help
+      Enable the akira,pwm-dial driver.  Reads the duty cycle of a
+      potentiometer-based RC oscillator via MCPWM capture and reports
+      INPUT_ABS_WHEEL (0-255) into the Zephyr input subsystem.
+      On AkiraConsole Production: RK10J12R0A0B (RV1) on GPIO48.
+
+config AKIRA_ST25DV
+    bool "Enable ST25DV64K NFC tag driver"
+    default y if DT_HAS_ST_ST25DV64K_ENABLED
+    depends on I2C
+    help
+      Enable STMicroelectronics ST25DV64K Dynamic NFC/RFID tag driver.
+      Provides I2C access to the 64 Kbit EEPROM user memory and system
+      configuration registers. GPO interrupt for RF field / write events.
+      RF operations (ISO 15693) happen autonomously when an NFC reader
+      is present.
+
 endmenu
 
 menu "Connectivity"

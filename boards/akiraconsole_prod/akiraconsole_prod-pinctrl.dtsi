@@ -45,6 +45,35 @@
 	};
 
 	// -------------------------------------------------------------------------
+	// GPIO48 — brightness wheel (RV1, RK10J12R0A0B) signal path
+	//
+	// RC relaxation oscillator: D2/D3 (BAT54J) + RV1 + C67 (10 nF) →
+	// U5B → U5A (74LVC2G14 Schmitt trigger chain) → GPIO48 input.
+	// Oscillates at f = 1/(R×C) ≈ 9 kHz; duty cycle encodes pot position.
+	// Range: 9 % (wheel full CW, max resistance) to 91 % (full CCW).
+	//
+	// DEFAULT mode: MCPWM0 capture — read duty cycle = read wheel position.
+	// OVERRIDE mode: LEDC CH0 output — MCU drives brightness in software.
+	// (Switch by re-routing GPIO48 pinmux; cannot do both simultaneously.)
+	// -------------------------------------------------------------------------
+
+	// Default: MCPWM0 capture input — pot reading
+	mcpwm0_default: mcpwm0_default {
+		group1 {
+			pinmux = <MCPWM0_CAP0_GPIO48>;
+			input-enable;
+		};
+	};
+
+	// Override: LEDC CH0 output — software brightness control
+	ledc0_default: ledc0_default {
+		group1 {
+			pinmux = <LEDC_CH0_GPIO48>;
+			output-enable;
+		};
+	};
+
+	// -------------------------------------------------------------------------
 	// I2C0 — all internal I2C peripherals
 	// SDA = GPIO8  (I2C.SDA)
 	// SCL = GPIO18 (I2C.SCL)

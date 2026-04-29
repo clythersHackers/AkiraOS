@@ -1,21 +1,65 @@
 # Copyright (c) 2026 AkiraOS Project
 # SPDX-License-Identifier: Apache-2.0
 
-description: CC1121 high-performance Sub-GHz RF transceiver (TI)
+description: |
+  TI CC1121RHB high-performance Sub-GHz RF transceiver (CC112x family).
+  Covers 315 / 433 / 868 / 915 MHz bands via 4-wire SPI.
+
+  All radio parameters are taken from device-tree at init — no rebuild
+  required when changing frequency, power, or bitrate between boards.
 
 compatible: "ti,cc1121"
 
 include: spi-device.yaml
 
 properties:
+
   reset-gpios:
     type: phandle-array
     required: false
     description: |
-      GPIO connected to RESET_N pin (active low).
-      Shared with LR2021 RF_RST on AkiraConsole Production.
+      GPIO connected to RESET_N (active low).
+      On AkiraConsole Production this pin is shared with the LR2021
+      via TCA6408 P2 (RF_RST).
 
   spi-max-frequency:
     type: int
     required: true
-    description: Maximum SPI clock frequency in Hz (max 10 MHz).
+    description: Maximum SPI clock in Hz. CC1121 supports up to 10 MHz.
+
+  akira,default-frequency-hz:
+    type: int
+    required: false
+    default: 868000000
+    description: |
+      Default carrier frequency in Hz applied at driver init.
+      Valid ranges: 315 MHz (290–350 MHz), 433 MHz (410–475 MHz),
+      868 MHz (820–960 MHz), 915 MHz (820–960 MHz).
+      The driver selects the matching FS_CFG synthesizer band
+      automatically from this value.
+
+  akira,default-tx-power-dbm:
+    type: int
+    required: false
+    default: 14
+    description: |
+      Default TX output power in dBm applied at driver init.
+      Valid range: -11 to +14 dBm (hardware-dependent for the band).
+
+  akira,default-bitrate-bps:
+    type: int
+    required: false
+    default: 4800
+    description: |
+      Default symbol rate / bit rate in bits per second.
+      Range: 600–500000 bps.  Stored in SYMBOL_RATE2/1/0 registers.
+
+  akira,xosc-frequency-hz:
+    type: int
+    required: false
+    default: 32000000
+    description: |
+      Crystal oscillator frequency in Hz.  Used for FREQ[23:0] and
+      SYMBOL_RATE register calculations.  Default is 32 MHz (Y1 on
+      AkiraConsole Production).  Change this if a different crystal
+      is populated on a custom board.
