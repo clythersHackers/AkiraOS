@@ -36,7 +36,8 @@ extern "C"
 #define AKIRA_CODENAME "GL1TCH"
 
     /* Simple version struct */
-    typedef struct {
+    typedef struct
+    {
         int major;
         int minor;
         int patch;

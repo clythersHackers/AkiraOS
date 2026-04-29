@@ -38,55 +38,55 @@
 #include <connectivity/usb/usb_hid.h>
 #endif
 
-
 LOG_MODULE_REGISTER(akira_main, CONFIG_AKIRA_LOG_LEVEL);
 
 int main(void)
 {
     LOG_INF("=====================================================)");
-    LOG_INF("AkiraOS booting (v1.5.4 - Hardened Runtime)"); 
+    LOG_INF("AkiraOS booting (v1.5.4 - Hardened Runtime)");
     LOG_INF("Platform: %s", akira_get_platform_name());
     LOG_INF("Build: %s %s", __DATE__, __TIME__);
     LOG_INF("=====================================================)");
 
     /* Initialize hardware HAL */
-    if (akira_hal_init() < 0) {
+    if (akira_hal_init() < 0)
+    {
         LOG_ERR("HAL init failed");
         return -ENODEV;
     }
 
     /* Display test - runs AFTER HAL initialization */
 #ifdef CONFIG_DISPLAY
-    akira_display_clear(0x0021);  
+    akira_display_clear(0x0021);
     /* Display boot info on screen */
     char buf[64];
     int y_pos = 20;
     const int line_height = 12;
-    const uint16_t text_color = 0xFFFF;  // White
-    
+    const uint16_t text_color = 0xFFFF; // White
+
     akira_display_text(5, y_pos, "====================================", text_color);
     y_pos += line_height;
-    
+
     akira_display_text(5, y_pos, "AkiraOS booting", text_color);
     y_pos += line_height;
-    
+
     akira_display_text(5, y_pos, "AkiraOS v1.5.4", text_color);
     y_pos += line_height;
-    
+
     snprintf(buf, sizeof(buf), "Platform: %s", akira_get_platform_name());
     akira_display_text(5, y_pos, buf, text_color);
     y_pos += line_height;
-    
+
     snprintf(buf, sizeof(buf), "Build: %s", __DATE__);
     akira_display_text(5, y_pos, buf, text_color);
     y_pos += line_height;
-    
+
     snprintf(buf, sizeof(buf), "       %s", __TIME__);
     akira_display_text(5, y_pos, buf, text_color);
     y_pos += line_height;
-    
+
     akira_display_text(5, y_pos, "====================================", text_color);
-    
+
     akira_display_flush();
     // k_sleep(K_MSEC(CONFIG_AKIRA_BOOT_DELAY_MS));
 
@@ -95,30 +95,36 @@ int main(void)
     /* USB manager auto-initialized via SYS_INIT (see usb_manager.c) */
 
 #ifdef CONFIG_AKIRA_HID
-    if (hid_manager_init(NULL) < 0) {
+    if (hid_manager_init(NULL) < 0)
+    {
         LOG_WRN("HID manager init failed");
     }
-    else {
+    else
+    {
         LOG_INF("HID manager initialized");
     }
 #endif
 
 #ifdef CONFIG_AKIRA_USB_HID
-    if(usb_hid_transport_init()<0){
+    if (usb_hid_transport_init() < 0)
+    {
         LOG_WRN("USB HID transport init failed");
     }
-    else{
+    else
+    {
         LOG_INF("USB HID transport initialized successfully");
     }
-#endif  
+#endif
 
 #ifdef CONFIG_AKIRA_BT_HID
     /* Initialize HID manager */
 
-    if(bt_hid_init() < 0){
+    if (bt_hid_init() < 0)
+    {
         LOG_WRN("Failed to init BT HID");
     }
-    else{
+    else
+    {
         LOG_INF("BT HID initialized succesfully!");
     }
 #endif
@@ -130,20 +136,23 @@ int main(void)
     LOG_INF("RF module enabled");
 #endif
 
-
 #ifdef CONFIG_AKIRA_HTTP_SERVER
     /* Initialize OTA manager before starting web server */
-    if (ota_manager_init() < 0) {
+    if (ota_manager_init() < 0)
+    {
         LOG_ERR("OTA manager init failed");
     }
-    else {
+    else
+    {
         LOG_INF("OTA manager initialized");
     }
 
-    if(web_server_start(NULL) < 0){
+    if (web_server_start(NULL) < 0)
+    {
         LOG_WRN("Failed to start webserver thread!");
     }
-    else{
+    else
+    {
         LOG_INF("Web server thread running!");
     }
 #endif
@@ -151,7 +160,8 @@ int main(void)
     /* Settings auto-initialized via SYS_INIT (see settings.c) */
 
     /* Initialize runtime */
-    if (akira_runtime_init() < 0) {
+    if (akira_runtime_init() < 0)
+    {
         LOG_ERR("Runtime init failed");
         return -EIO;
     }
@@ -189,40 +199,50 @@ int main(void)
     static const uint8_t dummy_wasm[] = {0x00, 'a', 's', 'm', 0x01, 0x00, 0x00, 0x00};
     const char *manifest = "{\"capabilities\":[\"display.write\",\"input.read\"]}";
     int sid = app_loader_install_with_manifest("selftest", dummy_wasm, sizeof(dummy_wasm), manifest, strlen(manifest));
-    if (sid >= 0) {
+    if (sid >= 0)
+    {
         LOG_INF("Selftest installed as slot %d", sid);
-        if (akira_runtime_start(sid) == 0) {
+        if (akira_runtime_start(sid) == 0)
+        {
             LOG_INF("Selftest started (slot %d)", sid);
-        } else {
+        }
+        else
+        {
             LOG_WRN("Selftest start failed (slot %d)", sid);
         }
-    } else {
+    }
+    else
+    {
         LOG_WRN("Selftest install failed: %d", sid);
     }
 #endif
 
     LOG_INF("AkiraOS init complete");
-    k_sleep(K_MSEC(1000));  // Brief pause before entering main loop
+    k_sleep(K_MSEC(1000)); // Brief pause before entering main loop
     /* Idle loop */
-    while (1) {
-        #ifdef CONFIG_DISPLAY
+    while (1)
+    {
+#ifdef CONFIG_DISPLAY
         extern akira_managed_app_t g_apps[AKIRA_MAX_WASM_INSTANCES];
         static uint32_t frame = 0;
         static bool idle_screen_shown = false;
         char buf[64];
-        const uint16_t text_color = 0xFFFF;  // White
-        const uint16_t bg_color = 0x0000;    // Black
+        const uint16_t text_color = 0xFFFF; // White
+        const uint16_t bg_color = 0x0000;   // Black
 
         /* Check if any app is running */
         bool app_running = false;
-        for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++) {
-            if (g_apps[i].used && g_apps[i].status == AKIRA_APP_STATUS_RUNNING) {
+        for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++)
+        {
+            if (g_apps[i].used && g_apps[i].status == AKIRA_APP_STATUS_RUNNING)
+            {
                 app_running = true;
                 break;
             }
         }
 
-        if (!app_running) {
+        if (!app_running)
+        {
             /* No app running - show system info animation */
             idle_screen_shown = true;
             akira_display_clear(bg_color);
@@ -242,7 +262,8 @@ int main(void)
             akira_display_text(5, 55, buf, text_color);
 
             snprintf(buf, sizeof(buf), "[");
-            for (int i = 0; i < 16; i++) {
+            for (int i = 0; i < 16; i++)
+            {
                 buf[i + 1] = (i < (frame % 16)) ? '=' : '-';
             }
             buf[17] = ']';
@@ -251,14 +272,16 @@ int main(void)
 
             frame++;
             akira_display_flush();
-        } else if (idle_screen_shown) {
+        }
+        else if (idle_screen_shown)
+        {
             /* App just started - clear the idle screen once */
             akira_display_clear(bg_color);
             akira_display_flush();
             idle_screen_shown = false;
             frame = 0;
         }
-        #endif
+#endif
         k_sleep(K_MSEC(100));
         // may be add show to display all installed apps and add posibility to run them from there? or just show some system info and status?
         // and if display available show some nice animation or something?

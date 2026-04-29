@@ -12,7 +12,7 @@ LOG_MODULE_REGISTER(akira_i2c, CONFIG_AKIRA_LOG_LEVEL);
  * @brief Stateless raw I2C register read/write API for WASM applications
  *
  * Buses are resolved lazily on first access and cached.
- * bus_id 0 = i2c0 (where LSM6DS3 lives on akiraconsole).
+ * bus_id 0 = i2c0 (platform-specific; may differ per board).
  */
 
 #include "akira_i2c_api.h"

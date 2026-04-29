@@ -20,8 +20,8 @@
 #endif
 
 /* Test-controllable return values ----------------------------------------- */
-int stub_boot_request_upgrade_rc;       /* 0 = succeed, non-zero = fail */
-int stub_boot_write_img_confirmed_rc;   /* 0 = succeed, non-zero = fail */
+int stub_boot_request_upgrade_rc;     /* 0 = succeed, non-zero = fail */
+int stub_boot_write_img_confirmed_rc; /* 0 = succeed, non-zero = fail */
 
 /* Weak stubs ---------------------------------------------------------------- */
 int __attribute__((weak)) boot_request_upgrade(int permanent)
