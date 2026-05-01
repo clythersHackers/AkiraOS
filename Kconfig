@@ -543,8 +543,8 @@ config AKIRA_MDNS
     bool "Enable mDNS/DNS-SD service advertisement"
     default y
     depends on AKIRA_HTTP_SERVER && NET_IPV4
-    select MDNS_RESPONDER if NET_MGMT
-    select DNS_SD if NET_MGMT
+    select MDNS_RESPONDER
+    select DNS_SD
     help
       Advertises the device on the local network as:
         {AKIRA_DEVICE_NAME}._akiraos._tcp.local
