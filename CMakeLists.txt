@@ -203,6 +203,7 @@ target_sources(app PRIVATE
     src/lib/error_codes.c
     src/lib/simple_json.c
     src/lib/mem_helper.c
+    src/lib/akpkg.c
 )
 
 # ===== Akira Core (kernel, HAL) =====

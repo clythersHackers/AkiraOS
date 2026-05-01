@@ -437,6 +437,22 @@ extern "C"
      */
     const char *app_source_to_str(app_source_t source);
 
+    /**
+     * @brief Install an .akpkg archive from an in-memory buffer.
+     *
+     * Decompresses the gzip-wrapped tar archive, extracts app.wasm and
+     * manifest.json, installs the app, and persists the manifest so that
+     * app_manager_start() can forward it to the WASM runtime.
+     *
+     * @param name    App name override (NULL or empty to use manifest "name").
+     * @param pkg     .akpkg data in memory.
+     * @param pkg_len Length of @p pkg in bytes.
+     * @param source  Installation source (e.g., APP_SOURCE_HTTP).
+     * @return App ID (>= 1) on success, negative errno on error.
+     */
+    int app_manager_install_akpkg(const char *name, const uint8_t *pkg,
+                                  size_t pkg_len, app_source_t source);
+
 #ifdef __cplusplus
 }
 #endif

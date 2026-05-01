@@ -9,6 +9,7 @@
 #include "akira_runtime.h"
 #include <lib/mem_helper.h>
 #include <lib/simple_json.h>
+#include <lib/akpkg.h>
 #include "../storage/fs_manager.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -1819,3 +1820,117 @@ int app_manager_run_from_sd(const char *name_or_path)
     return 0;
 }
 #endif /* CONFIG_AKIRA_SD_XIP */
+
+/* ===== .akpkg install ===== */
+
+int app_manager_install_akpkg(const char *name, const uint8_t *pkg,
+                              size_t pkg_len, app_source_t source)
+{
+    if (!g_initialized) {
+        return -ENODEV;
+    }
+    if (!pkg || pkg_len == 0) {
+        return -EINVAL;
+    }
+    if (!akpkg_is_gzip(pkg, pkg_len)) {
+        LOG_ERR("akpkg: buffer is not a gzip stream");
+        return -EINVAL;
+    }
+
+    /* --- Decompress --- */
+    /* ISIZE is at the last 4 bytes; for files < 4 GiB this is the exact size. */
+    size_t isize = (size_t)pkg[pkg_len - 4]
+                 | ((size_t)pkg[pkg_len - 3] << 8)
+                 | ((size_t)pkg[pkg_len - 2] << 16)
+                 | ((size_t)pkg[pkg_len - 1] << 24);
+
+    if (isize == 0 || isize > 4u * 1024u * 1024u) {
+        LOG_ERR("akpkg: implausible ISIZE %zu", isize);
+        return -EINVAL;
+    }
+
+    uint8_t *tar_buf = akira_malloc_buffer(isize);
+    if (!tar_buf) {
+        LOG_ERR("akpkg: cannot allocate %zu bytes for decompressed tar", isize);
+        return -ENOMEM;
+    }
+
+    ssize_t tar_len = akpkg_inflate(pkg, pkg_len, tar_buf, isize);
+    if (tar_len < 0) {
+        LOG_ERR("akpkg: inflate failed (%zd)", tar_len);
+        akira_free_buffer(tar_buf);
+        return (int)tar_len;
+    }
+
+    /* --- Extract tar entries --- */
+    const uint8_t *wasm_ptr;    size_t wasm_size;
+    const char    *mfst_ptr;    size_t mfst_size;
+
+    int ret = akpkg_tar_extract(tar_buf, (size_t)tar_len,
+                                &wasm_ptr, &wasm_size,
+                                &mfst_ptr, &mfst_size);
+    if (ret) {
+        LOG_ERR("akpkg: tar extraction failed (%d)", ret);
+        akira_free_buffer(tar_buf);
+        return ret;
+    }
+
+    LOG_INF("akpkg: wasm=%zu B  manifest=%zu B", wasm_size, mfst_size);
+
+    /* --- Determine app name --- */
+    char app_name[APP_NAME_MAX_LEN];
+    if (name && name[0]) {
+        strncpy(app_name, name, APP_NAME_MAX_LEN - 1);
+        app_name[APP_NAME_MAX_LEN - 1] = '\0';
+    } else {
+        strncpy(app_name, "uploaded_app", APP_NAME_MAX_LEN - 1);
+        app_name[APP_NAME_MAX_LEN - 1] = '\0';
+    }
+
+    /* --- Parse manifest --- */
+    app_manifest_t manifest;
+    bool has_manifest = false;
+
+    if (mfst_size > 0 && mfst_size < 2048u) {
+        /* app_manifest_parse requires a null-terminated string. */
+        char *json_copy = akira_malloc_buffer(mfst_size + 1u);
+        if (json_copy) {
+            memcpy(json_copy, mfst_ptr, mfst_size);
+            json_copy[mfst_size] = '\0';
+            if (app_manifest_parse(json_copy, mfst_size, &manifest) == 0) {
+                has_manifest = true;
+                /* Manifest name always takes precedence over the caller-supplied name. */
+                if (manifest.name[0]) {
+                    strncpy(app_name, manifest.name, APP_NAME_MAX_LEN - 1);
+                    app_name[APP_NAME_MAX_LEN - 1] = '\0';
+                }
+            }
+            akira_free_buffer(json_copy);
+        }
+    }
+
+    /* --- Install the WASM binary --- */
+    int app_id = app_manager_install(app_name, wasm_ptr, wasm_size,
+                                     has_manifest ? &manifest : NULL,
+                                     source);
+
+    /* --- Persist raw manifest JSON for app_manager_start() --- */
+    if (app_id > 0 && mfst_size > 0) {
+        char json_path[APP_PATH_MAX_LEN];
+        snprintf(json_path, sizeof(json_path),
+                 "%s/%03d_%s.json", APPS_DIR, (uint8_t)app_id, app_name);
+        ssize_t written = fs_manager_write_file(json_path, mfst_ptr, mfst_size);
+        if (written < 0) {
+            LOG_WRN("akpkg: failed to save manifest JSON to %s (%zd)",
+                    json_path, written);
+        }
+    }
+
+    akira_free_buffer(tar_buf);
+
+    if (app_id > 0) {
+        LOG_INF("akpkg: installed '%s' (id=%d, wasm=%zu B)",
+                app_name, app_id, wasm_size);
+    }
+    return app_id;
+}
