@@ -450,8 +450,9 @@ extern "C"
      * @param source  Installation source (e.g., APP_SOURCE_HTTP).
      * @return App ID (>= 1) on success, negative errno on error.
      */
-    int app_manager_install_akpkg(const char *name, const uint8_t *pkg,
-                                  size_t pkg_len, app_source_t source);
+    int app_manager_install_akpkg(char *name, size_t name_size,
+                                  const uint8_t *pkg, size_t pkg_len,
+                                  app_source_t source);
 
 #ifdef __cplusplus
 }

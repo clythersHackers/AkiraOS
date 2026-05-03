@@ -643,17 +643,26 @@ int app_manager_start(const char *name)
         }
 
         /* Install into Akira runtime (saves binary + creates container). */
-        char manifest_json[512] = {0};
+        char *manifest_json = NULL;
         char json_path[APP_PATH_MAX_LEN];
         snprintf(json_path, sizeof(json_path), "%s/%03d_%s.json",
                  APPS_DIR, app->id, app->name);
         ssize_t json_len = -1;
         if (fs_manager_exists(json_path)) {
-            json_len = fs_manager_read_file(json_path, manifest_json,
-                                           sizeof(manifest_json) - 1);
-            if (json_len > 0) {
-                manifest_json[json_len] = '\0';
-                LOG_INF("Using stored manifest JSON for %s (%zd bytes)", name, json_len);
+            ssize_t json_file_size = fs_manager_get_size(json_path);
+            if (json_file_size > 0) {
+                manifest_json = akira_malloc_buffer((size_t)json_file_size + 1);
+                if (manifest_json) {
+                    json_len = fs_manager_read_file(json_path, manifest_json,
+                                                    (size_t)json_file_size);
+                    if (json_len > 0) {
+                        manifest_json[json_len] = '\0';
+                        LOG_INF("Using stored manifest JSON for %s (%zd bytes)", name, json_len);
+                    } else {
+                        akira_free_buffer(manifest_json);
+                        manifest_json = NULL;
+                    }
+                }
             }
         }
 
@@ -662,6 +671,7 @@ int app_manager_start(const char *name)
             json_len > 0 ? manifest_json : NULL,
             json_len > 0 ? (size_t)json_len : 0);
         akira_free_buffer(buffer);
+        akira_free_buffer(manifest_json);
 
         if (load_ret < 0)
         {
@@ -1513,10 +1523,10 @@ static int delete_app_binary(const char *name)
         return -ENOENT;
     }
 
-    /* Delete both .wasm and .aot variants if they exist */
+    /* Delete .wasm, .aot, and .json variants if they exist */
     char path[APP_PATH_MAX_LEN];
-    static const char *exts[] = {".wasm", ".aot"};
-    for (int i = 0; i < 2; i++) {
+    static const char *exts[] = {".wasm", ".aot", ".json"};
+    for (int i = 0; i < 3; i++) {
         snprintf(path, sizeof(path), "%s/%03d_%s%s", APPS_DIR, app->id, name, exts[i]);
         int ret = fs_manager_delete_file(path);
         if (ret < 0 && ret != -ENOENT)
@@ -1823,8 +1833,9 @@ int app_manager_run_from_sd(const char *name_or_path)
 
 /* ===== .akpkg install ===== */
 
-int app_manager_install_akpkg(const char *name, const uint8_t *pkg,
-                              size_t pkg_len, app_source_t source)
+int app_manager_install_akpkg(char *name, size_t name_size,
+                              const uint8_t *pkg, size_t pkg_len,
+                              app_source_t source)
 {
     if (!g_initialized) {
         return -ENODEV;
@@ -1877,21 +1888,23 @@ int app_manager_install_akpkg(const char *name, const uint8_t *pkg,
 
     LOG_INF("akpkg: wasm=%zu B  manifest=%zu B", wasm_size, mfst_size);
 
-    /* --- Determine app name --- */
-    char app_name[APP_NAME_MAX_LEN];
-    if (name && name[0]) {
-        strncpy(app_name, name, APP_NAME_MAX_LEN - 1);
-        app_name[APP_NAME_MAX_LEN - 1] = '\0';
-    } else {
-        strncpy(app_name, "uploaded_app", APP_NAME_MAX_LEN - 1);
-        app_name[APP_NAME_MAX_LEN - 1] = '\0';
+    /* --- Determine app name (use caller buffer directly) --- */
+    if (!name || name_size == 0) {
+        akira_free_buffer(tar_buf);
+        return -EINVAL;
     }
+    if (name[0] == '\0') {
+        strncpy(name, "uploaded_app", name_size - 1);
+        name[name_size - 1] = '\0';
+    }
+    /* Alias for readability inside this function */
+    char *app_name = name;
 
     /* --- Parse manifest --- */
     app_manifest_t manifest;
     bool has_manifest = false;
 
-    if (mfst_size > 0 && mfst_size < 2048u) {
+    if (mfst_size > 0 && mfst_size < 4096u) {
         /* app_manifest_parse requires a null-terminated string. */
         char *json_copy = akira_malloc_buffer(mfst_size + 1u);
         if (json_copy) {
@@ -1899,10 +1912,11 @@ int app_manager_install_akpkg(const char *name, const uint8_t *pkg,
             json_copy[mfst_size] = '\0';
             if (app_manifest_parse(json_copy, mfst_size, &manifest) == 0) {
                 has_manifest = true;
-                /* Manifest name always takes precedence over the caller-supplied name. */
+                /* Manifest name always takes precedence over the caller-supplied name.
+                 * Write back into the caller's buffer so they see the final name. */
                 if (manifest.name[0]) {
-                    strncpy(app_name, manifest.name, APP_NAME_MAX_LEN - 1);
-                    app_name[APP_NAME_MAX_LEN - 1] = '\0';
+                    strncpy(name, manifest.name, name_size - 1);
+                    name[name_size - 1] = '\0';
                 }
             }
             akira_free_buffer(json_copy);

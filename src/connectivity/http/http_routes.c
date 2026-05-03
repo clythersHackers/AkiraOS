@@ -476,7 +476,8 @@ static int route_app_install(const http_request_t *req, http_response_t *res,
     if (akpkg_is_gzip(pkg, total_received))
     {
         LOG_INF("Detected .akpkg format, decompressing...");
-        app_id = app_manager_install_akpkg(app_name, pkg, total_received,
+        app_id = app_manager_install_akpkg(app_name, sizeof(app_name),
+                                           pkg, total_received,
                                            APP_SOURCE_HTTP);
     }
     else
