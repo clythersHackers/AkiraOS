@@ -1,0 +1,223 @@
+/dts-v1/;
+
+// FIXME: Rename to <your-board-name>_<soc>_<cpu>.dts
+//
+// Base DTS for your board.  This file describes the static hardware.
+// Runtime feature overrides (partitions, display mode, USB) live in
+// boards/template_procpu.overlay — the application-level overlay.
+//
+// =============================================================================
+// Step 1 — Include your SoC DTSI
+// =============================================================================
+// FIXME: Replace the comment below with the #include for your SoC.
+// Examples:
+//   #include <espressif/esp32s3/esp32s3_mini_n8.dtsi>      // ESP32-S3-WROOM-1-N8
+//   #include <nordic/nrf54l15.dtsi>                         // nRF54L15
+//   #include <st/u5/stm32u585xi.dtsi>                      // STM32U585
+//   #include <st/l4/stm32l476rg.dtsi>                      // STM32L476RG
+//
+// After adding your SoC DTSI the following nodes exist (names vary by SoC):
+//   flash0, sram0/sram1, uart0, spi0/spi1/spi2, i2c0/i2c1,
+//   gpio0/gpio1, wdt0, adc0/adc1, rng0/trng0, usb0/udc0
+// All are disabled by default in the SoC DTSI; enable them in this file or
+// the overlay.
+
+// FIXME: #include "<your-soc.dtsi>"
+
+// =============================================================================
+// Step 2 — Include MCUboot partition table
+// =============================================================================
+// FIXME: Choose the partition table DTSI matching your flash size.
+// ESP32 family have pre-built tables in the Zephyr tree, e.g.:
+//   #include <espressif/partitions_0x0_amp.dtsi>    // MCUboot at 0x0, dual-slot
+// For other SoCs define the partitions inline below (see flash0 node).
+//
+// FIXME: #include <espressif/partitions_0x0_amp.dtsi>  // ESP32 only
+
+// =============================================================================
+// Step 3 — Include pinctrl
+// =============================================================================
+#include "template-pinctrl.dtsi"   // FIXME: rename to match your board
+
+// =============================================================================
+// Top-level / node
+// =============================================================================
+/ {
+	// FIXME: Update model string and compatible pair.
+	// compatible[0] = "<vendor>,<board-name>"
+	// compatible[1] = "<soc-vendor>,<soc-name>"
+	// Example: "mycompany,my-sensor-node", "nordic,nrf54l15"
+	model = "FIXME: Your Board Name";
+	compatible = "FIXME_VENDOR,FIXME_BOARD", "FIXME_SOC_VENDOR,FIXME_SOC";
+
+	aliases {
+		// FIXME: Update alias targets to match your peripheral node names.
+		// These aliases are used by AkiraOS and Zephyr sample apps.
+		watchdog0 = &wdt0;               // FIXME: node label of your watchdog
+		// akira-led   = &led_act;       // FIXME: uncomment and set if LED is fitted
+		// sw0         = &btn_ok;        // FIXME: uncomment and set if button is fitted
+		// i2c-0       = &i2c0;          // FIXME: uncomment if I2C sensors are present
+	};
+
+	chosen {
+		// FIXME: Verify node labels below match your SoC DTSI.
+		// Common names: sram0, sram1, flash0, uart0, udc0, esp32_bt_hci
+		zephyr,sram           = &sram0;         // FIXME: e.g. &sram1 on ESP32-S3
+		zephyr,console        = &uart0;
+		zephyr,shell-uart     = &uart0;
+		zephyr,flash          = &flash0;
+		zephyr,code-partition = &slot0_partition;
+		// zephyr,display     = &FIXME;          // FIXME: uncomment when display is wired
+		// zephyr,bt-hci      = &esp32_bt_hci;   // FIXME: ESP32 only
+	};
+
+	// =========================================================================
+	// GPIO — status LEDs (optional)
+	// =========================================================================
+	// FIXME: Uncomment and configure if an LED is present on your board.
+	// leds {
+	//     compatible = "gpio-leds";
+	//     led_act: led_act {
+	//         // FIXME: Replace &gpio0 / pin number / flag with your LED GPIO.
+	//         gpios = <&gpio0 /* FIXME_PIN */ GPIO_ACTIVE_HIGH>;
+	//         label = "Activity LED";
+	//     };
+	// };
+
+	// =========================================================================
+	// GPIO keys / buttons (optional)
+	// =========================================================================
+	// FIXME: Uncomment and configure if buttons are present.
+	// gpio_keys {
+	//     compatible = "gpio-keys";
+	//     btn_ok: btn_ok {
+	//         // FIXME: Replace pin and flags.  BOOT/reset buttons are often
+	//         //        GPIO_PULL_UP | GPIO_ACTIVE_LOW.
+	//         gpios = <&gpio0 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+	//         label = "BTN OK";
+	//         zephyr,code = <INPUT_KEY_0>;
+	//     };
+	// };
+};
+
+// =============================================================================
+// GPIO controllers
+// =============================================================================
+// FIXME: Enable the GPIO controllers present on your SoC.
+&gpio0 { status = "disabled"; /* FIXME: change to "okay" */ };
+// &gpio1 { status = "disabled"; /* FIXME: uncomment if your SoC has gpio1 */ };
+
+// =============================================================================
+// UART — console / shell
+// =============================================================================
+&uart0 {
+	status = "disabled"; // FIXME: change to "okay"
+	current-speed = <115200>;
+	pinctrl-0   = <&uart0_default>;
+	pinctrl-names = "default";
+};
+
+// =============================================================================
+// SPI — display / radio / SD card
+// =============================================================================
+&spi0 {
+	// FIXME: Node label may differ: &spi1, &spi2, &spim0, etc. — check your SoC DTSI.
+	status = "disabled"; // FIXME: change to "okay"
+	#address-cells = <1>;
+	#size-cells    = <0>;
+	pinctrl-0   = <&spim0_default>;
+	pinctrl-names = "default";
+	clock-frequency = <20000000>; // FIXME: adjust to your SoC max + signal integrity
+
+	// FIXME: Add SPI device child nodes here (display, radio, SD card).
+	// See boards/akiraconsole_prod_esp32s3_procpu.overlay for reference patterns.
+	// cs-gpios = <&gpio0 /* CS_PIN */ GPIO_ACTIVE_LOW>;
+};
+
+// =============================================================================
+// I2C — sensor bus
+// =============================================================================
+&i2c0 {
+	// FIXME: Node label may differ: &i2c1, &i2cm0, etc.
+	status = "disabled"; // FIXME: change to "okay"
+	#address-cells = <1>;
+	#size-cells    = <0>;
+	pinctrl-0   = <&i2c0_default>;
+	pinctrl-names = "default";
+	clock-frequency = <I2C_BITRATE_FAST>; // FIXME: STANDARD(100k) | FAST(400k) | FAST_PLUS(1M)
+
+	// FIXME: Add I2C device child nodes here (IMU, PMIC, NFC, etc.)
+	// Example:
+	// bme280: bme280@77 {
+	//     compatible = "bosch,bme280";
+	//     reg = <0x77>;
+	//     status = "disabled"; // enable in overlay (#ifndef CONFIG_MCUBOOT)
+	// };
+};
+
+// =============================================================================
+// Watchdog
+// =============================================================================
+&wdt0 {
+	status = "disabled"; // FIXME: change to "okay"
+};
+
+// =============================================================================
+// ADC
+// =============================================================================
+// FIXME: Uncomment and configure if ADC is present and needed.
+// &adc0 {
+//     status = "disabled"; // FIXME: change to "okay"
+//     #io-channel-cells = <1>;
+// };
+
+// =============================================================================
+// Flash0 and partition layout
+// =============================================================================
+// FIXME: If you are NOT using an ESP32 partitions_0x0_amp.dtsi include above,
+// define MCUboot partitions here.
+//
+// Replace FIXME_BOOT_SIZE, FIXME_SLOT_SIZE with values that suit your flash.
+// Rules:
+//   1. boot_partition  — MCUboot binary, typically 64–128 KB
+//   2. slot0_partition — your application, size = (flash - boot - slot1 - data)
+//   3. slot1_partition — OTA update staging, must equal slot0_partition size
+//   4. Leave 32 KB at end for NVS settings + 256–512 KB for LittleFS
+//      (these are defined in the overlay, not here)
+//
+// Example for 4 MB flash (MCUboot 128KB, app 1MB × 2, rest for data):
+//   boot:  0x000000, size 0x20000  (128 KB)
+//   slot0: 0x020000, size 0x100000 (1 MB)
+//   slot1: 0x120000, size 0x100000 (1 MB)
+//   → overlay adds NVS @ 0x220000 (32 KB) + LittleFS @ 0x228000 (256 KB)
+//
+// &flash0 {
+//     partitions {
+//         compatible = "fixed-partitions";
+//         #address-cells = <1>;
+//         #size-cells    = <1>;
+//
+//         boot_partition: partition@0 {
+//             label = "mcuboot";
+//             reg   = <0x00000000 /* FIXME_BOOT_SIZE e.g. DT_SIZE_K(128) */>;
+//             read-only;
+//         };
+//
+//         slot0_partition: partition@20000 {  // FIXME: offset = FIXME_BOOT_SIZE
+//             label = "image-0";
+//             reg   = <0x00020000 /* FIXME_SLOT_SIZE e.g. DT_SIZE_K(1024) */>;
+//         };
+//
+//         slot1_partition: partition@120000 { // FIXME: offset = boot + slot0
+//             label = "image-1";
+//             reg   = <0x00120000 /* FIXME_SLOT_SIZE (must equal slot0) */>;
+//         };
+//
+//         // FIXME: Optional scratch partition for mcuboot swap (not needed for
+//         //        overwrite-only or direct-xip upgrade modes):
+//         // scratch_partition: partition@220000 {
+//         //     label = "image-scratch";
+//         //     reg   = <0x00220000 DT_SIZE_K(128)>;
+//         // };
+//     };
+// };

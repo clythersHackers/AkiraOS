@@ -1,0 +1,112 @@
+// SPDX-License-Identifier: Apache-2.0
+// FIXME: Rename to <your-board-name>-pinctrl.dtsi
+//
+// Pin-control definitions.
+// Each "group" maps a peripheral signal to a physical GPIO and sets electrical
+// properties (pull, drive, bias).  The binding documentation is at:
+//   zephyr/dts/bindings/pinctrl/
+//
+// Naming convention (Zephyr pinctrl):
+//   <peripheral>_default  — normal operation
+//   <peripheral>_sleep    — low-power sleep state (optional)
+//
+// IMPORTANT: The correct include headers depend on your SoC family. Examples:
+//   ESP32-S3: #include <zephyr/dt-bindings/pinctrl/esp-pinctrl-common.h>
+//             #include <dt-bindings/pinctrl/esp32s3-pinctrl.h>
+//             #include <zephyr/dt-bindings/pinctrl/esp32s3-gpio-sigmap.h>
+//   nRF54L:   #include <zephyr/dt-bindings/pinctrl/nrf-pinctrl.h>
+//   STM32:    #include <zephyr/dt-bindings/pinctrl/stm32-pinctrl.h>
+//
+// FIXME: Replace the include block below with the one matching your SoC.
+//
+// #include <zephyr/dt-bindings/pinctrl/esp-pinctrl-common.h>   // ESP32 family
+// #include <dt-bindings/pinctrl/esp32s3-pinctrl.h>             // ESP32-S3 specifically
+// #include <zephyr/dt-bindings/pinctrl/nrf-pinctrl.h>          // nRF54L / nRF52 / nRF53
+// #include <zephyr/dt-bindings/pinctrl/stm32-pinctrl.h>        // STM32
+
+&pinctrl {
+
+	// -------------------------------------------------------------------------
+	// UART0 — debug serial / Zephyr shell
+	//
+	// FIXME: Replace GPIO numbers with your board's TX and RX pins.
+	// FIXME: Replace ESP32S3-specific pinmux macros with your SoC equivalents.
+	//
+	// ESP32-S3 example:
+	//   TX = GPIO43 → pinmux = <UART0_TX_GPIO43>;
+	//   RX = GPIO44 → pinmux = <UART0_RX_GPIO44>;
+	//
+	// nRF example (NRF_PSEL macro, port P0.20 TX, P0.22 RX):
+	//   pinmux = <NRF_PSEL(UART_TX, 0, 20)>;
+	//   pinmux = <NRF_PSEL(UART_RX, 0, 22)>;
+	//
+	// STM32 example (PA9 TX, PA10 RX, AF7):
+	//   pinmux = <STM32_PINMUX('A', 9,  AF7)>;
+	//   pinmux = <STM32_PINMUX('A', 10, AF7)>;
+	// -------------------------------------------------------------------------
+	uart0_default: uart0_default {
+		group1 {
+			pinmux = </* FIXME: UART0_TX_GPIONN — your TX GPIO */>;
+			output-high;
+		};
+		group2 {
+			pinmux = </* FIXME: UART0_RX_GPIONN — your RX GPIO */>;
+			bias-pull-up;
+		};
+	};
+
+	// -------------------------------------------------------------------------
+	// SPI (primary bus — display, radio, SD card)
+	//
+	// FIXME: Replace GPIO numbers. CS lines are NOT listed here — they are
+	// managed via cs-gpios in the &spiN node in the main DTS / overlay.
+	//
+	// ESP32-S3 example (SPI2: MOSI=GPIO11, CLK=GPIO12, MISO=GPIO13):
+	//   pinmux = <SPIM2_MISO_GPIO13>, <SPIM2_MOSI_GPIO11>, <SPIM2_SCLK_GPIO12>;
+	//
+	// STM32 example (SPI1: PA5 CLK AF5, PA6 MISO AF5, PA7 MOSI AF5):
+	//   pinmux = <STM32_PINMUX('A', 5, AF5)>,   // CLK
+	//            <STM32_PINMUX('A', 6, AF5)>,   // MISO
+	//            <STM32_PINMUX('A', 7, AF5)>;   // MOSI
+	// -------------------------------------------------------------------------
+	spim0_default: spim0_default {
+		group1 {
+			pinmux =
+				</* FIXME: SPI_MISO_GPIONN */>,
+				</* FIXME: SPI_MOSI_GPIONN */>,
+				</* FIXME: SPI_SCLK_GPIONN */>;
+		};
+	};
+
+	// -------------------------------------------------------------------------
+	// I2C (sensor bus)
+	//
+	// FIXME: Replace GPIO numbers.
+	//
+	// ESP32-S3 example (I2C0: SDA=GPIO8, SCL=GPIO18):
+	//   group1: pinmux = <I2C0_SDA_GPIO8>;  bias-pull-up; drive-open-drain;
+	//   group2: pinmux = <I2C0_SCL_GPIO18>; bias-pull-up; drive-open-drain;
+	//
+	// STM32 example (I2C1: PB7 SDA AF4, PB6 SCL AF4):
+	//   group1: pinmux = <STM32_PINMUX('B', 7, AF4)>; bias-pull-up; drive-open-drain;
+	//   group2: pinmux = <STM32_PINMUX('B', 6, AF4)>; bias-pull-up; drive-open-drain;
+	// -------------------------------------------------------------------------
+	i2c0_default: i2c0_default {
+		group1 {
+			pinmux = </* FIXME: I2C_SDA_GPIONN */>;
+			bias-pull-up;
+			drive-open-drain;
+		};
+		group2 {
+			pinmux = </* FIXME: I2C_SCL_GPIONN */>;
+			bias-pull-up;
+			drive-open-drain;
+		};
+	};
+
+	// FIXME: Add additional pinctrl groups as needed for:
+	//   - I2S / audio interfaces
+	//   - PWM / LEDC / MCPWM channels
+	//   - ADC input pins (some SoCs require pinmux for ADC)
+	//   - USB DP/DM (usually handled by hardware, but check your SoC)
+};

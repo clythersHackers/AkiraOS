@@ -56,12 +56,29 @@ See [Platform Guides](../platform) for supported development kits:
 
 ## Custom Hardware
 
-AkiraOS can run on custom hardware with:
-- Zephyr RTOS support
-- Minimum 256KB RAM
-- 1MB+ flash
+AkiraOS can run on custom hardware. OEM porting resources:
 
-Add board overlays and configuration files under the `boards/` directory to target new hardware.
+- [**Porting Guide**](porting-guide.md) — end-to-end walkthrough: BSP files, display, WASM runtime, OTA, and a day-by-day week plan to first running app.
+- [**BSP Template Scaffold**](../../boards/template/) — copy-and-rename starting point with FIXME markers for GPIO, SPI, I2C, PSRAM, display, and flash partitions.
+
+### Using AkiraOS as a west module
+
+Third-party projects can import AkiraOS without forking:
+
+```yaml
+# your-project/west.yml
+manifest:
+  projects:
+    - name: akira-os
+      url: https://github.com/your-org/AkiraOS.git
+      revision: v1.5.4
+      path: akira-os
+  self:
+    path: my-app
+```
+
+After `west update`, board definitions, DTS bindings, Kconfig symbols, and the
+full WASM runtime are available automatically — no `-DMODULE_EXT_ROOT` needed.
 
 ---
 

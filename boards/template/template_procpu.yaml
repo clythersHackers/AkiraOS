@@ -1,0 +1,52 @@
+# FIXME: Replace 'template' with your board identifier and 'FIXME_SOC' with
+# the SoC family string matching your board.yml socs[].name entry.
+# This filename must follow the pattern:
+#   <board-name>_<soc-name>[_<cpu-cluster>].yaml
+# Example (nRF54L15):  my_sensor_node_nrf54l15_cpuapp.yaml
+# Example (ESP32-S3):  my_handheld_esp32s3_procpu.yaml
+
+# Zephyr board identifier — must match west build -b <identifier>.
+# Pattern: <board-name>/<soc-name>[/<cpu-cluster>]
+# Example: my_sensor_node/nrf54l15/cpuapp
+identifier: template/FIXME_SOC/procpu
+
+# FIXME: Human-readable board name.
+name: FIXME Your Board PROCPU
+
+type: mcu
+
+# FIXME: CPU architecture. Valid values:
+#   xtensa   — ESP32 family
+#   arm      — Cortex-M (Nordic nRF, STM32, NXP, ...)
+#   riscv    — ESP32-C/H series, GD32VF, ...
+#   arc      — ARC EM/HS
+arch: FIXME
+
+toolchain:
+  - zephyr
+  # FIXME: Add 'espressif' for ESP32 targets:
+  # - espressif
+
+# FIXME: List only the peripherals your hardware actually implements.
+# Remove any that are absent on your board — WASM apps check these at load time.
+supported:
+  - gpio
+  - uart
+  - i2c
+  - spi
+  - watchdog
+  - entropy
+  - pwm         # FIXME: remove if no PWM capable pins are routed
+  - adc         # FIXME: remove if no ADC channels are available
+  - flash
+  - dma
+  - input       # FIXME: remove if no buttons / touch input
+  # - display   # FIXME: uncomment if a display is fitted
+  # - bluetooth # FIXME: uncomment if BT/BLE radio is present
+  # - wifi      # FIXME: uncomment if WiFi radio is present
+  # - sensor    # FIXME: uncomment if I2C/SPI sensors are connected
+  # - crypto    # FIXME: uncomment if hardware crypto engine is present (e.g. AES, SHA)
+  # - counter   # FIXME: uncomment if hardware timer/counter is routed
+
+# FIXME: Your vendor slug (same as board.yml).
+vendor: FIXME
