@@ -660,7 +660,7 @@ int akpkg_tar_extract(const uint8_t *tar, size_t tar_len,
             const char *base = strrchr(name, '/');
             base = base ? base + 1 : name;
 
-            if (strcmp(base, "app.wasm") == 0) {
+            if (strcmp(base, "app.wasm") == 0 || strcmp(base, "app.aot") == 0) {
                 *wasm_ptr  = tar + pos;
                 *wasm_size = fsize;
             } else if (strcmp(base, "manifest.json") == 0) {
@@ -675,7 +675,7 @@ int akpkg_tar_extract(const uint8_t *tar, size_t tar_len,
 
     if (!(*wasm_ptr) || !(*manifest_ptr)) {
         LOG_ERR("akpkg: missing %s%s in archive",
-                (*wasm_ptr)     ? "" : "app.wasm ",
+                (*wasm_ptr)     ? "" : "app.wasm/app.aot ",
                 (*manifest_ptr) ? "" : "manifest.json");
         return -ENOENT;
     }
