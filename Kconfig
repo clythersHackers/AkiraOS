@@ -611,6 +611,16 @@ config AKIRA_HTTP_UPLOAD_TOKEN
       Clients must send: Authorization: Bearer <token>
       An empty string disables token checking (not recommended for production).
 
+config AKIRA_HTTP_DEV_UPLOAD
+    bool "Enable direct WASM app upload via HTTP"
+    default n
+    depends on AKIRA_HTTP_SERVER && AKIRA_APP_MANAGER
+    help
+      Registers the POST /api/apps/install endpoint for direct WASM app
+      installation over HTTP. Disable in production builds and use
+      akira-cli or app.akiraos.dev instead. Always enforces
+      AKIRA_HTTP_UPLOAD_TOKEN when set.
+
 config AKIRA_HTTP_NO_AUTH
     bool "Disable Bearer token authentication on HTTP endpoints"
     default y
@@ -974,6 +984,15 @@ config AKIRA_OTA_MAX_CHUNK_SIZE
     help
       Maximum size of each OTA data chunk during transfer.
 
+config AKIRA_OTA_THREAD_STACK_SIZE
+    int "OTA worker thread stack size (bytes)"
+    default 4096
+    range 2048 16384
+    depends on AKIRA_OTA
+    help
+      Stack size for the dedicated OTA download worker thread.
+      Increase if OTA callbacks or hash verification overflow the stack.
+
 endmenu
 
 menu "Power Management"
@@ -1077,11 +1096,10 @@ config AKIRA_APP_SIGNING
 config AKIRA_ALLOW_UNSIGNED_APPS
     bool "Allow unsigned WASM apps (development only)"
     default n
-    depends on !AKIRA_APP_SIGNING
     help
-      Opt-in to allow installation and execution of unsigned WASM
-      apps when signature verification is disabled. Never enable
-      this in a production firmware build.
+      When set, unsigned apps are loaded with a warning instead of being
+      rejected. Set y only in development builds — never in production.
+      Checked directly in app_signing_v2.c; independent of AKIRA_APP_SIGNING.
 
 config AKIRA_SANDBOX
     bool "Enable runtime sandbox"

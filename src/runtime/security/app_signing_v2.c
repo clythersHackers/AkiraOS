@@ -140,13 +140,13 @@ int app_verify_signature(const void *binary, size_t size,
     /* Check for unsigned apps */
     if (signature->algorithm == SIGN_ALG_NONE)
     {
-#ifdef CONFIG_AKIRA_APP_SIGNING
-        LOG_ERR("Unsigned apps rejected (CONFIG_AKIRA_APP_SIGNING enabled)");
+#if defined(CONFIG_AKIRA_ALLOW_UNSIGNED_APPS)
+        LOG_WRN("Unsigned app - allowed (dev mode, CONFIG_AKIRA_ALLOW_UNSIGNED_APPS=y)");
+        return 0;
+#else
+        LOG_ERR("Unsigned app rejected - set CONFIG_AKIRA_ALLOW_UNSIGNED_APPS=y for dev builds");
         sandbox_audit_log(AUDIT_EVENT_SIGNATURE_FAIL, "unsigned", 0);
         return -EACCES;
-#else
-        LOG_WRN("Unsigned app - allowing (signing not enforced)");
-        return 0;
 #endif
     }
 

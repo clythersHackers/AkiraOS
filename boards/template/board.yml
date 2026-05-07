@@ -12,13 +12,13 @@ board:
   #   zephyr/boards/vendor-prefixes.txt
   # Or add an entry to boards/vendor-prefixes.txt in this repo.
   # Example: vendor: mycompany
-  vendor: FIXME
+  # FIXME: Replace with your vendor slug from Zephyr's vendor-prefixes.txt
+  vendor: penengineering
 
   socs:
-    # FIXME: SoC identifier — must match an entry in the Zephyr SoC tree.
+    # FIXME: Replace 'esp32s3' with the SoC for your target board.
     # Browse zephyr/soc/ for valid names, e.g.:
     #   esp32s3        → zephyr/soc/xtensa/espressif/esp32s3/
     #   nrf54l15       → zephyr/soc/arm/nordic/nrf54l/
     #   stm32u585xx    → zephyr/soc/arm/st/u5/
-    # Example: name: nrf54l15
-    - name: FIXME
+    - name: esp32s3

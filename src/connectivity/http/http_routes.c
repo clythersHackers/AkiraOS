@@ -814,8 +814,10 @@ int akira_http_routes_init(void)
         {HTTP_POST, "/api/v1/apps/start", route_app_start, NULL},
         {HTTP_POST, "/api/v1/apps/stop", route_app_stop, NULL},
         {HTTP_DELETE, "/api/v1/apps", route_app_delete, NULL},
-        /* App + firmware upload */
+    /* App + firmware upload */
+#if defined(CONFIG_AKIRA_HTTP_DEV_UPLOAD)
         {HTTP_POST, "/api/apps/install", route_app_install, NULL},
+#endif
         {HTTP_POST, "/upload", route_firmware_upload, NULL},
         /* CORS */
         {HTTP_OPTIONS, "*", route_options, NULL},

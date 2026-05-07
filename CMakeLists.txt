@@ -25,6 +25,16 @@ if(CONFIG_MCUBOOT)
     return()
 endif()
 
+# When AkiraOS is included as a Zephyr module (cmake: . in zephyr/module.yml)
+# for an *external* application (e.g. multicore_bench), skip adding AkiraOS
+# application sources.  The module still contributes board_root and dts_root
+# via module.yml settings; this guard only prevents double-compiling the full
+# AkiraOS runtime into a host app that doesn't need it.
+if(NOT "${APPLICATION_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_LIST_DIR}")
+    message(STATUS "AkiraOS module: external app '${APPLICATION_SOURCE_DIR}' detected, skipping AkiraOS sources")
+    return()
+endif()
+
 
 
 # ===== WAMR Integration =====

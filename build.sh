@@ -45,6 +45,7 @@ ERASE_FLASH=false
 GENERATE_SBOM=false
 CLEAN_BUILD=false
 FULL_CLEAN=false
+RUN_TESTS=false
 PORT=""
 BAUD="921600"
 WEST_RUNNER=""          # "", or a west runner name e.g. "openocd", "jlink"
@@ -143,6 +144,7 @@ ${BOLD}OPTIONS:${NC}
     -e              Erase flash before flashing
     -s              Generate SBOM (Software Bill of Materials)
     -c              Clean build artifacts for selected board
+    --test          Build and run ztest suite on native_sim (ignores -b flag)
     --full-clean    Reset to pristine state (remove ALL build dirs)
     -p <port>       Serial port for flashing (default: auto-detect)
     --baud <rate>   Baud rate for flashing (default: 921600)
@@ -341,14 +343,40 @@ build_application() {
 run_native_sim() {
     local build_dir=$(get_build_dir)
     local exe="$build_dir/zephyr/zephyr.exe"
-    
+
     if [[ ! -f "$exe" ]]; then
         print_error "Executable not found: $exe"
         print_info "Run build first: ./build.sh"
         exit 1
     fi
-    
+
     print_step "Running AkiraOS native simulator..."
+    echo ""
+    "$exe"
+}
+
+run_tests() {
+    local test_build_dir="$WORKSPACE_ROOT/build-tests"
+
+    print_step "Building test suite (native_sim)..."
+    cd "$WORKSPACE_ROOT"
+    unset ZEPHYR_BASE
+
+    if west build --pristine -b native_sim AkiraOS/tests -d "$test_build_dir" -- \
+        -DMODULE_EXT_ROOT="$WORKSPACE_ROOT/AkiraOS"; then
+        print_success "Test build complete!"
+    else
+        print_error "Test build failed!"
+        exit 1
+    fi
+
+    local exe="$test_build_dir/zephyr/zephyr.exe"
+    if [[ ! -f "$exe" ]]; then
+        print_error "Test binary not found: $exe"
+        exit 1
+    fi
+
+    print_step "Running ztest suite..."
     echo ""
     "$exe"
 }
@@ -706,6 +734,10 @@ parse_args() {
                 CLEAN_BUILD=true
                 shift
                 ;;
+            --test)
+                RUN_TESTS=true
+                shift
+                ;;
             -p)
                 PORT="$2"
                 shift 2
@@ -736,9 +768,14 @@ parse_args() {
 # =============================================================================
 main() {
     parse_args "$@"
-    
+
     show_banner
-    
+
+    if [[ "$RUN_TESTS" == true ]]; then
+        run_tests
+        exit 0
+    fi
+
     # Validate board
     validate_board
     check_tools

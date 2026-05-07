@@ -47,12 +47,12 @@ struct pwm_dial_data
     const struct device *dev;
     struct k_work_delayable poll_work;
     /* Compact layout to minimise BSS contribution */
-    atomic_t cap_ready;            /* 1 = callback delivered fresh data    */
-    volatile uint16_t cap_period;  /* period cycles (10 MHz/9 kHz ≈ 1111) */
-    volatile uint16_t cap_pulse;   /* pulse cycles                         */
-    int16_t last_value;            /* last reported axis; -1 = uninit      */
-    uint8_t miss_count;            /* consecutive polls without signal     */
-    bool cap_armed;                /* capture currently enabled            */
+    atomic_t cap_ready;           /* 1 = callback delivered fresh data    */
+    volatile uint16_t cap_period; /* period cycles (10 MHz/9 kHz ≈ 1111) */
+    volatile uint16_t cap_pulse;  /* pulse cycles                         */
+    int16_t last_value;           /* last reported axis; -1 = uninit      */
+    uint8_t miss_count;           /* consecutive polls without signal     */
+    bool cap_armed;               /* capture currently enabled            */
 };
 
 /* Map duty cycle percentage to 0–255 axis value. */
@@ -83,7 +83,7 @@ static void pwm_dial_capture_cb(const struct device *pwm_dev, uint32_t channel,
     if (status == 0 && period_cyc > 0)
     {
         data->cap_period = (uint16_t)MIN(period_cyc, (uint32_t)UINT16_MAX);
-        data->cap_pulse  = (uint16_t)MIN(pulse_cyc,  (uint32_t)UINT16_MAX);
+        data->cap_pulse = (uint16_t)MIN(pulse_cyc, (uint32_t)UINT16_MAX);
         atomic_set(&data->cap_ready, 1);
     }
 }
