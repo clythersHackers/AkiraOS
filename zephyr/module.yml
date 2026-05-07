@@ -30,15 +30,11 @@ build:
   # cmake: root of the module — CMakeLists.txt at repo root is the entry point.
   cmake: .
 
-  # kconfig: top-level Kconfig file that sources Kconfig.zephyr and all
-  # AkiraOS feature menus (CONFIG_AKIRA_OS, CONFIG_AKIRA_WASM_RUNTIME, etc.)
-  kconfig: Kconfig
-
   settings:
     # board_root: registers boards/ so Zephyr finds akiraconsole_prod,
     # akiraconsole, esp32s3_super_mini, and any custom boards in this tree.
-    - board_root
+    board_root: .
 
     # dts_root: registers dts/ so Zephyr finds AkiraOS DTS bindings
     # (akira,ili9341 akira,pwm-dial etc.) when building downstream projects.
-    - dts_root
+    dts_root: .

@@ -17,6 +17,14 @@ list(APPEND DTS_ROOT ${CMAKE_CURRENT_LIST_DIR})
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(akira_os VERSION 1.5.4)
 
+# When this repository is present as a west module, MCUboot bootloader builds
+# also evaluate this CMakeLists. In that context (CONFIG_MCUBOOT=y), pulling
+# Akira application sources into the bootloader image causes unresolved symbols.
+if(CONFIG_MCUBOOT)
+    message(STATUS "AkiraOS module: MCUboot image detected, skipping app sources")
+    return()
+endif()
+
 
 
 # ===== WAMR Integration =====

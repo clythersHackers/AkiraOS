@@ -209,16 +209,17 @@ static int init_internal_storage(void)
     fs_state.internal_available = false;
 
     int ret;
-    
-    #define PARTITION_NODE DT_NODELABEL(lfs1)
+
+#define PARTITION_NODE DT_NODELABEL(lfs1)
 
     FS_FSTAB_DECLARE_ENTRY(PARTITION_NODE);
-    
-    struct fs_mount_t* mp = &FS_FSTAB_ENTRY(PARTITION_NODE);
+
+    struct fs_mount_t *mp = &FS_FSTAB_ENTRY(PARTITION_NODE);
 
     ret = fs_mount(mp);
-    if(ret < 0){
-        LOG_INF("Failed to mount lfs: (%d)",ret);
+    if (ret < 0)
+    {
+        LOG_INF("Failed to mount lfs: (%d)", ret);
     }
 
     struct fs_dirent entry;
@@ -248,14 +249,15 @@ static int init_internal_storage(void)
 static int init_sd_storage(void)
 {
 #if defined(CONFIG_FAT_FILESYSTEM_ELM) && \
-    (defined(CONFIG_AKIRA_SD_CARD) || \
+    (defined(CONFIG_AKIRA_SD_CARD) ||     \
      defined(CONFIG_DISK_DRIVER_SDMMC))
 
     /* When CONFIG_AKIRA_SD_CARD is set, sd_card.c (SYS_INIT priority 38) has
      * already probed and mounted /SD: before fs_manager runs (priority 40).
      * Just check if the mount is live via the public helper. */
 #ifdef CONFIG_AKIRA_SD_CARD
-    if (!akira_sd_card_is_present()) {
+    if (!akira_sd_card_is_present())
+    {
         LOG_DBG("SD card not present");
         return -ENODEV;
     }
@@ -281,7 +283,6 @@ static int init_sd_storage(void)
     return -ENOTSUP;
 #endif
 }
-
 
 /**
  * Initialize filesystem manager
@@ -422,7 +423,8 @@ int fs_manager_mkdir(const char *path)
         return -EINVAL;
     }
 
-    if(fs_manager_exists(path)){
+    if (fs_manager_exists(path))
+    {
         return 0;
     }
 
