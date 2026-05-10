@@ -20,7 +20,7 @@ type: mcu
 #   arm      — Cortex-M (Nordic nRF, STM32, NXP, ...)
 #   riscv    — ESP32-C/H series, GD32VF, ...
 #   arc      — ARC EM/HS
-arch: FIXME
+arch: xtensa
 
 toolchain:
   - zephyr
@@ -49,4 +49,4 @@ supported:
   # - counter   # FIXME: uncomment if hardware timer/counter is routed
 
 # FIXME: Your vendor slug (same as board.yml).
-vendor: FIXME
+vendor: espressif
