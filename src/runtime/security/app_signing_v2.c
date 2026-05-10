@@ -143,8 +143,8 @@ int app_verify_signature(const void *binary, size_t size,
     /* Check for unsigned apps */
     if (signature->algorithm == SIGN_ALG_NONE)
     {
-#if defined(CONFIG_AKIRA_ALLOW_UNSIGNED_APPS)
-        LOG_WRN("Unsigned app - allowed (dev mode, CONFIG_AKIRA_ALLOW_UNSIGNED_APPS=y)");
+#if defined(CONFIG_AKIRA_ALLOW_UNSIGNED_APPS) || !defined(CONFIG_AKIRA_APP_SIGNING)
+        LOG_WRN("Unsigned app - allowed (signing disabled or dev mode)");
         return 0;
 #else
         LOG_ERR("Unsigned app rejected - set CONFIG_AKIRA_ALLOW_UNSIGNED_APPS=y for dev builds");
