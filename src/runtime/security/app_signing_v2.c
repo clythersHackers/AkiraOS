@@ -18,6 +18,9 @@
 
 LOG_MODULE_REGISTER(akira_app_signing, CONFIG_AKIRA_LOG_LEVEL);
 
+/* Forward declaration — weak default defined later in this file */
+int akira_platform_allowlist_verify(const uint8_t *app_hash, size_t hash_len);
+
 /* mbedTLS integration */
 #ifdef CONFIG_MBEDTLS
 #include <mbedtls/sha256.h>
