@@ -27,7 +27,7 @@
  * @return 0 on success, -1 on error
  *
  * Fills buffer with null-terminated system information string.
- * Example: "AkiraOS v1.5.4 (WAMR Runtime)"
+ * Example: "AkiraOS v1.5.6 (WAMR Runtime)"
  */
 int sys_info(char *buffer, int buf_len);
 

@@ -71,7 +71,7 @@ manifest:
   projects:
     - name: akira-os
       url: https://github.com/your-org/AkiraOS.git
-      revision: v1.5.4
+      revision: v1.5.6
       path: akira-os
   self:
     path: my-app

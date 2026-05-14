@@ -15,7 +15,7 @@ assignees: ''
 
 ## Environment
 - **Board/Platform:** [e.g., ESP32-S3 DevKitM, native_sim]
-- **AkiraOS Version:** [e.g., 1.5.4]
+- **AkiraOS Version:** [e.g., 1.5.6]
 - **Zephyr SDK Version:** [e.g., 0.17.0]
 - **Build Environment:** [e.g., Ubuntu 22.04, WSL2]
 

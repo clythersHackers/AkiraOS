@@ -7,6 +7,27 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.5.6] — 2026-05-14
+
+### Added
+- Track B: WASM native APIs for Filesystem (`akira_fs_api`), Crypto (`akira_crypto_api`), and RTC (`akira_rtc_api`) with capability-gated sandbox.
+- Track A: OTA delta update engine (`akira_delta`), boot guard with automatic rollback (`akira_boot_guard`), and OTA WASM native API (`akira_ota_api`).
+- Track D: `akira` shell command tree (`akira_runtime_cmds`), structured telemetry sink (`akira_telemetry`), and panic handler with NVS crash storage (`akira_panic`).
+- New capability bits 26–31: `AKIRA_CAP_FS_READ/WRITE`, `AKIRA_CAP_CRYPTO`, `AKIRA_CAP_RTC_READ/WRITE`, `AKIRA_CAP_OTA_TRIGGER`.
+- `docs/ota_design.md` — OTA architecture design document.
+
+### Fixed
+- `ota_request_rollback()` implemented (was declared but never defined).
+- `ota_manager.c` compile guard aligned with `CONFIG_AKIRA_OTA` (fixes undeclared `CONFIG_AKIRA_OTA_THREAD_STACK_SIZE` on boards with OTA disabled).
+- Pre-existing warnings: nested `/*` in Doxygen comments, `printf` format mismatch (`off_t` vs `%x`), unused static functions.
+- All WASM allocations migrated to `akira_malloc_buffer()` / `akira_free_buffer()`.
+
+### Changed
+- Version bumped from 1.5.4 → 1.5.6 across all files.
+- Log banner updated to `AkiraOS v1.5.6 - GL1TCH`.
+
+---
+
 ## [1.5.4] — 2026-04-29
 
 ### Added
