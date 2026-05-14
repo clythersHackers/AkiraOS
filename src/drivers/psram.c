@@ -9,7 +9,9 @@
 #endif
 
 
+#ifdef CONFIG_AKIRA_PSRAM
 static bool psram_initialized = false;
+#endif
 
 #define PSRAM_TEST_SIZE 1024
 

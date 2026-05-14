@@ -275,6 +275,8 @@ int akira_native_storage_write(wasm_exec_env_t exec_env,
 
 void akira_native_storage_close(wasm_exec_env_t exec_env, int32_t fd)
 {
+    AKIRA_CHECK_CAP_OR_RETURN_VOID(exec_env, AKIRA_CAP_STORAGE_READ);
+
     k_mutex_lock(&s_fd_mutex, K_FOREVER);
 
     wasm_module_inst_t inst = wasm_runtime_get_module_inst(exec_env);

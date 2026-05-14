@@ -700,6 +700,6 @@ target_include_directories(app PRIVATE
 # Compile definitions
 target_compile_definitions(app PRIVATE
     AKIRA_VERSION_MAJOR=1
-    AKIRA_VERSION_MINOR=4
-    AKIRA_VERSION_PATCH=9
+    AKIRA_VERSION_MINOR=5
+    AKIRA_VERSION_PATCH=4
 )

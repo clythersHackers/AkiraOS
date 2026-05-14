@@ -50,6 +50,7 @@ LOG_MODULE_REGISTER(akira_power_manager, CONFIG_AKIRA_LOG_LEVEL);
 #define MAX_CONTAINERS 16
 
 /* Voltage-to-percent lookup for a typical single-cell Li-Ion (3.0 V – 4.2 V). */
+#if defined(CONFIG_INA219) || defined(CONFIG_AKIRA_BATTERY_ADC)
 static const struct {
     float voltage;
     uint8_t percent;
@@ -58,6 +59,7 @@ static const struct {
     { 3.80f, 70  }, { 3.70f, 60 }, { 3.60f, 45 }, { 3.50f, 30 },
     { 3.40f, 15  }, { 3.30f,  5 }, { 3.00f,  0 },
 };
+#endif /* CONFIG_INA219 || CONFIG_AKIRA_BATTERY_ADC */
 
 static struct {
     bool            initialized;
@@ -85,6 +87,7 @@ static struct {
 
 /* ---------- helpers ---------- */
 
+#if defined(CONFIG_INA219) || defined(CONFIG_AKIRA_BATTERY_ADC)
 static uint8_t voltage_to_percent(float v)
 {
     if (v >= k_lipo_curve[0].voltage) {
@@ -100,6 +103,7 @@ static uint8_t voltage_to_percent(float v)
     }
     return 0;
 }
+#endif /* CONFIG_INA219 || CONFIG_AKIRA_BATTERY_ADC */
 
 /* ---------- init ---------- */
 
@@ -188,13 +192,21 @@ int akira_pm_set_mode(akira_power_mode_t mode)
 
     case POWER_MODE_IDLE:
         /* Allow Zephyr PM to gate the CPU when idle. */
+#ifdef CONFIG_PM
         pm_state_force(0u, &(struct pm_state_info){PM_STATE_RUNTIME_IDLE, 0, 0});
+#else
+        LOG_WRN("PM not enabled (CONFIG_PM=n) — idle mode is a no-op");
+#endif
         break;
 
     case POWER_MODE_LIGHT_SLEEP:
         /* Suspend-to-idle: RAM retained, fast wake.
          * On ESP32 this maps to light sleep via the SoC PM backend. */
+#ifdef CONFIG_PM
         pm_state_force(0u, &(struct pm_state_info){PM_STATE_SUSPEND_TO_IDLE, 0, 0});
+#else
+        LOG_WRN("PM not enabled (CONFIG_PM=n) — light sleep is a no-op");
+#endif
         break;
 
     case POWER_MODE_DEEP_SLEEP:
@@ -203,7 +215,11 @@ int akira_pm_set_mode(akira_power_mode_t mode)
             LOG_WRN("Deep sleep disabled (CONFIG_AKIRA_POWER_DEEP_SLEEP=n)");
             return -ENOTSUP;
         }
+#ifdef CONFIG_PM
         pm_state_force(0u, &(struct pm_state_info){PM_STATE_STANDBY, 0, 0});
+#else
+        LOG_WRN("PM not enabled (CONFIG_PM=n) — deep sleep is a no-op");
+#endif
         break;
 
     case POWER_MODE_HIBERNATE:
@@ -212,7 +228,11 @@ int akira_pm_set_mode(akira_power_mode_t mode)
             LOG_WRN("Hibernate disabled (CONFIG_AKIRA_POWER_DEEP_SLEEP=n)");
             return -ENOTSUP;
         }
+#ifdef CONFIG_PM
         pm_state_force(0u, &(struct pm_state_info){PM_STATE_SOFT_OFF, 0, 0});
+#else
+        LOG_WRN("PM not enabled (CONFIG_PM=n) — hibernate is a no-op");
+#endif
         break;
     }
 

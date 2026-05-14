@@ -50,9 +50,8 @@ static uint16_t hw_framebuffer[320 * 240];
 #elif defined(CONFIG_AKIRA_FRAMEBUFFER_IN_PSRAM) && defined(CONFIG_MEMC)
 __attribute__((section(".ext_ram.bss"), aligned(4)))
 static uint16_t hw_framebuffer[320 * 240];
-#else
-static uint16_t hw_framebuffer[1]; /* placeholder — no SPIRAM on this target */
 #endif
+/* On targets without SPIRAM/MEMC, akira_framebuffer_get() returns NULL — no buffer needed. */
 
 int akira_hal_init(void)
 {

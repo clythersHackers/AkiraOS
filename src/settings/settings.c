@@ -265,29 +265,6 @@ static struct
     .sd_available = false};
 
 /*===========================================================================*/
-/* TODO: Migration                                                          */
-/*===========================================================================*/
-static int migrate_data_to_sd(void)
-{
-    if (storage.type == AKIRA_SETTINGS_STORAGE_SD)
-    {
-        LOG_WRN("Storage type is already SD");
-        return -1;
-    }
-    return 0;
-}
-
-static int migrate_data_to_flash(void)
-{
-    if (storage.type == AKIRA_SETTINGS_STORAGE_FLASH)
-    {
-        LOG_WRN("Storage type is already flash");
-        return -1;
-    }
-    return 0;
-}
-
-/*===========================================================================*/
 /* SD functions - NOT SUPPORTED YET                                          */
 /*===========================================================================*/
 
@@ -1217,7 +1194,9 @@ static int settings_clear(void)
                     strcmp(entry.name, ".") != 0 && strcmp(entry.name, "..") != 0)
                 {
                     char dirpath[MAX_FILEPATH_LEN];
-                    snprintf(dirpath, sizeof(dirpath), "/SD:/settings/%s", entry.name);
+                    snprintf(dirpath, sizeof(dirpath), "/SD:/settings/%.*s",
+                             (int)(sizeof(dirpath) - sizeof("/SD:/settings/")),
+                             entry.name);
                     fs_manager_delete_dir(dirpath);
                 }
             }

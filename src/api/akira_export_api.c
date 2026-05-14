@@ -66,7 +66,7 @@ bool akira_register_native_apis()
 #if defined(CONFIG_AKIRA_WASM_API) && defined(CONFIG_AKIRA_MODULE_RF) && defined(CONFIG_AKIRA_RF_FRAMEWORK)
         {"rf_set_frequency", (void *)akira_native_rf_set_frequency, "(i)i", NULL},
         {"rf_set_power", (void *)akira_native_rf_set_power, "(i)i", NULL},
-        {"rf_get_rssi", (void *)akira_native_rf_get_rssi, "(i)i", NULL},
+        {"rf_get_rssi", (void *)akira_native_rf_get_rssi, "()i", NULL},
         {"rf_send", (void *)akira_native_rf_send, "(*i)i", NULL},
 #endif
 

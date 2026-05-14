@@ -29,9 +29,15 @@ extern "C"
     /* Version Information                                                       */
     /*===========================================================================*/
 
+#ifndef AKIRA_VERSION_MAJOR
 #define AKIRA_VERSION_MAJOR 1
+#endif
+#ifndef AKIRA_VERSION_MINOR
 #define AKIRA_VERSION_MINOR 5
+#endif
+#ifndef AKIRA_VERSION_PATCH
 #define AKIRA_VERSION_PATCH 4
+#endif
 #define AKIRA_VERSION_STRING "1.5.4"
 #define AKIRA_CODENAME "GL1TCH"
 

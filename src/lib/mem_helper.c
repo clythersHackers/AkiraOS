@@ -30,9 +30,9 @@ LOG_MODULE_REGISTER(mem_helper, CONFIG_AKIRA_LOG_LEVEL);
 /**
  * @brief Check if pointer is in external PSRAM
  */
+#ifdef CONFIG_AKIRA_PSRAM
 static bool is_psram_ptr(void *ptr)
 {
-#ifdef CONFIG_AKIRA_PSRAM
 #if HAS_ESP_PTR_CHECK
     return esp_ptr_external_ram(ptr);
 #else
@@ -41,11 +41,8 @@ static bool is_psram_ptr(void *ptr)
     (void)ptr;
     return false;
 #endif
-#else
-    (void)ptr;
-    return false;
-#endif
 }
+#endif /* CONFIG_AKIRA_PSRAM */
 
 mem_source_t akira_get_mem_source(void *ptr)
 {

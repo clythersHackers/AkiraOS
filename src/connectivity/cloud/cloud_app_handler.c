@@ -112,10 +112,6 @@ static void complete_download(struct download_context *ctx, bool success, const 
     {
         LOG_INF("Auto-installing app: %s", ctx->app_id);
 
-        /* Build version from bytes */
-        uint32_t version = (ctx->version[0] << 24) | (ctx->version[1] << 16) |
-                          (ctx->version[2] << 8) | ctx->version[3];
-        
         /* Create manifest */
         app_manifest_t manifest = {0};
         strncpy(manifest.name, ctx->name, APP_NAME_MAX_LEN - 1);
