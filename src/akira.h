@@ -36,10 +36,10 @@ extern "C"
 #define AKIRA_VERSION_MINOR 5
 #endif
 #ifndef AKIRA_VERSION_PATCH
-#define AKIRA_VERSION_PATCH 4
+#define AKIRA_VERSION_PATCH 6
 #endif
 #define AKIRA_VERSION_STRING "1.5.6"
-#define AKIRA_CODENAME "GL1TCH"
+#define AKIRA_CODENAME "C1PH3R"
 
     /* Simple version struct */
     typedef struct

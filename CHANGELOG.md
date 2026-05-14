@@ -7,7 +7,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [1.5.6] — 2026-05-14
+## [1.5.6] — "C1PH3R" — 2026-05-14
 
 ### Added
 - Track B: WASM native APIs for Filesystem (`akira_fs_api`), Crypto (`akira_crypto_api`), and RTC (`akira_rtc_api`) with capability-gated sandbox.
@@ -24,7 +24,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 - Version bumped from 1.5.4 → 1.5.6 across all files.
-- Log banner updated to `AkiraOS v1.5.6 - GL1TCH`.
+- Log banner updated to `AkiraOS v1.5.6 `.
 
 ---
 
