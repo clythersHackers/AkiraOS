@@ -126,6 +126,11 @@ if(CONFIG_AKIRA_WASM_RUNTIME)
     endif()
 
     set(WAMR_BUILD_INTERP 1)
+    # Mini-loader: skips redundant module-level validation already handled by
+    # akira_runtime (SHA-256 integrity check + sandbox capability audit).
+    # Reduces WAMR flash footprint by ~20-30 KB. Disable if loading untrusted
+    # binaries directly from WAMR without AkiraOS's own security layer.
+    set(WAMR_BUILD_MINI_LOADER 1)
     # Check user configuration for AOT support
     if(CONFIG_WAMR_AOT_SUPPORT)
         set(WAMR_BUILD_AOT 1)

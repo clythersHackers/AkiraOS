@@ -47,8 +47,14 @@ void akira_display_clear(uint16_t color)
     }
 
     int pixels = caps.x_resolution * caps.y_resolution;
-    for (int i = 0; i < pixels; i++)
-        fb[i] = color;
+    /* Fill 2 pixels per 32-bit write for ~2× throughput over scalar uint16 stores */
+    uint32_t c32 = ((uint32_t)color << 16) | color;
+    uint32_t *p = (uint32_t *)(void *)fb;
+    int words = pixels / 2;
+    for (int i = 0; i < words; i++)
+        p[i] = c32;
+    if (pixels & 1)
+        fb[pixels - 1] = color;
 #endif
 }
 
@@ -100,11 +106,19 @@ void akira_display_rect(int x, int y, int w, int h, uint16_t color)
     if (span <= 0)
         return;
 
-    for (int py = y1; py < y2; py++) {
-        uint16_t *row = fb + py * caps.x_resolution + x1;
-        for (int i = 0; i < span; i++)
-            row[i] = color;
-    }
+    /* Fill first row with 32-bit writes, then memcpy to remaining rows.
+     * This leverages the optimised memcpy (often DMA-backed on Xtensa/ARM)
+     * instead of a scalar per-pixel store loop. */
+    uint16_t *row0 = fb + y1 * caps.x_resolution + x1;
+    uint32_t c32 = ((uint32_t)color << 16) | color;
+    uint32_t *p = (uint32_t *)(void *)row0;
+    int words = span / 2;
+    for (int i = 0; i < words; i++)
+        p[i] = c32;
+    if (span & 1)
+        row0[span - 1] = color;
+    for (int py = y1 + 1; py < y2; py++)
+        memcpy(fb + py * caps.x_resolution + x1, row0, (size_t)span * 2);
 #endif
 }
 

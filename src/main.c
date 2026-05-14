@@ -241,7 +241,6 @@ int main(void)
 #endif
 
     LOG_INF("AkiraOS init complete");
-    k_sleep(K_MSEC(1000)); // Brief pause before entering main loop
     /* Idle loop */
     while (1)
     {

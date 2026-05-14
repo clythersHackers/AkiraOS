@@ -48,11 +48,15 @@ int akira_rf_init(akira_rf_chip_t chip)
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     int ret;
 
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0) {
+        LOG_WRN("rf_init: lock timed out");
+        return -EBUSY;
+    }
 
     /* Ensure framework is initialized (under lock) */
     ret = ensure_rf_framework();
     if (ret < 0) {
+        k_mutex_unlock(&s_rf_lock);
         return ret;
     }
 
@@ -70,6 +74,7 @@ int akira_rf_init(akira_rf_chip_t chip)
             break;
         default:
             LOG_ERR("Unsupported chip type: %d", chip);
+            k_mutex_unlock(&s_rf_lock);
             return -EINVAL;
     }
 
@@ -77,6 +82,7 @@ int akira_rf_init(akira_rf_chip_t chip)
     const struct akira_rf_driver *driver = rf_framework_get_driver(rf_type);
     if (!driver) {
         LOG_ERR("Driver not found for chip type %d", rf_type);
+        k_mutex_unlock(&s_rf_lock);
         return -ENODEV;
     }
 
@@ -84,6 +90,7 @@ int akira_rf_init(akira_rf_chip_t chip)
     ret = driver->init();
     if (ret < 0) {
         LOG_ERR("Driver init failed: %d", ret);
+        k_mutex_unlock(&s_rf_lock);
         return ret;
     }
 
@@ -105,7 +112,10 @@ int akira_rf_deinit(void)
 {
     LOG_INF("RF deinit");
 
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0) {
+        LOG_WRN("rf_deinit: lock timed out");
+        return -EBUSY;
+    }
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     if (g_active_driver && g_active_driver->deinit) {
         g_active_driver->deinit();
@@ -120,7 +130,10 @@ int akira_rf_deinit(void)
 
 int akira_rf_send(const uint8_t *data, size_t len)
 {
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0) {
+        LOG_WRN("rf_send: lock timed out");
+        return -EBUSY;
+    }
     if (g_active_chip == AKIRA_RF_CHIP_NONE || !g_active_driver)
     {
         k_mutex_unlock(&s_rf_lock);
@@ -153,7 +166,10 @@ int akira_rf_send(const uint8_t *data, size_t len)
 
 int akira_rf_receive(uint8_t *buffer, size_t max_len, uint32_t timeout_ms)
 {
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0) {
+        LOG_WRN("rf_receive: lock timed out");
+        return -EBUSY;
+    }
     if (g_active_chip == AKIRA_RF_CHIP_NONE || !g_active_driver)
     {
         k_mutex_unlock(&s_rf_lock);
@@ -188,7 +204,10 @@ int akira_rf_set_frequency(uint32_t freq_hz)
 {
     LOG_INF("RF set frequency: %u Hz", freq_hz);
 
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0) {
+        LOG_WRN("rf_set_frequency: lock timed out");
+        return -EBUSY;
+    }
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     if (!g_active_driver || !g_active_driver->set_frequency) {
         k_mutex_unlock(&s_rf_lock);
@@ -208,7 +227,10 @@ int akira_rf_set_power(int8_t dbm)
 {
     LOG_INF("RF set power: %d dBm", dbm);
 
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0) {
+        LOG_WRN("rf_set_power: lock timed out");
+        return -EBUSY;
+    }
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     if (!g_active_driver || !g_active_driver->set_power) {
         k_mutex_unlock(&s_rf_lock);
@@ -230,7 +252,11 @@ int akira_rf_get_rssi(int16_t *rssi)
         return -EINVAL;
     }
 
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0) {
+        LOG_WRN("rf_get_rssi: lock timed out");
+        *rssi = -100;
+        return -EBUSY;
+    }
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     if (!g_active_driver || !g_active_driver->get_rssi) {
         *rssi = -100;

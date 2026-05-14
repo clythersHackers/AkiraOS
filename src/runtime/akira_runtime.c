@@ -449,17 +449,20 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
     }
 
     /* ===== Step 4: Load WASM module ===== */
-    /* Allocate chunk buffer from PSRAM if available, else SRAM */
+    /* Allocate a small probe buffer to check if PSRAM is available,
+     * then free it immediately — we only need the source type (chunk_src). */
     mem_source_t chunk_src;
-    uint8_t *chunk_buffer = akira_malloc_buffer_ex(CHUNK_BUFFER_SIZE, &chunk_src);
-    if (!chunk_buffer)
+    uint8_t *chunk_probe = akira_malloc_buffer_ex(CHUNK_BUFFER_SIZE, &chunk_src);
+    if (!chunk_probe)
     {
-        LOG_ERR("Failed to allocate chunk buffer (%d bytes)", CHUNK_BUFFER_SIZE);
+        LOG_ERR("Failed to probe memory source (%d bytes)", CHUNK_BUFFER_SIZE);
         g_apps[slot].used = false; /* release reserved slot */
         return -ENOMEM;
     }
-    LOG_INF("Chunk buffer allocated from %s (%d bytes)",
-            chunk_src == MEM_SOURCE_PSRAM ? "PSRAM" : "SRAM", CHUNK_BUFFER_SIZE);
+    LOG_INF("Memory source: %s",
+            chunk_src == MEM_SOURCE_PSRAM ? "PSRAM" : "SRAM");
+    akira_free_buffer(chunk_probe);
+    chunk_probe = NULL;
 
     /* Use WAMR's streaming loader for chunked loading when available,
      * otherwise fall back to direct load with our buffer management.
@@ -485,13 +488,15 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
         {
             LOG_INF("Staging %u bytes WASM to external memory", size);
 
-            /* Copy in chunks to avoid large stack/heap spikes */
+            /* Copy directly from source to PSRAM in chunks.
+             * No intermediate bounce buffer needed — source is a contiguous
+             * SRAM/flash region, and chunking here only serves to preserve
+             * cache/DMA locality on the PSRAM write path. */
             uint32_t offset = 0;
             while (offset < size)
             {
                 uint32_t chunk_len = MIN(CHUNK_BUFFER_SIZE, size - offset);
-                memcpy(chunk_buffer, buffer + offset, chunk_len);
-                memcpy(staged_buffer + offset, chunk_buffer, chunk_len);
+                memcpy(staged_buffer + offset, buffer + offset, chunk_len);
                 offset += chunk_len;
             }
             load_buffer = staged_buffer;
@@ -520,7 +525,6 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
         /* load_buffer == buffer (caller-owned) — make our own durable copy */
         owned_binary = akira_malloc_buffer(size);
         if (!owned_binary) {
-            akira_free_buffer(chunk_buffer);
             LOG_ERR("OOM: cannot allocate owned WASM binary copy (%u bytes)", size);
             g_apps[slot].used = false; /* release reserved slot */
             return -ENOMEM;
@@ -530,10 +534,6 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
 
     /* Load the WASM module — owned_binary is intentionally NOT freed here */
     module = wasm_runtime_load(owned_binary, size, error_buf, sizeof(error_buf));
-
-    /* chunk_buffer is a scratch pad only — always free after load */
-    akira_free_buffer(chunk_buffer);
-    chunk_buffer = NULL;
 
     if (!module)
     {

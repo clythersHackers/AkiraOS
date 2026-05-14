@@ -77,7 +77,10 @@ int akira_native_i2c_write_reg(wasm_exec_env_t exec_env,
         return -EINVAL;
     }
 
-    k_mutex_lock(&s_bus_lock, K_FOREVER);
+    if (k_mutex_lock(&s_bus_lock, K_MSEC(500)) != 0) {
+        LOG_WRN("i2c_write_reg: bus lock timed out");
+        return -EBUSY;
+    }
     const struct device *dev = get_bus(bus_id);
     if (!dev) {
         k_mutex_unlock(&s_bus_lock);
@@ -113,7 +116,10 @@ int akira_native_i2c_read_reg(wasm_exec_env_t exec_env,
         return -EINVAL;
     }
 
-    k_mutex_lock(&s_bus_lock, K_FOREVER);
+    if (k_mutex_lock(&s_bus_lock, K_MSEC(500)) != 0) {
+        LOG_WRN("i2c_read_reg: bus lock timed out");
+        return -EBUSY;
+    }
     const struct device *dev = get_bus(bus_id);
     if (!dev) {
         k_mutex_unlock(&s_bus_lock);
