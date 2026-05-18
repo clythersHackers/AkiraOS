@@ -66,8 +66,8 @@ static int cmd_apps_list(const struct shell *sh, size_t argc, char **argv)
     shell_print(sh, "App manager not enabled (CONFIG_AKIRA_APP_MANAGER=n)");
     return 0;
 #else
-    app_info_t list[16];
-    int n = app_manager_list(list, ARRAY_SIZE(list));
+    app_info_t list[CONFIG_AKIRA_APP_MAX_INSTALLED];
+    int n = app_manager_list(list, CONFIG_AKIRA_APP_MAX_INSTALLED);
     if (n < 0) {
         shell_error(sh, "app_manager_list: %d", n);
         return n;
@@ -165,8 +165,8 @@ static int cmd_mem_report(const struct shell *sh, size_t argc, char **argv)
 #endif
 
 #ifdef CONFIG_AKIRA_APP_MANAGER
-    app_info_t list[16];
-    int n = app_manager_list(list, ARRAY_SIZE(list));
+    app_info_t list[CONFIG_AKIRA_APP_MAX_INSTALLED];
+    int n = app_manager_list(list, CONFIG_AKIRA_APP_MAX_INSTALLED);
     if (n > 0) {
         shell_print(sh, "\nRunning apps:");
         shell_print(sh, "  %-24s %-8s %-8s %-7s", "NAME", "STATE", "HEAP KB", "STACK KB");
@@ -192,8 +192,8 @@ static int cmd_caps_show(const struct shell *sh, size_t argc, char **argv)
     shell_print(sh, "App manager not enabled");
     return 0;
 #else
-    app_info_t list[16];
-    int n = app_manager_list(list, ARRAY_SIZE(list));
+    app_info_t list[CONFIG_AKIRA_APP_MAX_INSTALLED];
+    int n = app_manager_list(list, CONFIG_AKIRA_APP_MAX_INSTALLED);
     if (n <= 0) {
         shell_print(sh, "No apps.");
         return 0;
