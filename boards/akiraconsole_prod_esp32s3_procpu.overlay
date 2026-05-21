@@ -58,35 +58,9 @@
 // Default : ST7789V via MIPI-DBI (board DTS default, no overlay changes needed).
 // ILI9341 : set CONFIG_AKIRA_ILI9341_DRIVER=y in the board .conf —
 //           CMakeLists.txt appends boards/akiraconsole_prod/*_ili9341.overlay.
-// Sharp   : set CONFIG_AKIRA_SHARP_DISPLAY=y (see block below).
+// Sharp   : set CONFIG_AKIRA_SHARP_DISPLAY=y in the board .conf —
+//           CMakeLists.txt appends boards/akiraconsole_prod/*_sharp.overlay.
 // =============================================================================
-// =============================================================================
-// Sharp LS027B7DH01 Memory LCD on J4 — only active when
-// CONFIG_AKIRA_SHARP_DISPLAY=y.
-// SCS polarity is ACTIVE_HIGH (unusual); cs-gpios[1] overridden below.
-// =============================================================================
-#ifdef CONFIG_AKIRA_SHARP_DISPLAY
-/ {
-	chosen {
-		zephyr,display = &ls027b7dh01;
-	};
-};
-
-&mipi_dbi_prod {
-	status = "disabled";
-};
-
-&spi2 {
-	// Override cs-gpios: index [1] changes to ACTIVE_HIGH for Sharp SCS
-	cs-gpios =
-                <&tca6408 6 GPIO_ACTIVE_LOW>,   // [0] LR_CS  (unchanged, TCA6408 P6)
-                <&gpio0 10 GPIO_ACTIVE_HIGH>,   // [1] SCS    — Sharp ACTIVE HIGH
-                <&gpio0 14 GPIO_ACTIVE_LOW>,    // [2] SD_CS  (unchanged)
-                <&tca6408 3 GPIO_ACTIVE_LOW>;   // [3] CC_CS  (unchanged, TCA6408 P3)
-		status = "okay";
-	};
-};
-#endif /* CONFIG_AKIRA_SHARP_DISPLAY */
 
 // =============================================================================
 // USB Device — HID interface

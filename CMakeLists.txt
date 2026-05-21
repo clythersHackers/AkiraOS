@@ -46,6 +46,18 @@ if(DEFINED BOARD)
           "AkiraOS: CONFIG_AKIRA_ILI9341_DRIVER=y but overlay not found: ${_akira_ili_overlay}")
       endif()
     endif()
+    if(_akira_board_conf_text MATCHES
+       "(^|\n)[ \t]*CONFIG_AKIRA_SHARP_DISPLAY[ \t]*=[ \t]*y([ \t\n]|$)")
+      set(_akira_sharp_overlay
+          "${CMAKE_CURRENT_LIST_DIR}/boards/${_akira_board_base}/${_akira_board_safe}_sharp.overlay")
+      if(EXISTS "${_akira_sharp_overlay}")
+        list(APPEND EXTRA_DTC_OVERLAY_FILE "${_akira_sharp_overlay}")
+        message(STATUS "AkiraOS: Sharp overlay → ${_akira_sharp_overlay}")
+      else()
+        message(WARNING
+          "AkiraOS: CONFIG_AKIRA_SHARP_DISPLAY=y but overlay not found: ${_akira_sharp_overlay}")
+      endif()
+    endif()
   endif()
 endif()
 
