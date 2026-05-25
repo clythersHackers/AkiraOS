@@ -205,12 +205,24 @@ int sd_manager_scan_apps(char names[][32], int max_count)
             break;
         }
 
-        /* Check for .wasm extension */
+        /* Check for .wasm/.WASM or .aot/.AOT extension (case-insensitive) */
         size_t len = strlen(entry.name);
-        if (len > 5 && strcmp(&entry.name[len - 5], ".wasm") == 0)
+        bool is_wasm = len > 5 &&
+            entry.name[len - 5] == '.' &&
+            ((entry.name[len - 4] | 0x20) == 'w') &&
+            ((entry.name[len - 3] | 0x20) == 'a') &&
+            ((entry.name[len - 2] | 0x20) == 's') &&
+            ((entry.name[len - 1] | 0x20) == 'm');
+        bool is_aot = len > 4 &&
+            entry.name[len - 4] == '.' &&
+            ((entry.name[len - 3] | 0x20) == 'a') &&
+            ((entry.name[len - 2] | 0x20) == 'o') &&
+            ((entry.name[len - 1] | 0x20) == 't');
+        int ext_len = is_wasm ? 5 : (is_aot ? 4 : 0);
+        if (ext_len > 0)
         {
             /* Extract name without extension */
-            size_t name_len = len - 5;
+            size_t name_len = len - (size_t)ext_len;
             if (name_len >= APP_NAME_MAX)
             {
                 name_len = APP_NAME_MAX - 1;

@@ -25,6 +25,7 @@ LOG_MODULE_REGISTER(akira_sd_card, CONFIG_AKIRA_LOG_LEVEL);
 #include <zephyr/kernel.h>
 #include <zephyr/fs/fs.h>
 #include <zephyr/storage/disk_access.h>
+#include <zephyr/drivers/disk.h>
 #include <ff.h>
 #include <errno.h>
 
@@ -48,10 +49,26 @@ int akira_sd_card_init(void)
         return 0;
     }
 
-    /* Probe the disk layer — returns 0 if the card is present */
-    int ret = disk_access_init(SD_DISK_NAME);
+    /* Fully deinit the disk controller before reinitializing.
+     * Without this, disk_access_init fails after a card removal+reinsertion
+     * because the SDMMC host driver still holds its previous session state.
+     * DISK_IOCTL_CTRL_DEINIT is a no-op if the disk was never initialized. */
+    disk_access_ioctl(SD_DISK_NAME, DISK_IOCTL_CTRL_DEINIT, NULL);
+
+    /* Probe the disk layer — retry a few times to let the card stabilize */
+    int ret = -EIO;
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) {
+            k_msleep(200);
+        }
+        ret = disk_access_init(SD_DISK_NAME);
+        if (ret == 0) {
+            break;
+        }
+        LOG_DBG("SD init attempt %d failed: %d", attempt + 1, ret);
+    }
     if (ret < 0) {
-        LOG_DBG("SD disk \"%s\" not found: %d", SD_DISK_NAME, ret);
+        LOG_DBG("SD disk \"%s\" not found after retries: %d", SD_DISK_NAME, ret);
         return ret;
     }
 
@@ -90,10 +107,13 @@ void akira_sd_card_deinit(void)
     int ret = fs_unmount(&g_sd_mount);
     if (ret < 0) {
         LOG_WRN("SD unmount failed: %d", ret);
-        return;
+        /* Fall through — still need to deinit the disk controller */
     }
 
     g_mounted = false;
+    /* Fully release the SDMMC host controller so the next akira_sd_card_init()
+     * can reinitialize cleanly without ENOTSUP/-116 errors. */
+    disk_access_ioctl(SD_DISK_NAME, DISK_IOCTL_CTRL_DEINIT, NULL);
     LOG_INF("SD card unmounted");
 }
 
