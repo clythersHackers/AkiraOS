@@ -115,7 +115,13 @@ int power_manager_init(void)
 
 #ifdef CONFIG_FUEL_GAUGE
     /* Bind to the first fuel gauge device on the bus (declared in DTS). */
+    /* Prefer the BQ28Z610 fitted on AkiraConsole Production.
+     * Falls back to any generic fuel_gauge node if present (other boards). */
+#if DT_HAS_COMPAT_STATUS_OKAY(ti_bq28z610)
+    g_pm.fuel_gauge = DEVICE_DT_GET_ANY(ti_bq28z610);
+#else
     g_pm.fuel_gauge = DEVICE_DT_GET_ANY(zephyr_fuel_gauge);
+#endif
     if (!g_pm.fuel_gauge || !device_is_ready(g_pm.fuel_gauge)) {
         LOG_WRN("Fuel gauge device not ready — battery readout unavailable");
         g_pm.fuel_gauge = NULL;
@@ -344,7 +350,7 @@ int akira_pm_get_battery_status(akira_battery_status_t *status)
 
 #ifdef CONFIG_FUEL_GAUGE
     if (g_pm.fuel_gauge) {
-        union fuel_gauge_prop_val soc, volt, curr, chg;
+        union fuel_gauge_prop_val soc, volt, curr;
         bool ok = true;
 
         ok &= (fuel_gauge_get_prop(g_pm.fuel_gauge,
@@ -356,17 +362,13 @@ int akira_pm_get_battery_status(akira_battery_status_t *status)
 
         if (ok) {
             status->level_percent = (uint8_t)soc.relative_state_of_charge;
-            /* Fuel-gauge returns µV and µA — convert to V and A. */
+            /* Fuel-gauge returns µV and µA — convert to mV and mA. */
             status->voltage_mv    = (int32_t)(volt.voltage / 1000);
             status->current_ma    = (int32_t)(curr.current / 1000);
-            status->charging      = (status->current_ma > 0);
+            /* Positive current = discharge, negative = charging.
+             * BQ28Z610 reports charge current as negative. */
+            status->charging      = (status->current_ma < 0);
             status->low_battery   = (status->level_percent < CONFIG_AKIRA_BATTERY_LOW_THRESHOLD);
-
-            /* Optional: read charge status flag if the driver supports it. */
-            if (fuel_gauge_get_prop(g_pm.fuel_gauge,
-                    FUEL_GAUGE_CHARGE_TYPE, &chg) == 0) {
-                status->charging = (chg.charge_type != CHARGE_TYPE_NONE);
-            }
             return 0;
         }
         LOG_WRN("Fuel gauge full-status read incomplete");

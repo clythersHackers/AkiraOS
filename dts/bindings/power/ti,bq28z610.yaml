@@ -5,4 +5,4 @@ description: BQ28Z610 1-cell Li-Ion battery fuel gauge + protection (TI)
 
 compatible: "ti,bq28z610"
 
-include: i2c-device.yaml
+include: [i2c-device.yaml, fuel-gauge.yaml]
