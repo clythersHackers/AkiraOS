@@ -321,5 +321,12 @@
 			label = "lfs_storage";
 			reg = <0x00408000 DT_SIZE_K(512)>;
 		};
+
+        /* Hub credentials NVS — device_id + auth token
+         * 2 × 4 KB sectors; placed after LittleFS well within 8 MB flash. */
+        hub_nvs_partition: partition@488000 {
+            label = "hub_nvs";
+            reg = <0x00488000 DT_SIZE_K(8)>;
+        };
     };
 };

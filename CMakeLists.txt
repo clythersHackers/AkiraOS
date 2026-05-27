@@ -214,6 +214,7 @@ endif()
 # Add source files
 target_sources(app PRIVATE
     src/main.c
+    src/akira_platform_stubs.c
     
     # Core drivers and shell
 
@@ -537,7 +538,12 @@ endif()
 
 # ===== Connectivity Layer =====
 
-# WiFi uses Zephyr's native stack - no wrapper needed
+# WiFi event notifier — always compiled when WiFi is enabled.
+# Listens for NET_EVENT_IPV4_ADDR_ADD (DHCP done) and calls the
+# __weak akira_on_wifi_connected() hook so Platform can react.
+if(CONFIG_WIFI)
+    target_sources(app PRIVATE src/connectivity/radio/wifi_notify.c)
+endif()
 
 # HID Manager (when enabled)
 if(CONFIG_AKIRA_HID)

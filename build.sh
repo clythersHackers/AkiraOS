@@ -37,6 +37,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
 
+
 # Defaults
 BOARD="native_sim"
 BUILD_BOOTLOADER=""       # "", "y" (with app), "o" (only)
@@ -46,6 +47,8 @@ GENERATE_SBOM=false
 CLEAN_BUILD=false
 FULL_CLEAN=false
 RUN_TESTS=false
+USE_PLATFORM=false
+AKIRA_PLATFORM_PATH=""
 PORT=""
 BAUD="921600"
 WEST_RUNNER=""          # "", or a west runner name e.g. "openocd", "jlink"
@@ -145,6 +148,8 @@ ${BOLD}OPTIONS:${NC}
     -s              Generate SBOM (Software Bill of Materials)
     -c              Clean build artifacts for selected board
     --test          Build and run ztest suite on native_sim (ignores -b flag)
+    --platform      Include AkiraPlatform commercial overlay in the build.
+                    Optional: --platform /custom/path (default: ../AkiraPlatform)
     --full-clean    Reset to pristine state (remove ALL build dirs)
     -p <port>       Serial port for flashing (default: auto-detect)
     --baud <rate>   Baud rate for flashing (default: 921600)
@@ -185,6 +190,12 @@ ${BOLD}EXAMPLES:${NC}
 
     ./build.sh --full-clean
         Remove all build directories
+
+    ./build.sh -b akiraconsole --platform
+        Build AkiraOS + AkiraPlatform overlay (auto-detected at ../AkiraPlatform)
+
+    ./build.sh -b akiraconsole --platform /opt/akira/platform
+        Build with AkiraPlatform at a custom path
 
 ${BOLD}FLASH ADDRESSES (ESP32):${NC}
     MCUboot:     0x1000
@@ -322,7 +333,21 @@ build_application() {
     cd "$WORKSPACE_ROOT"
     unset ZEPHYR_BASE
     
-    if west build --pristine -b "$zephyr_board" AkiraOS -d "$build_dir" -- -DMODULE_EXT_ROOT="$WORKSPACE_ROOT/AkiraOS"; then
+    local platform_cmake=""
+    if [[ "$USE_PLATFORM" == true ]]; then
+        # Resolve path: explicit --platform <path>, or default sibling directory
+        if [[ -z "$AKIRA_PLATFORM_PATH" ]]; then
+            AKIRA_PLATFORM_PATH="$(dirname "$WORKSPACE_ROOT")/AkiraPlatform"
+        fi
+        if [[ ! -d "$AKIRA_PLATFORM_PATH" ]]; then
+            print_error "AkiraPlatform not found at: $AKIRA_PLATFORM_PATH"
+            exit 1
+        fi
+        platform_cmake=" -DZEPHYR_EXTRA_MODULES=$AKIRA_PLATFORM_PATH"
+        print_info "AkiraPlatform: $AKIRA_PLATFORM_PATH"
+    fi
+
+    if west build --pristine -b "$zephyr_board" AkiraOS -d "$build_dir" -- -DMODULE_EXT_ROOT="$WORKSPACE_ROOT/AkiraOS"$platform_cmake; then
         print_success "AkiraOS build complete!"
         print_info "Binary: $build_dir/zephyr/zephyr.bin"
         
@@ -771,6 +796,15 @@ parse_args() {
                 ;;
             --test)
                 RUN_TESTS=true
+                shift
+                ;;
+            --platform)
+                USE_PLATFORM=true
+                # Optional next argument: custom path (if not another flag)
+                if [[ $# -gt 1 && "$2" != -* ]]; then
+                    AKIRA_PLATFORM_PATH="$2"
+                    shift
+                fi
                 shift
                 ;;
             -p)

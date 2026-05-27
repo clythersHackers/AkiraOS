@@ -13,6 +13,7 @@
 #include "../storage/fs_manager.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include "../../akira.h"
 #include <zephyr/fs/fs.h>
 #include <zephyr/sys/crc.h>
 #include <string.h>
@@ -405,6 +406,7 @@ int app_manager_install(const char *name, const void *binary, size_t size,
     k_mutex_unlock(&g_registry_mutex);
 
     LOG_INF("Installed app: %s (ID: %d, size: %zu)", app_name, existing->id, size);
+    akira_on_app_installed(app_name, existing->id);
     return existing->id;
 }
 
@@ -562,6 +564,7 @@ int app_manager_uninstall(const char *name)
     k_mutex_unlock(&g_registry_mutex);
 
     LOG_INF("Uninstalled app: %s", name);
+    akira_on_app_uninstalled(name);
     return 0;
 }
 
