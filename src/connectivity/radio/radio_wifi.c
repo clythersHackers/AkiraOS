@@ -37,7 +37,7 @@ static radio_handle_t wifi_handle;
  * NET_EVENT_IPV4_ADDR_ADD fires when ESP-IDF's DHCP assigns an IP.
  * At this point ESP-IDF's DNS resolver has a server and getaddrinfo works. */
 static void ipv4_mgmt_event_handler(struct net_mgmt_event_callback *cb,
-                                    uint32_t mgmt_event, struct net_if *iface)
+                                    uint64_t mgmt_event, struct net_if *iface)
 {
     ARG_UNUSED(cb);
     ARG_UNUSED(iface);
@@ -49,7 +49,7 @@ static void ipv4_mgmt_event_handler(struct net_mgmt_event_callback *cb,
 
 /* WiFi management event handler */
 static void wifi_mgmt_event_handler(struct net_mgmt_event_callback *cb,
-                                   uint32_t mgmt_event, struct net_if *iface)
+                                   uint64_t mgmt_event, struct net_if *iface)
 {
     struct wifi_radio_data *data = CONTAINER_OF(cb, struct wifi_radio_data, mgmt_cb);
 
@@ -276,7 +276,7 @@ static int wifi_radio_get_hw_addr(radio_handle_t *handle, uint8_t *addr, size_t 
     }
     
     link_addr = net_if_get_link_addr(data->iface);
-    if (!link_addr || !link_addr->addr) {
+    if (!link_addr) {
         return -ENOENT;
     }
     

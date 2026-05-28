@@ -36,6 +36,17 @@ void akira_on_app_installed(const char *name, int id);
 void akira_on_app_uninstalled(const char *name);
 
 /**
+ * @brief Called when a WASM application exits with a non-zero exit code
+ *         (runtime exception, trap, or unhandled error).
+ *
+ * Default: no-op. AkiraPlatform overrides to forward the event to the hub.
+ *
+ * @param name       App name string (NUL-terminated).
+ * @param exit_code  Non-zero exit code from the WASM runtime.
+ */
+void akira_on_app_crashed(const char *name, int exit_code);
+
+/**
  * @brief Called when WiFi has an IPv4 address (DHCP done, DNS ready).
  *
  * Default: no-op. AkiraPlatform overrides to register/connect the hub.

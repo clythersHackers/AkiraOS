@@ -98,10 +98,10 @@ int akira_wdt_init(void)
     }
     s_wdt_channel = ch;
 
-    int ret = wdt_enable(s_wdt_dev, WDT_OPT_PAUSE_HALTED_BY_DBG);
+    int ret = wdt_setup(s_wdt_dev, WDT_OPT_PAUSE_HALTED_BY_DBG);
     if (ret < 0) {
         /* Some drivers don't support the debug-pause option; retry plain. */
-        ret = wdt_enable(s_wdt_dev, 0);
+        ret = wdt_setup(s_wdt_dev, 0);
     }
     if (ret < 0) {
         LOG_ERR("WDT enable failed: %d", ret);

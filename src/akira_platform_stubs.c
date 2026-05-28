@@ -25,6 +25,12 @@ __weak void akira_on_app_uninstalled(const char *name)
 	ARG_UNUSED(name);
 }
 
+__weak void akira_on_app_crashed(const char *name, int exit_code)
+{
+        ARG_UNUSED(name);
+        ARG_UNUSED(exit_code);
+}
+
 __weak void akira_on_wifi_connected(void)
 {
 }

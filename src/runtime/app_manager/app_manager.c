@@ -14,6 +14,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include "../../akira.h"
+#include "../../akira_platform_stubs.h"
 #include <zephyr/fs/fs.h>
 #include <zephyr/sys/crc.h>
 #include <string.h>
@@ -1662,6 +1663,11 @@ static void app_manager_on_runtime_exit(int slot, int exit_code)
 #endif /* CONFIG_AKIRA_SD_XIP */
 
     k_mutex_unlock(&g_registry_mutex);
+
+    /* Notify platform overlay when an app exits abnormally */
+    if (exit_code != 0 && lc_name[0] != '\0') {
+        akira_on_app_crashed(lc_name, exit_code);
+    }
 
 #ifdef CONFIG_AKIRA_WASM_IPC
     if (lc_state >= 0) {

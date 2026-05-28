@@ -20,6 +20,7 @@
  */
 
 #include "../../akira.h"
+#include "../../akira_platform_stubs.h"
 #include <zephyr/kernel.h>
 #include <zephyr/net/net_mgmt.h>
 #include <zephyr/net/net_event.h>
@@ -54,7 +55,7 @@ K_THREAD_DEFINE(wifi_notify_tid,
 static struct net_mgmt_event_callback s_ipv4_cb;
 
 static void ipv4_event_handler(struct net_mgmt_event_callback *cb,
-			       uint32_t event, struct net_if *iface)
+			       uint64_t event, struct net_if *iface)
 {
 	ARG_UNUSED(cb);
 	ARG_UNUSED(iface);

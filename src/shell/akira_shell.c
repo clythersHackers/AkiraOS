@@ -1461,7 +1461,7 @@ static const struct shell *scan_sh_ctx;
 static int scan_result_count;
 
 static void wifi_scan_shell_handler(struct net_mgmt_event_callback *cb,
-                                    uint32_t event, struct net_if *iface)
+                                    uint64_t event, struct net_if *iface)
 {
     ARG_UNUSED(iface);
 
