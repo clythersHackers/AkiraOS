@@ -266,6 +266,13 @@ target_sources(app PRIVATE
     src/ui/ui_framework.c
 )
 
+# Boot logo animation (only compiled when the boot animation is enabled)
+if(CONFIG_AKIRA_BOOT_ANIMATION)
+    target_sources(app PRIVATE
+        src/console_shell/boot_anim.c
+    )
+endif()
+
 # App Loader/Manager are implemented under src/runtime (loader/ and manager/) — included above
 
 # ===== Core Libraries =====
@@ -720,13 +727,13 @@ if(CONFIG_AKIRA_APP_SOURCE_BLE)
     target_sources(app PRIVATE src/connectivity/bluetooth/bt_app_transfer.c)
 endif()
 
-# ===== Native OS Shell (LVGL-based launcher) =====
+# ===== Native OS Shell (akira_display_* framebuffer renderer) =====
 if(CONFIG_AKIRA_OS_SHELL)
     target_sources(app PRIVATE
         src/console_shell/akira_os_shell.c
         src/console_shell/display_ownership.c
-        src/console_shell/shell_theme.c
         src/console_shell/home_screen.c
+        src/console_shell/shell_theme.c
         src/console_shell/sd_install_screen.c
         src/console_shell/install_progress_screen.c
         src/console_shell/settings_screen.c
@@ -738,7 +745,6 @@ if(CONFIG_AKIRA_OS_SHELL)
         src/console_shell/settings/datetime_screen.c
         src/console_shell/settings/apps_screen.c
         src/console_shell/settings/devmode_screen.c
-        src/drivers/display/lvgl_input_driver.c
     )
     target_include_directories(app PRIVATE src/console_shell)
 endif()
