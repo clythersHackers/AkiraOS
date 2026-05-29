@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include "../lib/mem_helper.h"
 
 LOG_MODULE_REGISTER(fs_manager, CONFIG_AKIRA_LOG_LEVEL);
 
@@ -118,9 +119,9 @@ static int ram_write_file(const char *path, const void *data, size_t size)
     {
         if (file->data)
         {
-            k_free(file->data);
+            akira_free_buffer(file->data);
         }
-        file->data = k_malloc(size);
+        file->data = akira_malloc_buffer(size);
         if (!file->data)
         {
             file->in_use = false;
@@ -168,7 +169,7 @@ static int ram_delete_file(const char *path)
 
     if (file->data)
     {
-        k_free(file->data);
+        akira_free_buffer(file->data);
     }
     memset(file, 0, sizeof(*file));
 
@@ -583,7 +584,7 @@ ssize_t fs_manager_append_file(const char *path, const void *data, size_t size)
     if (is_ram_path(path))
     {
         /* Simple implementation: read existing, append, write back */
-        uint8_t *temp = k_malloc(RAM_FILE_MAX_SIZE);
+        uint8_t *temp = akira_malloc_buffer(RAM_FILE_MAX_SIZE);
         if (!temp)
         {
             return -ENOMEM;
@@ -597,13 +598,13 @@ ssize_t fs_manager_append_file(const char *path, const void *data, size_t size)
 
         if (existing + size > RAM_FILE_MAX_SIZE)
         {
-            k_free(temp);
+            akira_free_buffer(temp);
             return -ENOSPC;
         }
 
         memcpy(temp + existing, data, size);
         ssize_t ret = ram_write_file(path, temp, existing + size);
-        k_free(temp);
+        akira_free_buffer(temp);
         return ret < 0 ? ret : (ssize_t)size;
     }
 
