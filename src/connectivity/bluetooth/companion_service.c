@@ -38,6 +38,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include "../../lib/mem_helper.h"
 
 LOG_MODULE_REGISTER(companion_svc, CONFIG_AKIRA_LOG_LEVEL);
 
@@ -89,7 +90,7 @@ static struct k_work s_cmd_work;
 static struct {
     bool    active;
     uint8_t type;           /* COMP_XFER_APP_DATA / COMP_XFER_FILE_DATA */
-    uint8_t *buf;           /* k_malloc staging buffer */
+    uint8_t *buf;           /* akira_malloc_buffer staging buffer */
     uint32_t capacity;      /* allocated bytes */
     uint32_t received;      /* bytes written so far */
     char     path[128];     /* destination path for COMP_XFER_FILE_DATA */
@@ -298,11 +299,11 @@ static void handle_apps_install_begin(const char *op, int id, const char *params
 
     if (s_xfer.active) {
         /* Abort previous incomplete transfer */
-        k_free(s_xfer.buf);
+        akira_free_buffer(s_xfer.buf);
         memset(&s_xfer, 0, sizeof(s_xfer));
     }
 
-    s_xfer.buf = k_malloc(size);
+    s_xfer.buf = akira_malloc_buffer(size);
     if (!s_xfer.buf) {
         LOG_ERR("OOM for app staging buffer (%u bytes)", size);
         send_resp(op, id, false, "out of memory");
@@ -365,7 +366,7 @@ static void handle_apps_install_end(const char *op, int id, const char *params)
     }
 
 cleanup:
-    k_free(s_xfer.buf);
+    akira_free_buffer(s_xfer.buf);
     memset(&s_xfer, 0, sizeof(s_xfer));
 }
 
@@ -551,11 +552,11 @@ static void handle_files_write(const char *op, int id, const char *params)
     }
 
     if (s_xfer.active) {
-        k_free(s_xfer.buf);
+        akira_free_buffer(s_xfer.buf);
         memset(&s_xfer, 0, sizeof(s_xfer));
     }
 
-    s_xfer.buf = k_malloc(size);
+    s_xfer.buf = akira_malloc_buffer(size);
     if (!s_xfer.buf) {
         send_resp(op, id, false, "out of memory");
         return;
@@ -771,7 +772,7 @@ static ssize_t data_up_write(struct bt_conn *conn,
     if (s_xfer.received + plen > s_xfer.capacity) {
         LOG_ERR("Transfer overflow: received %u + %u > capacity %u",
                 s_xfer.received, plen, s_xfer.capacity);
-        k_free(s_xfer.buf);
+        akira_free_buffer(s_xfer.buf);
         memset(&s_xfer, 0, sizeof(s_xfer));
         return BT_GATT_ERR(BT_ATT_ERR_WRITE_NOT_PERMITTED);
     }
@@ -781,7 +782,7 @@ static ssize_t data_up_write(struct bt_conn *conn,
 
     if (xflags & COMP_FLAG_ERROR) {
         LOG_WRN("Transfer aborted by peer");
-        k_free(s_xfer.buf);
+        akira_free_buffer(s_xfer.buf);
         memset(&s_xfer, 0, sizeof(s_xfer));
         return (ssize_t)len;
     }
@@ -803,7 +804,7 @@ static ssize_t data_up_write(struct bt_conn *conn,
                     s_xfer.received);
         }
         /* For COMP_XFER_APP_DATA the install is triggered by apps.install.end */
-        k_free(s_xfer.buf);
+        akira_free_buffer(s_xfer.buf);
         memset(&s_xfer, 0, sizeof(s_xfer));
     }
 
@@ -929,7 +930,7 @@ static void conn_cb_disconnected(struct bt_conn *conn, uint8_t reason)
 
     /* Clean up any in-progress transfer */
     if (s_xfer.active) {
-        k_free(s_xfer.buf);
+        akira_free_buffer(s_xfer.buf);
         memset(&s_xfer, 0, sizeof(s_xfer));
     }
 }
@@ -1002,7 +1003,7 @@ int companion_svc_deinit(void)
     }
 
     if (s_xfer.active) {
-        k_free(s_xfer.buf);
+        akira_free_buffer(s_xfer.buf);
         memset(&s_xfer, 0, sizeof(s_xfer));
     }
 
