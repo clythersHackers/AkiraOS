@@ -38,6 +38,7 @@
 
 #include "usb_cdc_serial.h"
 #include "../ota/web_server.h"
+#include "../../lib/mem_helper.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -211,7 +212,7 @@ static bool json_get_string(const char *json, const char *key,
 static void chunk_reset(void)
 {
     if (s_chunk.buf) {
-        k_free(s_chunk.buf);
+        akira_free_buffer(s_chunk.buf);
         s_chunk.buf = NULL;
     }
     s_chunk.active   = false;
@@ -228,7 +229,7 @@ static bool chunk_append(uint32_t chunk_idx, uint32_t total,
     uint32_t max_raw = total * CHUNK_RAW_MAX;
 
     if (!s_chunk.active) {
-        s_chunk.buf = k_malloc(max_raw);
+        s_chunk.buf = akira_malloc_buffer(max_raw);
         if (!s_chunk.buf) {
             LOG_ERR("OOM for chunk staging buffer (%u bytes)", max_raw);
             return false;
