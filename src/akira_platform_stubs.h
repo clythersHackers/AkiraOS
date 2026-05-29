@@ -21,10 +21,11 @@ extern "C" {
  *
  * Default: no-op. AkiraPlatform overrides to notify the hub.
  *
- * @param name  App name string (NUL-terminated).
- * @param id    Numeric app ID assigned by the app manager.
+ * @param name     App name string (NUL-terminated).
+ * @param id       Numeric app ID assigned by the app manager.
+ * @param version  Version string from manifest (e.g. "1.0.0"), never NULL.
  */
-void akira_on_app_installed(const char *name, int id);
+void akira_on_app_installed(const char *name, int id, const char *version);
 
 /**
  * @brief Called when a WASM application is successfully uninstalled.
@@ -34,6 +35,17 @@ void akira_on_app_installed(const char *name, int id);
  * @param name  App name string (NUL-terminated).
  */
 void akira_on_app_uninstalled(const char *name);
+
+/**
+ * @brief Called when a WASM application begins execution (runtime started).
+ *
+ * Distinct from installation: an app can be installed but not running.
+ * Default: no-op. AkiraPlatform overrides to track running apps.
+ *
+ * @param name  App name string (NUL-terminated).
+ * @param id    Numeric container/slot ID assigned by the runtime.
+ */
+void akira_on_app_started(const char *name, int id);
 
 /**
  * @brief Called when a WASM application exits with a non-zero exit code

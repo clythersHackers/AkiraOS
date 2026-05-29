@@ -14,10 +14,11 @@
 #include <zephyr/kernel.h>
 #include "akira_platform_stubs.h"
 
-__weak void akira_on_app_installed(const char *name, int id)
+__weak void akira_on_app_installed(const char *name, int id, const char *version)
 {
 	ARG_UNUSED(name);
 	ARG_UNUSED(id);
+	ARG_UNUSED(version);
 }
 
 __weak void akira_on_app_uninstalled(const char *name)
@@ -25,10 +26,16 @@ __weak void akira_on_app_uninstalled(const char *name)
 	ARG_UNUSED(name);
 }
 
+__weak void akira_on_app_started(const char *name, int id)
+{
+	ARG_UNUSED(name);
+	ARG_UNUSED(id);
+}
+
 __weak void akira_on_app_crashed(const char *name, int exit_code)
 {
-        ARG_UNUSED(name);
-        ARG_UNUSED(exit_code);
+	ARG_UNUSED(name);
+	ARG_UNUSED(exit_code);
 }
 
 __weak void akira_on_wifi_connected(void)
