@@ -216,7 +216,8 @@ endif()
 # Add source files
 target_sources(app PRIVATE
     src/main.c
-    
+    src/akira_platform_stubs.c
+
     # Core drivers and shell
 
     src/drivers/platform_hal.c
