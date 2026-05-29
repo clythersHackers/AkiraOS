@@ -29,10 +29,6 @@ jobs:
             name: native_sim
             fetch_espressif_blobs: false
             zephyr_toolchain: x86_64-zephyr-elf
-          - board: flipper_zero
-            name: board-flipper_zero
-            fetch_espressif_blobs: false
-            zephyr_toolchain: arm-zephyr-eabi
           - board: nrf54l15dk/nrf54l15/cpuapp
             name: board-nrf54l15dk
             fetch_espressif_blobs: false
