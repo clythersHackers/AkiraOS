@@ -407,7 +407,7 @@ int app_manager_install(const char *name, const void *binary, size_t size,
     k_mutex_unlock(&g_registry_mutex);
 
     LOG_INF("Installed app: %s (ID: %d, size: %zu)", app_name, existing->id, size);
-    akira_on_app_installed(app_name, existing->id);
+    akira_on_app_installed(app_name, existing->id, existing->version);
     return existing->id;
 }
 
@@ -731,6 +731,8 @@ int app_manager_start(const char *name)
     char lc_name[APP_NAME_MAX_LEN];
     strncpy(lc_name, app->name, APP_NAME_MAX_LEN);
     k_mutex_unlock(&g_registry_mutex);
+
+    akira_on_app_started(lc_name, container_id);
 
 #ifdef CONFIG_AKIRA_WASM_IPC
     {
