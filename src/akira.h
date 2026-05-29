@@ -6,7 +6,7 @@
  * Include this file to access all core OS features.
  *
  * @author Artur R0K3R
- * @version 1.5.6
+ * @version 1.5.8
  * @stability stable
  * @since 1.0
  */
@@ -38,7 +38,7 @@ extern "C"
 #ifndef AKIRA_VERSION_PATCH
 #define AKIRA_VERSION_PATCH 6
 #endif
-#define AKIRA_VERSION_STRING "1.5.6"
+#define AKIRA_VERSION_STRING "1.5.8"
 #define AKIRA_CODENAME "C1PH3R"
 
     /* Simple version struct */

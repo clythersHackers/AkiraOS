@@ -7,6 +7,33 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.5.8] — 2026-05-29
+
+### Added
+- `feat(connectivity SPI)`: USB CDC serial interface (`usb_cdc_serial`) and BLE companion service for host pairing.
+- `feat(power)`: BQ28Z610 fuel gauge driver with DTS binding (`ti,bq28z610`).
+- `feat(runtime)`: Pre-allocate WASM thread stacks via `SYS_INIT` to prevent heap fragmentation at runtime.
+- `feat(boot animation)`: Boot animation configurable via `CONFIG_AKIRA_BOOT_ANIMATION`, fps and colors tunable via Kconfig.
+- `feat(boards)`: nucleo_l476rg board support.
+- `feat(security)`: Watchdog hardening, HTTP upload auth, signing enforcement; drop legacy local web UI.
+- `feat(connectivity)`: USB web serial interface and BLE companion service.
+
+### Fixed
+- `fix(security)`: Missing `NETWORK`/`SETTINGS` entries in capability name lookup table.
+- `fix(storage)`: SD hot-plug — deinit before reinit, retry on init failure, case-insensitive `.wasm`/`.aot` scan.
+- `fix(wdt)`: Replace deprecated `wdt_enable()` with `wdt_setup()` (Zephyr 4.3 API).
+- `fix(connectivity)`: Miscellaneous BT transfer, HTTP, OTA, and settings fixes.
+- `fix(build)`: All-board build — resolve Kconfig orphans, web server link errors, and display guards.
+- `fix(build)`: Boot animation source guard; drop `lvgl_input_driver` from OS shell build.
+- `fix(ci)`: `dorny/test-reporter` git exit 128 in test job.
+- `refactor(config)`: Use native Zephyr driver selectors for display panel (remove manual `#define` guards).
+- `style(akpkg)`: Reformat `akpkg.c` to project K&R coding style.
+
+### Changed
+- Version bumped from 1.5.6 → 1.5.8 across all files.
+
+---
+
 ## [1.5.6] — "C1PH3R" — 2026-05-14
 
 ### Added

@@ -64,7 +64,7 @@ if(DEFINED BOARD)
 endif()
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(akira_os VERSION 1.5.6)
+project(akira_os VERSION 1.5.8)
 
 # When this repository is present as a west module, MCUboot bootloader builds
 # also evaluate this CMakeLists. In that context (CONFIG_MCUBOOT=y), pulling
