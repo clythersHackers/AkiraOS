@@ -36,7 +36,7 @@ extern "C"
 #define AKIRA_VERSION_MINOR 5
 #endif
 #ifndef AKIRA_VERSION_PATCH
-#define AKIRA_VERSION_PATCH 6
+#define AKIRA_VERSION_PATCH 8
 #endif
 #define AKIRA_VERSION_STRING "1.5.8"
 #define AKIRA_CODENAME "C1PH3R"

@@ -783,7 +783,7 @@ target_include_directories(app PRIVATE
 target_compile_definitions(app PRIVATE
     AKIRA_VERSION_MAJOR=1
     AKIRA_VERSION_MINOR=5
-    AKIRA_VERSION_PATCH=6
+    AKIRA_VERSION_PATCH=8
     # Match MPU thread pool to MAX_CONTAINERS to save 8 KB of static DRAM
     BH_ZEPHYR_MPU_STACK_COUNT=${CONFIG_MAX_CONTAINERS}
 )
