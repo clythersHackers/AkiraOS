@@ -26,6 +26,26 @@
         };
     };
 
+    // UART1: secondary UART for WASM apps (TX=GPIO47, RX=GPIO48)
+    uart1m0_default: uart1m0_default {
+        group1 {
+            pinmux = <UART1_TX_GPIO47>;
+            output-enable;
+        };
+        group2 {
+            pinmux = <UART1_RX_GPIO48>;
+            bias-pull-up;
+        };
+    };
+
+    // LEDC CH0: PWM output for WASM apps (GPIO40)
+    ledc0_default: ledc0_default {
+        group1 {
+            pinmux = <LEDC_CH0_GPIO40>;
+            output-enable;
+        };
+    };
+
     // I2C0: LSM6DS3 IMU (SDA=GPIO8, SCL=GPIO18)
     i2cm0_default: i2cm0_default {
         group1 {
@@ -247,6 +267,32 @@
     current-speed = <115200>;
 };
 
+// UART1 — secondary UART exposed to WASM apps via akira_uart_api
+// TX=GPIO47  RX=GPIO48  (both free on AkiraConsole DIY)
+&uart1
+{
+    status = "okay";
+    current-speed = <115200>;
+    pinctrl-0 = <&uart1m0_default>;
+    pinctrl-names = "default";
+};
+
+// LEDC — hardware PWM controller exposed to WASM apps via akira_pwm_api
+// CH0 output on GPIO40 (free pin on AkiraConsole DIY)
+&ledc0
+{
+    pinctrl-0 = <&ledc0_default>;
+    pinctrl-names = "default";
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    channel0@0 {
+        reg = <0x0>;
+        timer = <0>;
+    };
+};
+
 // I2C configuration - LSM6DS3 IMU on SDA=GPIO8, SCL=GPIO18
 &i2c0
 {
@@ -330,3 +376,5 @@
         };
     };
 };
+
+

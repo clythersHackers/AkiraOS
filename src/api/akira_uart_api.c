@@ -116,7 +116,7 @@ int akira_native_uart_open(wasm_exec_env_t exec_env,
         return -EBUSY;
     }
 
-    const struct device *dev = device_get_binding(s_uart_names[port_id]);
+    const struct device *dev = device_get_by_dt_nodelabel(s_uart_names[port_id]);
     if (!dev || !device_is_ready(dev)) {
         LOG_ERR("uart_open: device %s not ready", s_uart_names[port_id]);
         return -ENODEV;

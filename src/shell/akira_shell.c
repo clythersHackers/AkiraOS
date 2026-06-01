@@ -173,7 +173,7 @@ static int cmd_app_start(const struct shell *sh, size_t argc, char **argv)
     int ret = app_manager_start(argv[1]);
     if (ret < 0)
     {
-        AKIRA_SHELL_ERROR(sh, "Failed to start app: %s", argv[1]);
+        AKIRA_SHELL_ERROR(sh, "Failed to start app: %s  (%d)", argv[1], ret);
         return ret;
     }
     AKIRA_SHELL_PRINT(sh, "App started: %s", argv[1]);

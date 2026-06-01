@@ -46,7 +46,7 @@ static const struct device *get_bus(int32_t bus_id)
     {
         return s_buses[bus_id];
     }
-    const struct device *dev = device_get_binding(s_bus_names[bus_id]);
+    const struct device *dev = device_get_by_dt_nodelabel(s_bus_names[bus_id]);
     if (!dev || !device_is_ready(dev))
     {
         LOG_ERR("i2c: bus %s not ready", s_bus_names[bus_id]);
