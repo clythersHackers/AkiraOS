@@ -7,6 +7,13 @@ manifest:
       revision: v4.3.0
       west-commands: scripts/west-commands.yml
       import: true
+    
+    # AkiraPlatform (optional enterprise features)
+    # Add via build.sh --platform flag to include in compilation
+    - name: akira-platform
+      url: https://git.penengineering.io/akira/akira-platform
+      revision: main
+      path: akira-platform
       
   self:
     path: akira-os

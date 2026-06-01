@@ -45,6 +45,7 @@ ERASE_FLASH=false
 GENERATE_SBOM=false
 CLEAN_BUILD=false
 FULL_CLEAN=false
+ENABLE_PLATFORM=false
 PORT=""
 BAUD="921600"
 
@@ -143,6 +144,7 @@ ${BOLD}OPTIONS:${NC}
     -s              Generate SBOM (Software Bill of Materials)
     -c              Clean build artifacts for selected board
     --full-clean    Reset to pristine state (remove ALL build dirs)
+    --platform      Enable AkiraPlatform enterprise features
     -p <port>       Serial port for flashing (default: auto-detect)
     --baud <rate>   Baud rate for flashing (default: 921600)
     -h, --help      Show this help message
@@ -351,7 +353,26 @@ build_application() {
     cd "$WORKSPACE_ROOT"
     unset ZEPHYR_BASE
     
-    if west build --pristine -b "$zephyr_board" AkiraOS -d "$build_dir" -- -DMODULE_EXT_ROOT="$WORKSPACE_ROOT/AkiraOS"; then
+    # Build with optional AkiraPlatform modules
+    local extra_cmake="-DMODULE_EXT_ROOT=$WORKSPACE_ROOT/AkiraOS"
+    if [[ "$ENABLE_PLATFORM" == true ]]; then
+        # Look for akira-platform in workspace (post-west-update) or parent dir
+        local platform_path=""
+        if [[ -d "$WORKSPACE_ROOT/akira-platform" ]]; then
+            platform_path="$WORKSPACE_ROOT/akira-platform"
+        elif [[ -d "$WORKSPACE_ROOT/../AkiraPlatform" ]]; then
+            platform_path="$WORKSPACE_ROOT/../AkiraPlatform"
+        else
+            print_error "AkiraPlatform not found!"
+            print_info "Either run: west update"
+            print_info "Or ensure akira-platform exists in parent directory"
+            exit 1
+        fi
+        extra_cmake+=" -DEXTRA_ZEPHYR_MODULES=$platform_path"
+        print_info "AkiraPlatform enabled: $platform_path"
+    fi
+    
+    if west build --pristine -b "$zephyr_board" AkiraOS -d "$build_dir" -- $extra_cmake; then
         print_success "AkiraOS build complete!"
         print_info "Binary: $build_dir/zephyr/zephyr.bin"
         
@@ -724,6 +745,10 @@ parse_args() {
                 CLEAN_BUILD=true
                 shift
                 ;;
+            --platform)
+                ENABLE_PLATFORM=true
+                shift
+                ;;
             -p)
                 PORT="$2"
                 shift 2
@@ -764,6 +789,7 @@ main() {
     echo "  Flash:       ${FLASH_TARGET:-no}"
     echo "  Erase:       $ERASE_FLASH"
     echo "  SBOM:        $GENERATE_SBOM"
+    echo "  Platform:    $ENABLE_PLATFORM"
     echo "  Clean:       $CLEAN_BUILD"
     echo ""
     
