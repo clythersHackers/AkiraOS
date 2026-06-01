@@ -10,10 +10,10 @@ manifest:
     
     # AkiraPlatform (optional enterprise features)
     # Add via build.sh --platform flag to include in compilation
-    - name: akira-platform
-      url: https://git.penengineering.io/akira/akira-platform
-      revision: main
-      path: akira-platform
+    #- name: akira-platform
+    #  url: https://git.penengineering.io/akira/akira-platform
+    #  revision: main
+    #  path: akira-platform
       
   self:
     path: akira-os
