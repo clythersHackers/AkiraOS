@@ -15,8 +15,6 @@
 #include <zephyr/net/net_mgmt.h>
 #include <string.h>
 
-__weak void akira_on_wifi_connected(void) {}
-
 LOG_MODULE_REGISTER(radio_wifi, LOG_LEVEL_INF);
 
 #ifdef CONFIG_WIFI

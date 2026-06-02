@@ -58,13 +58,6 @@ void akira_on_app_started(const char *name, int id);
  */
 void akira_on_app_crashed(const char *name, int exit_code);
 
-/**
- * @brief Called when WiFi has an IPv4 address (DHCP done, DNS ready).
- *
- * Default: no-op. AkiraPlatform overrides to register/connect the hub.
- */
-void akira_on_wifi_connected(void);
-
 #ifdef __cplusplus
 }
 #endif

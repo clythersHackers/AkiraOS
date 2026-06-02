@@ -646,10 +646,9 @@ endif()
 
 # ===== Advanced Connectivity Layer =====
 
-# WiFi Notification Handler — triggers akira_on_wifi_connected() on IPv4 ready
-# Required by AkiraPlatform hub for auto-registration and auto-connect
-if(CONFIG_WIFI OR CONFIG_AKIRA_PLATFORM_HUB)
-    target_sources(app PRIVATE src/connectivity/radio/wifi_notify.c)
+# WiFi Manager — centralized connect/disconnect/stats
+if(CONFIG_AKIRA_WIFI_MANAGER)
+    target_sources(app PRIVATE src/connectivity/wifi/wifi_manager.c)
 endif()
 
 # Radio Abstraction Layer (RAL)

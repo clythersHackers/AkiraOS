@@ -133,6 +133,26 @@ config AKIRA_WIFI
     help
       Enable Akira WiFi connectivity APIs.
 
+config AKIRA_WIFI_MANAGER
+    bool "Enable Akira WiFi Manager"
+    default y
+    depends on AKIRA_WIFI && WIFI && AKIRA_SETTINGS
+    help
+      Centralized WiFi lifecycle manager. Provides connect/disconnect,
+      credential updates via the settings API, polling stats (RSSI,
+      channel, time connected, tx/rx bytes), and an event callback.
+      Does not auto-connect on boot — call wifi_manager_connect() explicitly.
+
+config AKIRA_WIFI_MANAGER_MAX_CBS
+    int "Maximum number of WiFi manager event callbacks"
+    default 4
+    range 1 16
+    depends on AKIRA_WIFI_MANAGER
+    help
+      Size of the static callback table. Each slot is a function pointer
+      plus a user_data pointer. 4 covers: shell, OS shell, cloud client,
+      WASM bridge.
+
 config AKIRA_TERMINAL_MODE
     bool "Enable hacker terminal mode"  
     default n
@@ -2121,6 +2141,14 @@ config AKIRA_BT_INIT_PRIORITY
 	default 70
 	help
 	  Automatic init priority for bt_manager.
+
+config AKIRA_WIFI_MANAGER_INIT_PRIORITY
+    int "WiFi manager SYS_INIT priority"
+    default 60
+    depends on AKIRA_WIFI_MANAGER
+    help
+      Must be greater than AKIRA_SETTINGS_INIT_PRIORITY (default 50)
+      so credentials are available when the manager initializes.
 
 endmenu
 
