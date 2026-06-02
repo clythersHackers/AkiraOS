@@ -30,7 +30,7 @@ LOG_MODULE_REGISTER(wifi_notify, LOG_LEVEL_INF);
 
 /* Stack for the dedicated wifi-connected worker thread.
  * Must cover DNS resolution + any work done in akira_on_wifi_connected(). */
-#define WIFI_NOTIFY_STACK_SIZE 4096
+#define WIFI_NOTIFY_STACK_SIZE 6144
 
 /* Semaphore: net_mgmt callback gives it, worker thread takes it.
  * Max count 1 — if WiFi reconnects rapidly, only one run is queued. */

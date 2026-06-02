@@ -1016,6 +1016,37 @@ config AKIRA_APP_SOURCE_FIRMWARE
 
 endmenu
 
+menu "App Data Limits"
+
+config AKIRA_APP_NAME_MAX_LEN
+    int "Maximum app name length (bytes)"
+    default 32
+    range 16 128
+    depends on AKIRA_APP_MANAGER
+    help
+      Maximum length of an app name including null terminator.
+      Used for app_manifest_t.name and app_entry_t.name arrays.
+
+config AKIRA_APP_VERSION_MAX_LEN
+    int "Maximum app version string length (bytes)"
+    default 16
+    range 8 64
+    depends on AKIRA_APP_MANAGER
+    help
+      Maximum length of an app version string including null terminator.
+      Used for app_manifest_t.version and app_entry_t.version arrays.
+
+config AKIRA_APP_PATH_MAX_LEN
+    int "Maximum app path length (bytes)"
+    default 64
+    range 32 256
+    depends on AKIRA_APP_MANAGER
+    help
+      Maximum length of an app file path including null terminator.
+      Used when scanning directories and resolving app locations.
+
+endmenu
+
 menu "Auto-Restart"
 
 config AKIRA_APP_AUTO_RESTART
