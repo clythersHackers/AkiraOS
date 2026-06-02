@@ -34,6 +34,11 @@
 #include <string.h>
 
 #include <wasm_export.h>
+#ifdef CONFIG_AKIRA_WASM_PYTHON
+#include "akira_python_api.h"
+#endif
+
+LOG_MODULE_REGISTER(akira_export_api, CONFIG_AKIRA_LOG_LEVEL);
 
 bool akira_register_native_apis()
 {
@@ -280,5 +285,16 @@ bool akira_register_native_apis()
 
     };
 
-    return wasm_runtime_register_natives("env", native_syms, sizeof(native_syms) / sizeof(NativeSymbol));
+    if (!wasm_runtime_register_natives("env", native_syms,
+                                       sizeof(native_syms) / sizeof(NativeSymbol))) {
+        return false;
+    }
+
+#ifdef CONFIG_AKIRA_WASM_PYTHON
+    if (!akira_python_register_natives()) {
+        return false;
+    }
+#endif
+
+    return true;
 }

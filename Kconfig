@@ -1474,6 +1474,15 @@ config AKIRA_WASM_API
       Enable registration of native APIs for WASM applications.
       This allows WASM apps to call native platform functions.
 
+config AKIRA_WASM_PYTHON
+    bool "Enable MicroPython WASM app support"
+    default y
+    depends on AKIRA_WASM_API
+    help
+      Register Emscripten/WASI native symbols needed by MicroPython WASM apps
+      built with SUPPORT_LONGJMP=none.  Provides env.setjmp, env.longjmp, and
+      wasi_snapshot_preview1 fd_* stubs (fd_write routes to the Zephyr logger).
+
 config AKIRA_LSM6DS3_DRIVER
     bool "AkiraOS out-of-tree LSM6DS3 IMU driver"
     depends on I2C && SENSOR

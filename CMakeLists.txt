@@ -319,6 +319,10 @@ if(CONFIG_AKIRA_WASM_RUNTIME)
     )
 endif()
 
+if(CONFIG_AKIRA_WASM_PYTHON)
+    target_sources(app PRIVATE src/api/akira_python_api.c)
+endif()
+
 if(CONFIG_AKIRA_WASM_API AND CONFIG_SENSOR)
     target_sources(app PRIVATE src/api/akira_sensor_api.c)
 endif()
