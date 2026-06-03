@@ -159,6 +159,18 @@ int main(void)
     }
 #endif
 
+
+#ifdef CONFIG_BT
+    if(bt_manager_init(NULL) < 0)
+    {
+        LOG_WRN("Bluetooth manager init failed");
+    }
+    else
+    {
+        LOG_INF("Bluetooth manager initialized");
+    }
+#endif
+
     /* Filesystem auto-initialized via SYS_INIT (see fs_manager.c) */
 
 #ifdef CONFIG_AKIRA_MODULE_RF

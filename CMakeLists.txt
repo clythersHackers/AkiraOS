@@ -579,15 +579,16 @@ if(CONFIG_SHELL)
 endif()
 
 # Bluetooth manager — needed by both HID mode and BLE app API mode
-if(CONFIG_AKIRA_BT_HID OR CONFIG_AKIRA_WASM_BLE)
+if(CONFIG_BT OR CONFIG_AKIRA_WASM_BLE)
     target_sources(app PRIVATE src/connectivity/bluetooth/bt_manager.c)
 endif()
 
 if(CONFIG_AKIRA_BT_HID)
     target_sources(app PRIVATE src/connectivity/bluetooth/bt_hid.c)
-    if(CONFIG_AKIRA_BT_ECHO)
-        target_sources(app PRIVATE src/connectivity/bluetooth/bt_echo.c)
-    endif()
+endif()
+
+if(CONFIG_AKIRA_BT_ECHO)
+    target_sources(app PRIVATE src/connectivity/bluetooth/bt_echo.c)
 endif()
 
 if(CONFIG_AKIRA_WASM_BLE)

@@ -1280,7 +1280,7 @@ static int cmd_benchmark(const struct shell *sh, size_t argc, char **argv)
     return 0;
 }
 
-#if defined(CONFIG_BT) && defined(CONFIG_AKIRA_BT_HID)
+#if defined(CONFIG_BT)
 /* ===== Bluetooth commands ===== */
 static int cmd_bt_info(const struct shell *sh, size_t argc, char **argv)
 {
@@ -1430,6 +1430,18 @@ static int cmd_bt_echo(const struct shell *sh, size_t argc, char **argv)
         return 0;
     }
 
+    else if (strcmp(argv[1], "send") == 0)
+    {
+        const char *msg = (argc >= 3) ? argv[2] : "hello from AkiraOS";
+        int rc = bt_echo_send((const uint8_t *)msg, strlen(msg));
+        if (rc < 0) {
+            AKIRA_SHELL_ERROR(sh, "Send failed: %d", rc);
+        } else {
+            AKIRA_SHELL_PRINT(sh, "Sent %d bytes: %s", (int)strlen(msg), msg);
+        }
+        return rc;
+    }
+
     AKIRA_SHELL_ERROR(sh, "Unknown arg: %s", argv[1]);
     return -EINVAL;
 }
@@ -1448,7 +1460,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(bt_cmds,
                                SHELL_CMD(disconnect, NULL, "Disconnect current connection", cmd_bt_disconnect),
                                SHELL_CMD(unpair, NULL, "Delete all bonds", cmd_bt_unpair),
 #if defined(CONFIG_AKIRA_BT_ECHO)
-                               SHELL_CMD(echo, NULL, "Echo service control: <on|off|status>", cmd_bt_echo),
+                               SHELL_CMD(echo, NULL, "Echo service: <on|off|status|send [msg]>", cmd_bt_echo),
 #endif
                                SHELL_CMD(adv, &bt_adv_cmds, "Advertising control", NULL),
                                SHELL_SUBCMD_SET_END);

@@ -164,7 +164,7 @@ static void disconnected_cb(struct bt_conn *conn, uint8_t reason)
 #endif
 }
 
-#if defined(CONFIG_BT_SMP) || defined(CONFIG_BT_CLASSIC)
+#if defined(CONFIG_BT_SMP)
 static void security_changed_cb(struct bt_conn *conn, bt_security_t level,
                                 enum bt_security_err err)
 {
@@ -182,6 +182,23 @@ static void security_changed_cb(struct bt_conn *conn, bt_security_t level,
             LOG_INF("Stale bond for %s — wiping and requesting re-pair", addr);
             bt_unpair(BT_ID_DEFAULT, bt_conn_get_dst(conn));
             bt_conn_set_security(conn, BT_SECURITY_L2 | BT_SECURITY_FORCE_PAIR);
+        }
+        else if (err == BT_SECURITY_ERR_AUTH_REQUIREMENT)
+        {
+            if (bt_mgr.mode == BT_MODE_HID)
+            {
+                /* HID: Windows "Remove device" wiped its LTK but device kept the
+                 * stale bond. Windows reconnects fresh with MITM=1 → AUTH_REQUIREMENT.
+                 * Wipe our stale bond and force just-works re-pair. */
+                LOG_INF("HID stale bond for %s — wiping and re-pairing", addr);
+                bt_unpair(BT_ID_DEFAULT, bt_conn_get_dst(conn));
+                bt_conn_set_security(conn, BT_SECURITY_L2 | BT_SECURITY_FORCE_PAIR);
+            }
+            else
+            {
+                /* Non-HID: BONDABLE=n, no LTK to store — stay at L1. */
+                LOG_WRN("Peer %s requires MITM (NoInputNoOutput) — staying at L1", addr);
+            }
         }
         return;
     }
@@ -225,7 +242,7 @@ static const struct bt_conn_auth_cb auth_callbacks = {
     .pairing_confirm = auth_pairing_confirm,
 };
 
-static const struct bt_conn_auth_info_cb auth_info_callbacks = {
+static struct bt_conn_auth_info_cb auth_info_callbacks = {
     .pairing_complete = auth_pairing_complete,
     .pairing_failed   = auth_pairing_failed,
 };
@@ -249,9 +266,11 @@ static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE,
                 BT_BYTES_LIST_LE16(0x03C4)), /* Gamepad */
 #endif
+#ifdef CONFIG_AKIRA_BT_HID
     BT_DATA_BYTES(BT_DATA_UUID16_ALL,
                   BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL),
                   BT_UUID_16_ENCODE(BT_UUID_BAS_VAL)),
+#endif
 };
 
 #endif /* BT_AVAILABLE */
@@ -292,6 +311,10 @@ int bt_manager_init(const bt_config_t *config)
 #if BT_AVAILABLE
     /* Initialize delayed work for reconnection */
     k_work_init_delayable(&bt_mgr.reconnect_work, reconnect_work_handler);
+
+#if defined(CONFIG_AKIRA_BT_ECHO)
+    bt_echo_init();
+#endif
     
     int err = bt_enable(NULL);
     if (err)
@@ -304,6 +327,7 @@ int bt_manager_init(const bt_config_t *config)
     /* Load stored bonds */
     if (IS_ENABLED(CONFIG_SETTINGS))
     {
+        LOG_INF("Loaded BT settings");
         settings_load();
     }
 
