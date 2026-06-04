@@ -33,7 +33,8 @@ LOG_MODULE_REGISTER(akira_date, CONFIG_AKIRA_LOG_LEVEL);
 
 #ifdef CONFIG_AKIRA_SETTINGS
 #include <settings/settings.h>
-#define TIME_BASE_KEY  "system/time_base"
+#include <settings/system_settings.h>
+#define TIME_BASE_KEY  AKIRA_SETTINGS_TIME_BASE_KEY
 #endif
 
 /* Offset such that: real_epoch = s_time_base + uptime_s */

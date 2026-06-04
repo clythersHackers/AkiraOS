@@ -12,11 +12,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-
-// Special keys for wifi
-#define AKIRA_SETTINGS_WIFI_SSID_KEY "wifi/ssid"
-#define AKIRA_SETTINGS_WIFI_PSK_KEY "wifi/psk"
-
+#include <settings/system_settings.h>
 
 #define SETTINGS_COUNTER_ID 0 // Position in NVS to store count of settings
 #define SETTINGS_START_ID 1 // Starting ID for settings entries in NVS
