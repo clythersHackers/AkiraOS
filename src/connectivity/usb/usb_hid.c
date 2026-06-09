@@ -352,7 +352,7 @@ static int usb_hid_set_report(const struct device *dev,
              * says it should not be present (the ID is in the SETUP wValue).
              * Strip it BEFORE clamping so the handler always receives a full
              * USB_HID_RAW_PAYLOAD_SIZE-byte payload (not one byte short). */
-            if (dlen > 0 && data[0] == USB_HID_RAW_REPORT_ID)
+            if (dlen > 1 && data[0] == USB_HID_RAW_REPORT_ID)
             {
                 data++;
                 dlen--;
