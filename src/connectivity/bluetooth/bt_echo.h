@@ -1,6 +1,8 @@
 /**
  * @file bt_echo.h
  * @brief Simple Bluetooth Echo GATT service (for testing)
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_BT_ECHO_H

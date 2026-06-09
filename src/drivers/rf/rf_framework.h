@@ -4,6 +4,8 @@
  * 
  * Provides a common interface for different RF transceiver chips (NRF24L01, CC1101, LR1121)
  * allowing applications and WASM modules to interact with any RF chip through a consistent API.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_RF_FRAMEWORK_H

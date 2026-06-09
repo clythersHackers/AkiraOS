@@ -9,7 +9,9 @@
  * - State synchronization between nodes
  *
  * @copyright Copyright (c) 2026 PenEngineering S.R.L
-*/
+ * @stability experimental
+ * @since 1.5
+ */
 
 #ifndef AKIRA_MESH_H
 #define AKIRA_MESH_H

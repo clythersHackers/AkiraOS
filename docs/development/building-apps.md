@@ -1,10 +1,13 @@
 # Building WASM Applications
 
 Complete guide to developing WebAssembly applications for AkiraOS.
+Apps can be written in **C**, **Rust**, or **Python** (MicroPython).
 
 ## Toolchain Setup
 
-### WASI SDK (Recommended)
+### C Apps — WASI SDK
+
+The WASI SDK provides the clang/lld toolchain used to compile `.wasm` binaries. AkiraOS apps target `wasm32-unknown-unknown` — **not** the WASI runtime. No WASI system calls are used at runtime.
 
 ```bash
 cd ~
@@ -13,22 +16,47 @@ tar xvf wasi-sdk-24.0-x86_64-linux.tar.gz
 export WASI_SDK_PATH=~/wasi-sdk-24.0
 ```
 
+### Rust Apps — rustup
+
+```bash
+# Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# Add the WASM target
+rustup target add wasm32-unknown-unknown
+```
+
+No WASI SDK is needed for Rust apps.
+
+### Python Apps — micropython.wasm
+
+Python apps use a prebuilt `micropython.wasm` runtime that includes the `_akira`
+native C module. Obtain it from the AkiraOS releases page and place it at:
+
+```
+AkiraSDK/python/runtime/micropython.wasm
+```
+
+or set the environment variable `MICROPYTHON_WASM=/path/to/micropython.wasm`.
+
+See [AkiraSDK/python/runtime/README.md](../../AkiraSDK/python/runtime/README.md).
+
+
 ## Build Process
 
-### Using AkiraSDK (Recommended)
+### C Apps — Using AkiraSDK (Recommended)
 
 The `AkiraSDK/` submodule includes `include/akira_api.h` and ready-to-build sample apps in `AkiraSDK/wasm_apps/`.
 
 ```bash
-# Build all sample apps
+# Build all C sample apps
 cd ~/akira-workspace/AkiraOS/AkiraSDK/wasm_apps
 ./build.sh
 
-# Build a single app
+# Build a single C app
 ./build.sh hello_world
 ```
 
-### Simple Custom App
+### C Apps — Simple Custom App
 
 ```c
 // app.c
@@ -60,6 +88,152 @@ $WASI_SDK_PATH/bin/clang \
 ```
 
 **Important:** Use `wasm32-unknown-unknown` (bare-metal), not `wasm32-wasi`. AkiraOS provides its own API layer without WASI system calls.
+
+---
+
+## Rust Apps
+
+Full guide: [AkiraSDK/docs/RUST_GUIDE.md](../../AkiraSDK/docs/RUST_GUIDE.md)
+
+### Project structure
+
+```
+my_rust_app/
+├── Cargo.toml          # crate-type = ["cdylib"]
+├── .cargo/config.toml  # target = "wasm32-unknown-unknown" + linker flags
+├── manifest.json
+└── src/
+    └── main.rs
+```
+
+A complete template is at `AkiraSDK/wasm_apps/rust/hello_world/`.
+
+### Writing a Rust app
+
+```rust
+#![no_std]
+#![no_main]
+
+use akira_sdk::{console, display};
+
+#[no_mangle]
+pub extern "C" fn main() -> i32 {
+    console::println("Hello from Rust WASM!");
+    display::clear(display::COLOR_BLACK);
+    display::text(10, 10, "Hello Rust!", display::COLOR_WHITE);
+    display::flush();
+    0
+}
+```
+
+### Building
+
+```bash
+# From the app directory
+cargo build --target wasm32-unknown-unknown --release
+# Output: target/wasm32-unknown-unknown/release/<name>.wasm
+
+# Via AkiraSDK build script
+cd AkiraSDK/wasm_apps
+./build.sh rust/my_app
+
+# Via make
+cd AkiraSDK/wasm_apps
+make rust/my_app
+make build-rust    # all Rust apps
+```
+
+### Cargo.toml essentials
+
+```toml
+[lib]
+crate-type = ["cdylib"]   # produces .wasm with C export table
+name = "my_app"
+path = "src/main.rs"
+
+[dependencies]
+akira_sdk = { path = "../../rust/akira_sdk" }
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"
+strip = true
+```
+
+---
+
+## Python Apps (MicroPython)
+
+Full guide: [AkiraSDK/docs/PYTHON_GUIDE.md](../../AkiraSDK/docs/PYTHON_GUIDE.md)
+
+### Architecture
+
+Python scripts are packaged into a WASM binary by injecting the source as a
+custom section (`akira_py_script`) into `micropython.wasm`.
+At runtime, WAMR loads the binary; MicroPython reads the section and executes
+the script. The `_akira` native C module (built into the runtime) maps all
+AkiraOS API calls.
+
+```
+main.py + micropython.wasm  →  py_to_wasm.py  →  app.wasm
+```
+
+### Project structure
+
+```
+my_python_app/
+├── main.py          # import akira; call API
+└── manifest.json    # memory_quota must be ≥ 262144 (256 KB)
+```
+
+A complete template is at `AkiraSDK/python/apps/hello_world/`.
+
+### Writing a Python app
+
+```python
+import akira
+
+def main():
+    akira.print("Hello from Python WASM!")
+    akira.display_clear(akira.COLOR_BLACK)
+    akira.display_text(10, 10, "Hello Python!", akira.COLOR_WHITE)
+    akira.display_flush()
+
+main()
+```
+
+### Building
+
+```bash
+# Direct (from app directory)
+python3 AkiraSDK/scripts/py_to_wasm.py main.py \
+    --manifest manifest.json -o my_app.wasm
+
+# Via AkiraSDK build script
+cd AkiraSDK/wasm_apps
+./build.sh python/my_app
+
+# Via make
+cd AkiraSDK/wasm_apps
+make python/my_app
+make build-python    # all Python apps
+```
+
+### manifest.json for Python apps
+
+```json
+{
+  "name": "my_app",
+  "version": "1.0.0",
+  "capabilities": ["input.read"],
+  "memory_quota": 262144
+}
+```
+
+> Python apps need **256 KB** (`262144`) for the MicroPython heap.
+
+---
 
 ### Manifest File
 
@@ -265,6 +439,8 @@ AkiraOS:~$ app stop myapp
 
 - [First App Tutorial](../getting-started/first-app.md)
 - [SDK API Reference](../../AkiraSDK/docs/API_REFERENCE.md)
+- [Rust App Guide](../../AkiraSDK/docs/RUST_GUIDE.md)
+- [Python App Guide](../../AkiraSDK/docs/PYTHON_GUIDE.md)
 - [Manifest Format](../api-reference/manifest-format.md)
 - [Best Practices](best-practices.md)
 - [Advanced Sample Apps](advanced-apps.md)

@@ -6,7 +6,9 @@
  * transport binding through the Radio Abstraction Layer.
  *
  * @copyright Copyright (c) 2026 PenEngineering S.R.L
-*/
+ * @stability experimental
+ * @since 1.5
+ */
 
 #ifndef AKIRA_MATTER_MANAGER_H
 #define AKIRA_MATTER_MANAGER_H

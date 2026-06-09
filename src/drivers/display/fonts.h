@@ -1,3 +1,8 @@
+/**
+ * @file fonts.h
+ * @stability experimental
+ * @since 1.4
+ */
 #ifndef __FONTS_H__
 #define __FONTS_H__
 

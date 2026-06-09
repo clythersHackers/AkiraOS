@@ -35,10 +35,10 @@ LOG_MODULE_REGISTER(akira_pwm, CONFIG_AKIRA_LOG_LEVEL);
 
 /*
  * PWM devices by logical channel index.
- * Channel 0 → "pwm0", channel 1 → "pwm1" …
- * Most boards expose a single LEDC/PWM controller — use channel 0.
+ * On ESP32-S3, all channels share the single LEDC controller (ledc0).
+ * The WASM channel argument maps directly to the LEDC hardware channel (0-7).
  */
-static const char *const s_pwm_names[] = { "pwm0", "pwm1", "pwm2", "pwm3" };
+static const char *const s_pwm_names[] = { "ledc0", "ledc0", "ledc0", "ledc0" };
 BUILD_ASSERT(ARRAY_SIZE(s_pwm_names) >= AKIRA_PWM_MAX_CHANNELS,
              "s_pwm_names must cover AKIRA_PWM_MAX_CHANNELS entries");
 
@@ -59,7 +59,7 @@ static const struct device *get_pwm_dev(int32_t channel)
     if (s_pwm_devs[channel] != NULL) {
         return s_pwm_devs[channel];
     }
-    const struct device *dev = device_get_binding(s_pwm_names[channel]);
+    const struct device *dev = device_get_by_dt_nodelabel(s_pwm_names[channel]);
     if (!dev || !device_is_ready(dev)) {
         LOG_ERR("pwm: device %s not ready", s_pwm_names[channel]);
         return NULL;
@@ -95,7 +95,7 @@ int akira_native_pwm_set(wasm_exec_env_t exec_env,
     uint32_t period_ns = (uint32_t)(AKIRA_PWM_NS_PER_SEC / (uint64_t)freq_hz);
     uint32_t pulse_ns  = (uint32_t)((uint64_t)period_ns * (uint32_t)duty_pct / 100ULL);
 
-    int ret = pwm_set(dev, AKIRA_PWM_CHANNEL_ID, period_ns, pulse_ns, 0);
+    int ret = pwm_set(dev, (uint32_t)channel, period_ns, pulse_ns, 0);
     if (ret < 0) {
         LOG_ERR("pwm_set: channel=%d freq=%d duty=%d err=%d",
                 channel, freq_hz, duty_pct, ret);
@@ -116,7 +116,7 @@ int akira_native_pwm_disable(wasm_exec_env_t exec_env, int32_t channel)
     }
 
     /* Set pulse_ns = 0 to hold output low */
-    int ret = pwm_set(dev, AKIRA_PWM_CHANNEL_ID, 1000000 /* 1ms period */, 0, 0);
+    int ret = pwm_set(dev, (uint32_t)channel, 1000000 /* 1ms period */, 0, 0);
     if (ret < 0) {
         LOG_ERR("pwm_disable: channel=%d err=%d", channel, ret);
     } else {

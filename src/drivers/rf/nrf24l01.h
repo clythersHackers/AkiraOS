@@ -98,7 +98,9 @@ extern "C"
      *
      * @param config Configuration structure
      * @return 0 on success, negative errno on failure
-     */
+ * @stability experimental
+ * @since 1.4
+ */
     int nrf24_init(struct nrf24_config *config);
 
     /**

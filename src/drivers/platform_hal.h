@@ -10,6 +10,8 @@
  * - Nordic nRF (nRF52/nRF54 series)
  *
  * This allows the same codebase to compile and run on all platforms.
+ * @stability stable
+ * @since 1.2
  */
 
 #ifndef PLATFORM_HAL_H

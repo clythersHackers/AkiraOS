@@ -23,6 +23,8 @@
  *     // Success
  * }
  * ```
+ * @stability stable
+ * @since 1.0
  */
 
 #ifndef AKIRA_ERROR_CODES_H

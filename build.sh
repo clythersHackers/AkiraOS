@@ -45,8 +45,18 @@ ERASE_FLASH=false
 GENERATE_SBOM=false
 CLEAN_BUILD=false
 FULL_CLEAN=false
+ENABLE_PLATFORM=false
 PORT=""
 BAUD="921600"
+
+# Version (read from VERSION file)
+_ver_file="$SCRIPT_DIR/VERSION"
+AKIRA_VERSION="$(
+    major=$(grep 'VERSION_MAJOR' "$_ver_file" | sed 's/.*= *//')
+    minor=$(grep 'VERSION_MINOR' "$_ver_file" | sed 's/.*= *//')
+    patch=$(grep 'PATCHLEVEL'    "$_ver_file" | sed 's/.*= *//')
+    echo "${major}.${minor}.${patch}"
+)"
 
 # Colors
 RED=$'\033[0;31m'
@@ -105,14 +115,14 @@ print_step()    { echo -e "${CYAN}${BOLD}==> $1${NC}"; }
 
 show_banner() {
     echo -e "${CYAN}"
-    cat << 'EOF'
+    cat << EOF
      _    _    _           ___  ____  
     / \  | | _(_)_ __ __ _/ _ \/ ___| 
-   / _ \ | |/ / | '__/ _` | | | \___ \ 
+   / _ \ | |/ / | '__/ _\` | | | \___ \ 
   / ___ \|   <| | | | (_| | |_| |___) |
  /_/   \_\_|\_\_|_|  \__,_|\___/|____/ 
                                        
-         Unified Build System v1.4.x
+         Unified Build System v${AKIRA_VERSION}
 EOF
     echo -e "${NC}"
 }
@@ -134,6 +144,7 @@ ${BOLD}OPTIONS:${NC}
     -s              Generate SBOM (Software Bill of Materials)
     -c              Clean build artifacts for selected board
     --full-clean    Reset to pristine state (remove ALL build dirs)
+    --platform      Enable AkiraPlatform enterprise features
     -p <port>       Serial port for flashing (default: auto-detect)
     --baud <rate>   Baud rate for flashing (default: 921600)
     -h, --help      Show this help message
@@ -264,16 +275,65 @@ build_mcuboot() {
     # EXTRA_DTC_OVERLAY_FILE mirrors what sysbuild does automatically — it
     # ensures MCUboot's compiled-in partition layout matches the app's layout.
     local extra_cmake="-DBOARD_ROOT=$SCRIPT_DIR -DDTS_ROOT=$SCRIPT_DIR"
+    # Prefer a board-specific MCUboot overlay (${BOARD}.mcuboot.overlay) when
+    # present; otherwise fall back to the application overlay (${BOARD}.overlay).
+    local mcuboot_overlay="$SCRIPT_DIR/boards/${BOARD}.mcuboot.overlay"
     local board_overlay="$SCRIPT_DIR/boards/${BOARD}.overlay"
-    if [[ -f "$board_overlay" ]]; then
+    if [[ -f "$mcuboot_overlay" ]]; then
+        extra_cmake+=" -DEXTRA_DTC_OVERLAY_FILE=$mcuboot_overlay"
+        print_info "MCUboot overlay: $mcuboot_overlay"
+    elif [[ -f "$board_overlay" ]]; then
         extra_cmake+=" -DEXTRA_DTC_OVERLAY_FILE=$board_overlay"
         print_info "MCUboot overlay: $board_overlay"
     fi
 
+    # Pass board-specific MCUboot Kconfig overrides when present.
+    # These live in AkiraOS/boards/<board>.mcuboot.conf so the mcuboot repo
+    # stays at its upstream manifest-rev without local commits.
+    local mcuboot_conf="$SCRIPT_DIR/boards/${BOARD}.mcuboot.conf"
+    if [[ -f "$mcuboot_conf" ]]; then
+        extra_cmake+=" -DEXTRA_CONF_FILE=$mcuboot_conf"
+        print_info "MCUboot conf: $mcuboot_conf"
+    fi
+
+    # Some ESP32 SoCs require a patched MCUboot linker script to avoid IRAM
+    # overflow (ESP32-C6) or RISC-V RVC relocation errors (ESP32-H2).  Zephyr's
+    # SOC_LINKER_SCRIPT cmake variable is forced via CACHE INTERNAL and cannot
+    # be overridden from the command line, so we temporarily replace the file in
+    # the Zephyr source tree and restore it via git after the build.
+    local _linker_patched_soc=""
+    _apply_mcuboot_linker_patch() {
+        local soc="$1"
+        local akira_ld="$SCRIPT_DIR/zephyr/soc/espressif/${soc}/mcuboot.ld"
+        local zephyr_ld="$WORKSPACE_ROOT/zephyr/soc/espressif/${soc}/mcuboot.ld"
+        if [[ -f "$akira_ld" && -f "$zephyr_ld" ]]; then
+            cp "$akira_ld" "$zephyr_ld"
+            _linker_patched_soc="$soc"
+            print_info "Applied MCUboot linker patch for $soc"
+        fi
+    }
+    _restore_mcuboot_linker_patch() {
+        if [[ -n "$_linker_patched_soc" ]]; then
+            git -C "$WORKSPACE_ROOT/zephyr" checkout -- \
+                "soc/espressif/${_linker_patched_soc}/mcuboot.ld" 2>/dev/null || true
+            print_info "Restored MCUboot linker for ${_linker_patched_soc}"
+        fi
+    }
+
+    case "$zephyr_board" in
+        *esp32c6*) _apply_mcuboot_linker_patch "esp32c6" ;;
+        *esp32h2*) _apply_mcuboot_linker_patch "esp32h2" ;;
+    esac
+
     cd "$WORKSPACE_ROOT"
 
-    if west build --pristine -b "$zephyr_board" bootloader/mcuboot/boot/zephyr -d "$build_dir" \
-        -- $extra_cmake; then
+    local build_rc=0
+    west build --pristine -b "$zephyr_board" bootloader/mcuboot/boot/zephyr -d "$build_dir" \
+        -- $extra_cmake || build_rc=$?
+
+    _restore_mcuboot_linker_patch
+
+    if [[ $build_rc -eq 0 ]]; then
         print_success "MCUboot build complete!"
         print_info "Binary: $build_dir/zephyr/zephyr.bin"
     else
@@ -293,7 +353,26 @@ build_application() {
     cd "$WORKSPACE_ROOT"
     unset ZEPHYR_BASE
     
-    if west build --pristine -b "$zephyr_board" AkiraOS -d "$build_dir" -- -DMODULE_EXT_ROOT="$WORKSPACE_ROOT/AkiraOS"; then
+    # Build with optional AkiraPlatform modules
+    local extra_cmake="-DMODULE_EXT_ROOT=$WORKSPACE_ROOT/AkiraOS"
+    if [[ "$ENABLE_PLATFORM" == true ]]; then
+        # Look for akira-platform in workspace (post-west-update) or parent dir
+        local platform_path=""
+        if [[ -d "$WORKSPACE_ROOT/akira-platform" ]]; then
+            platform_path="$WORKSPACE_ROOT/akira-platform"
+        elif [[ -d "$WORKSPACE_ROOT/../AkiraPlatform" ]]; then
+            platform_path="$WORKSPACE_ROOT/../AkiraPlatform"
+        else
+            print_error "AkiraPlatform not found!"
+            print_info "Either run: west update"
+            print_info "Or ensure akira-platform exists in parent directory"
+            exit 1
+        fi
+        extra_cmake+=" -DEXTRA_ZEPHYR_MODULES=$platform_path"
+        print_info "AkiraPlatform enabled: $platform_path"
+    fi
+    
+    if west build --pristine -b "$zephyr_board" AkiraOS -d "$build_dir" -- $extra_cmake; then
         print_success "AkiraOS build complete!"
         print_info "Binary: $build_dir/zephyr/zephyr.bin"
         
@@ -459,12 +538,64 @@ flash_stm32() {
         local hex1="$1" hex2="$2" out="$3"
         python3 - "$hex1" "$hex2" "$out" << 'PYEOF'
 import sys
-lines1 = open(sys.argv[1]).read().strip().splitlines()
-lines2 = open(sys.argv[2]).read().strip().splitlines()
-# Strip EOF record from first file; keep EOF only at the very end
-lines1 = [l for l in lines1 if l.strip() != ':00000001FF']
-with open(sys.argv[3], 'w') as f:
-    f.write('\n'.join(lines1 + lines2) + '\n')
+
+def checksum(byte_vals):
+    return (256 - (sum(byte_vals) & 0xFF)) & 0xFF
+
+def parse_hex(filename):
+    """Parse Intel HEX file into a list of (abs_address, bytes) chunks."""
+    chunks = []
+    ela = 0
+    with open(filename) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line[0] != ':':
+                continue
+            byte_count = int(line[1:3], 16)
+            addr16     = int(line[3:7], 16)
+            rec_type   = int(line[7:9], 16)
+            data       = bytes.fromhex(line[9:9 + byte_count * 2])
+            if rec_type == 0:   # Data
+                chunks.append((ela | addr16, data))
+            elif rec_type == 1:  # EOF
+                break
+            elif rec_type == 2:  # Extended Segment Address
+                ela = ((data[0] << 8) | data[1]) << 4
+            elif rec_type == 4:  # Extended Linear Address
+                ela = ((data[0] << 8) | data[1]) << 16
+    return chunks
+
+def write_hex(chunks, filename):
+    """Write chunks sorted by address as a clean Intel HEX file."""
+    chunks.sort(key=lambda c: c[0])
+    current_ela = None
+    lines = []
+    for abs_addr, data in chunks:
+        offset = 0
+        while offset < len(data):
+            row_addr = abs_addr + offset
+            ela      = row_addr >> 16
+            low      = row_addr & 0xFFFF
+            if ela != current_ela:
+                ela_hi, ela_lo = (ela >> 8) & 0xFF, ela & 0xFF
+                cs = checksum([0x02, 0x00, 0x00, 0x04, ela_hi, ela_lo])
+                lines.append(f':02000004{ela_hi:02X}{ela_lo:02X}{cs:02X}')
+                current_ela = ela
+            row     = data[offset:offset + 16]
+            n       = len(row)
+            addr_hi = (low >> 8) & 0xFF
+            addr_lo = low & 0xFF
+            cs = checksum([n, addr_hi, addr_lo, 0x00] + list(row))
+            lines.append(f':{n:02X}{addr_hi:02X}{addr_lo:02X}00'
+                         + ''.join(f'{b:02X}' for b in row)
+                         + f'{cs:02X}')
+            offset += 16
+    lines.append(':00000001FF')
+    with open(filename, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+
+chunks = parse_hex(sys.argv[1]) + parse_hex(sys.argv[2])
+write_hex(chunks, sys.argv[3])
 PYEOF
     }
 
@@ -550,7 +681,7 @@ generate_sbom() {
         cat > "$sbom_file" << EOF
 {
     "name": "AkiraOS",
-    "version": "1.4.x",
+    "version": "${AKIRA_VERSION}",
     "board": "$BOARD",
     "zephyr_board": "${BOARD_MAP[$BOARD]}",
     "build_date": "$(date -Iseconds)",
@@ -610,6 +741,10 @@ parse_args() {
                 CLEAN_BUILD=true
                 shift
                 ;;
+            --platform)
+                ENABLE_PLATFORM=true
+                shift
+                ;;
             -p)
                 PORT="$2"
                 shift 2
@@ -650,6 +785,7 @@ main() {
     echo "  Flash:       ${FLASH_TARGET:-no}"
     echo "  Erase:       $ERASE_FLASH"
     echo "  SBOM:        $GENERATE_SBOM"
+    echo "  Platform:    $ENABLE_PLATFORM"
     echo "  Clean:       $CLEAN_BUILD"
     echo ""
     

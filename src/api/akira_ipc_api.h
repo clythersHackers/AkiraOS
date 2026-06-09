@@ -13,6 +13,8 @@
  *
  * The calling app's name is resolved automatically from the exec_env so
  * msg_recv() cannot eavesdrop on another app's subscription.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_IPC_API_H

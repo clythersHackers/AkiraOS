@@ -8,6 +8,9 @@
 
 #include "usb_storage.h"
 #include <runtime/app_manager/app_manager.h>
+#include <lib/akpkg.h>
+#include <lib/mem_helper.h>
+#include <storage/fs_manager.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/fs/fs.h>
@@ -71,11 +74,19 @@ int usb_storage_scan_apps(char names[][32], int max_count)
             break;
         }
 
-        /* Check for .wasm extension */
+        /* Accept .wasm and .akpkg extensions */
         size_t len = strlen(entry.name);
+        size_t name_len = 0;
         if (len > 5 && strcmp(&entry.name[len - 5], ".wasm") == 0)
         {
-            size_t name_len = len - 5;
+            name_len = len - 5;
+        }
+        else if (len > 6 && strcmp(&entry.name[len - 6], ".akpkg") == 0)
+        {
+            name_len = len - 6;
+        }
+        if (name_len > 0)
+        {
             if (name_len >= APP_NAME_MAX)
             {
                 name_len = APP_NAME_MAX - 1;
@@ -104,8 +115,36 @@ int usb_storage_install_app(const char *name)
     }
 
     char path[64];
-    snprintf(path, sizeof(path), "%s/%s.wasm", USB_APPS_DIR, name);
 
+    /* Try .akpkg first, then fall back to .wasm */
+    snprintf(path, sizeof(path), "%s/%s.akpkg", USB_APPS_DIR, name);
+    if (fs_manager_exists(path))
+    {
+        ssize_t size = fs_manager_get_size(path);
+        if (size > 0)
+        {
+            uint8_t *buf = akira_malloc_buffer((size_t)size);
+            if (!buf)
+            {
+                return -ENOMEM;
+            }
+            ssize_t rd = fs_manager_read_file(path, buf, (size_t)size);
+            int ret = -EIO;
+            if (rd == size)
+            {
+                char name_buf[APP_NAME_MAX_LEN];
+                strncpy(name_buf, name, sizeof(name_buf) - 1);
+                name_buf[sizeof(name_buf) - 1] = '\0';
+                ret = app_manager_install_akpkg(name_buf, sizeof(name_buf),
+                                                buf, (size_t)size,
+                                                APP_SOURCE_USB);
+            }
+            akira_free_buffer(buf);
+            return ret;
+        }
+    }
+
+    snprintf(path, sizeof(path), "%s/%s.wasm", USB_APPS_DIR, name);
     return app_manager_install_from_path(path);
 }
 

@@ -18,19 +18,24 @@ LOG_MODULE_REGISTER(akira_rf_api, CONFIG_AKIRA_LOG_LEVEL);
 static K_MUTEX_DEFINE(s_rf_lock);
 
 static akira_rf_chip_t g_active_chip = AKIRA_RF_CHIP_NONE;
+#ifdef CONFIG_AKIRA_RF_FRAMEWORK
 static bool rf_framework_initialized = false;
+#endif /* CONFIG_AKIRA_RF_FRAMEWORK */
 static const struct akira_rf_driver *g_active_driver = NULL;
 
 /* Ensure RF framework is initialized */
+#ifdef CONFIG_AKIRA_RF_FRAMEWORK
 static int ensure_rf_framework(void)
 {
     /* Called under s_rf_lock */
-    if (rf_framework_initialized) {
+    if (rf_framework_initialized)
+    {
         return 0;
     }
 
     int ret = rf_framework_init();
-    if (ret < 0) {
+    if (ret < 0)
+    {
         LOG_ERR("RF framework init failed: %d", ret);
         return ret;
     }
@@ -38,6 +43,7 @@ static int ensure_rf_framework(void)
     rf_framework_initialized = true;
     return 0;
 }
+#endif /* CONFIG_AKIRA_RF_FRAMEWORK */
 
 /* Core RF API functions (no security checks) */
 
@@ -48,42 +54,54 @@ int akira_rf_init(akira_rf_chip_t chip)
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
     int ret;
 
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0)
+    {
+        LOG_WRN("rf_init: lock timed out");
+        return -EBUSY;
+    }
 
     /* Ensure framework is initialized (under lock) */
     ret = ensure_rf_framework();
-    if (ret < 0) {
+    if (ret < 0)
+    {
+        k_mutex_unlock(&s_rf_lock);
         return ret;
     }
 
     /* Map chip enum to RF framework type */
     rf_chip_type_t rf_type;
-    switch (chip) {
-        case AKIRA_RF_CHIP_LR1121:
-            rf_type = RF_CHIP_LR1121;
-            break;
-        case AKIRA_RF_CHIP_CC1101:
-            rf_type = RF_CHIP_CC1101;
-            break;
-        case AKIRA_RF_CHIP_NRF24L01:
-            rf_type = RF_CHIP_NRF24L01;
-            break;
-        default:
-            LOG_ERR("Unsupported chip type: %d", chip);
-            return -EINVAL;
+    switch (chip)
+    {
+    case AKIRA_RF_CHIP_LR1121:
+        rf_type = RF_CHIP_LR1121;
+        break;
+    case AKIRA_RF_CHIP_CC1101:
+        rf_type = RF_CHIP_CC1101;
+        break;
+    case AKIRA_RF_CHIP_NRF24L01:
+        rf_type = RF_CHIP_NRF24L01;
+        break;
+    default:
+        LOG_ERR("Unsupported chip type: %d", chip);
+        k_mutex_unlock(&s_rf_lock);
+        return -EINVAL;
     }
 
     /* Get driver from framework */
     const struct akira_rf_driver *driver = rf_framework_get_driver(rf_type);
-    if (!driver) {
+    if (!driver)
+    {
         LOG_ERR("Driver not found for chip type %d", rf_type);
+        k_mutex_unlock(&s_rf_lock);
         return -ENODEV;
     }
 
     /* Initialize the driver */
     ret = driver->init();
-    if (ret < 0) {
+    if (ret < 0)
+    {
         LOG_ERR("Driver init failed: %d", ret);
+        k_mutex_unlock(&s_rf_lock);
         return ret;
     }
 
@@ -105,9 +123,14 @@ int akira_rf_deinit(void)
 {
     LOG_INF("RF deinit");
 
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0)
+    {
+        LOG_WRN("rf_deinit: lock timed out");
+        return -EBUSY;
+    }
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
-    if (g_active_driver && g_active_driver->deinit) {
+    if (g_active_driver && g_active_driver->deinit)
+    {
         g_active_driver->deinit();
     }
     g_active_driver = NULL;
@@ -120,7 +143,11 @@ int akira_rf_deinit(void)
 
 int akira_rf_send(const uint8_t *data, size_t len)
 {
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0)
+    {
+        LOG_WRN("rf_send: lock timed out");
+        return -EBUSY;
+    }
     if (g_active_chip == AKIRA_RF_CHIP_NONE || !g_active_driver)
     {
         k_mutex_unlock(&s_rf_lock);
@@ -137,7 +164,8 @@ int akira_rf_send(const uint8_t *data, size_t len)
     LOG_DBG("RF send: %zu bytes", len);
 
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
-    if (!g_active_driver->tx) {
+    if (!g_active_driver->tx)
+    {
         k_mutex_unlock(&s_rf_lock);
         return -ENOSYS;
     }
@@ -146,14 +174,19 @@ int akira_rf_send(const uint8_t *data, size_t len)
     return ret;
 #else
     k_mutex_unlock(&s_rf_lock);
-    (void)data; (void)len;
+    (void)data;
+    (void)len;
     return -ENOSYS;
 #endif
 }
 
 int akira_rf_receive(uint8_t *buffer, size_t max_len, uint32_t timeout_ms)
 {
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0)
+    {
+        LOG_WRN("rf_receive: lock timed out");
+        return -EBUSY;
+    }
     if (g_active_chip == AKIRA_RF_CHIP_NONE || !g_active_driver)
     {
         k_mutex_unlock(&s_rf_lock);
@@ -170,7 +203,8 @@ int akira_rf_receive(uint8_t *buffer, size_t max_len, uint32_t timeout_ms)
     LOG_DBG("RF receive: max=%zu, timeout=%u", max_len, timeout_ms);
 
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
-    if (!g_active_driver->rx) {
+    if (!g_active_driver->rx)
+    {
         k_mutex_unlock(&s_rf_lock);
         return -ENOSYS;
     }
@@ -179,7 +213,9 @@ int akira_rf_receive(uint8_t *buffer, size_t max_len, uint32_t timeout_ms)
     return ret;
 #else
     k_mutex_unlock(&s_rf_lock);
-    (void)buffer; (void)max_len; (void)timeout_ms;
+    (void)buffer;
+    (void)max_len;
+    (void)timeout_ms;
     return -ENOSYS;
 #endif
 }
@@ -188,9 +224,14 @@ int akira_rf_set_frequency(uint32_t freq_hz)
 {
     LOG_INF("RF set frequency: %u Hz", freq_hz);
 
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0)
+    {
+        LOG_WRN("rf_set_frequency: lock timed out");
+        return -EBUSY;
+    }
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
-    if (!g_active_driver || !g_active_driver->set_frequency) {
+    if (!g_active_driver || !g_active_driver->set_frequency)
+    {
         k_mutex_unlock(&s_rf_lock);
         return -ENOSYS;
     }
@@ -208,9 +249,14 @@ int akira_rf_set_power(int8_t dbm)
 {
     LOG_INF("RF set power: %d dBm", dbm);
 
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0)
+    {
+        LOG_WRN("rf_set_power: lock timed out");
+        return -EBUSY;
+    }
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
-    if (!g_active_driver || !g_active_driver->set_power) {
+    if (!g_active_driver || !g_active_driver->set_power)
+    {
         k_mutex_unlock(&s_rf_lock);
         return -ENOSYS;
     }
@@ -226,13 +272,20 @@ int akira_rf_set_power(int8_t dbm)
 
 int akira_rf_get_rssi(int16_t *rssi)
 {
-    if (!rssi) {
+    if (!rssi)
+    {
         return -EINVAL;
     }
 
-    k_mutex_lock(&s_rf_lock, K_FOREVER);
+    if (k_mutex_lock(&s_rf_lock, K_MSEC(2000)) != 0)
+    {
+        LOG_WRN("rf_get_rssi: lock timed out");
+        *rssi = -100;
+        return -EBUSY;
+    }
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
-    if (!g_active_driver || !g_active_driver->get_rssi) {
+    if (!g_active_driver || !g_active_driver->get_rssi)
+    {
         *rssi = -100;
         k_mutex_unlock(&s_rf_lock);
         return -ENOSYS;
@@ -270,7 +323,8 @@ int akira_native_rf_send(wasm_exec_env_t exec_env, uint32_t payload_ptr, uint32_
     /* The API layer will dispatch to the proper radio driver */
     return akira_rf_send(ptr, len);
 #else
-    (void)ptr; (void)len;
+    (void)ptr;
+    (void)len;
     return -ENOSYS;
 #endif
 }
@@ -294,7 +348,9 @@ int akira_native_rf_receive(wasm_exec_env_t exec_env, uint32_t buffer_ptr, uint3
     /* The API layer will dispatch to the proper radio driver */
     return akira_rf_receive(ptr, max_len, timeout_ms);
 #else
-    (void)ptr; (void)max_len; (void)timeout_ms;
+    (void)ptr;
+    (void)max_len;
+    (void)timeout_ms;
     return -ENOSYS;
 #endif
 }
@@ -312,15 +368,18 @@ int akira_native_rf_set_frequency(wasm_exec_env_t exec_env, uint32_t freq_hz)
 #endif
 }
 
-int akira_native_rf_get_rssi(wasm_exec_env_t exec_env, int16_t *rssi)
+int akira_native_rf_get_rssi(wasm_exec_env_t exec_env)
 {
-
     AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_RF_TRANSCEIVE, -EPERM);
 
 #ifdef CONFIG_AKIRA_RF_FRAMEWORK
-    return akira_rf_get_rssi(rssi);
+    int16_t rssi = 0;
+    int ret = akira_rf_get_rssi(&rssi);
+    if (ret < 0) {
+        return ret;
+    }
+    return (int32_t)rssi;
 #else
-    (void)rssi;
     return -ENOSYS;
 #endif
 }

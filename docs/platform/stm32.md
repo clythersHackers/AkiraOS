@@ -1,60 +1,78 @@
 # STM32 Platform Guide
 
-Experimental support for STM32 microcontrollers.
+AkiraOS supports several STM32 boards with Cortex-M4/M33 cores.
 
 ## Status
 
-**Status: Experimental** — limited testing, community-driven
+**b_u585i_iot02a / steval_stwinbx1:** Supported — regularly tested  
+**nucleo_l476rg:** Supported — community-tested  
 
 ## Supported Boards
 
-- STM32F4 Discovery
-- STM32F7 Discovery
-- Nucleo boards (select models)
-- Custom boards (with porting)
+| Board ID | Description | Flash | RAM |
+|----------|-------------|-------|-----|
+| `b_u585i_iot02a` | ST B-U585I-IOT02A Discovery Kit (STM32U585) | 2MB | 786KB |
+| `steval_stwinbx1` | ST STEVAL-STWINBX1 (STM32U585) | 2MB | 786KB |
+| `nucleo_l476rg` | ST Nucleo L476RG (STM32L476RG) | 1MB | 96KB |
 
 ## Features
 
-- Cortex-M4/M7 ARM architecture
-- External SRAM required for multiple WASM apps
-- Rich peripherals — I2C, SPI, ADC, timers
-- WiFi/BT via external modules
+- Cortex-M4/M33 ARM architecture
+- Flash partitioning for MCUboot + dual OTA slots
+- LittleFS internal flash storage
+- I2C, SPI, ADC, UART, timers
+- WiFi/BT via external modules (b_u585i_iot02a / steval_stwinbx1)
 
 ## Getting Started
 
 ### Build
 
 ```bash
-cd ~/akira-workspace/AkiraOS
-west build -b stm32f4_disco
+# STM32U5 IoT Discovery Kit
+./build.sh -b b_u585i_iot02a
+
+# ST STEVAL-STWINBX1
+./build.sh -b steval_stwinbx1
+
+# Nucleo L476RG (constrained — 96KB RAM)
+./build.sh -b nucleo_l476rg
 ```
 
-### Flash
+### Build with MCUboot bootloader
 
 ```bash
-west flash  # via ST-Link
+./build.sh -b b_u585i_iot02a -bl y
+```
+
+### Flash (ST-Link)
+
+```bash
+./build.sh -b b_u585i_iot02a -r a
+# or manually:
+west flash
 ```
 
 ---
 
-## Configuration
+## Configuration Notes
 
-External SRAM required for WASM apps:
+### b_u585i_iot02a / steval_stwinbx1
+Full feature set — networking, BT, OTA, LittleFS + external flash, USB HID.  
+See [boards/b_u585i_iot02a.conf](../../boards/b_u585i_iot02a.conf) and  
+[boards/steval_stwinbx1.conf](../../boards/steval_stwinbx1.conf).
 
-```bash
-CONFIG_EXTERNAL_SRAM=y
-CONFIG_HEAP_MEM_POOL_SIZE=131072  # 128KB
-```
+### nucleo_l476rg
+Constrained board (96KB SRAM). Networking buffers, FAT filesystem, and WebSocket  
+are disabled in the board config to fit RAM. WASM heap and app slots are reduced.  
+LittleFS is available on internal flash.  
+See [boards/nucleo_l476rg.conf](../../boards/nucleo_l476rg.conf).
 
 ---
 
 ## Limitations
 
-- Requires external PSRAM/SRAM
-- WiFi/BT needs add-on modules
-- Less testing than ESP32/nRF platforms
-
-**Community Contributions Welcome!**
+- Nucleo L476RG: no onboard WiFi/BT — OTA requires USB/serial
+- Nucleo L476RG: max 1 running WASM app, 4 installed apps (RAM constraint)
 
 ---
 
@@ -63,3 +81,4 @@ CONFIG_HEAP_MEM_POOL_SIZE=131072  # 128KB
 - [Platform Overview](index.md)
 - [Building Apps](../development/building-apps.md)
 - [Development Guide](../development/index.md)
+

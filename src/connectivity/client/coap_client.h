@@ -4,6 +4,8 @@
  *
  * Provides CoAP client functionality for connecting to constrained
  * application protocol servers (IoT cloud, LwM2M, etc.)
+ * @stability experimental
+ * @since 1.5
  */
 
 #ifndef AKIRA_COAP_CLIENT_H

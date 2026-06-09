@@ -4,6 +4,8 @@
  *
  * Provides WebSocket client functionality for connecting to remote servers
  * for real-time bidirectional communication (cloud sync, remote control, etc.)
+ * @stability experimental
+ * @since 1.5
  */
 
 #ifndef AKIRA_WS_CLIENT_H

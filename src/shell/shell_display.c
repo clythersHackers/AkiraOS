@@ -377,7 +377,7 @@ static void render_input_line(void)
 /**
  * @brief Clear a specific line on display
  */
-static void clear_line(uint8_t row)
+static __maybe_unused void clear_line(uint8_t row)
 {
     if (row >= SHELL_MAX_ROWS) {
         return;

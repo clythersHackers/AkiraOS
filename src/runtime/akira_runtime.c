@@ -11,6 +11,7 @@
 #include "manifest_parser.h"
 #include "runtime_cache.h"
 #include <zephyr/kernel.h>
+#include <zephyr/init.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
 #include <stdint.h>
@@ -46,7 +47,7 @@ LOG_MODULE_REGISTER(akira_runtime, CONFIG_AKIRA_LOG_LEVEL);
 #define FILE_DIR_MAX_LEN 128
 
 /* Chunked loading configuration */
-#define CHUNK_BUFFER_SIZE   (16 * 1024)  /* 16KB chunks for WASM loading */
+#define CHUNK_BUFFER_SIZE (16 * 1024) /* 16KB chunks for WASM loading */
 
 akira_managed_app_t g_apps[AKIRA_MAX_WASM_INSTANCES];
 
@@ -64,11 +65,26 @@ akira_managed_app_t g_apps[AKIRA_MAX_WASM_INSTANCES];
  * Keeping stacks in SRAM avoids this entirely.  Only the WASM heap,
  * WASM binary, and other runtime data need to live in PSRAM.
  *
- * We allocate at runtime via k_thread_stack_alloc() (kernel SRAM heap) so the
- * stacks do not appear in the link-time .bss section and don't overflow DRAM.
+ * We allocate via k_thread_stack_alloc() in a SYS_INIT hook at APPLICATION
+ * level 1, before BT/WiFi/USB consume and fragment the SRAM heap. Stacks are
+ * held permanently and reused across app launches without re-allocation.
  * Size is tuned per-board via CONFIG_AKIRA_WASM_APP_STACK_SIZE.
  */
 static k_thread_stack_t *g_app_stacks[AKIRA_MAX_WASM_INSTANCES];
+
+/* Early SYS_INIT hook: allocates WASM thread stacks before BT/WiFi/USB init
+ * fragment the heap. APPLICATION level 1 runs before all driver-level init
+ * that would otherwise consume contiguous SRAM blocks. */
+static int wasm_stacks_early_alloc(void)
+{
+    for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++)
+    {
+        g_app_stacks[i] = k_thread_stack_alloc(CONFIG_AKIRA_WASM_APP_STACK_SIZE, 0);
+        /* Failure logged in akira_runtime_init() when the slot is first used. */
+    }
+    return 0;
+}
+SYS_INIT(wasm_stacks_early_alloc, APPLICATION, 1);
 static struct k_thread g_app_threads[AKIRA_MAX_WASM_INSTANCES];
 
 /* Per-slot deferred cleanup context.
@@ -80,9 +96,10 @@ static struct k_thread g_app_threads[AKIRA_MAX_WASM_INSTANCES];
  * Without this, stacks accumulate in the SRAM kernel heap and exhaust it,
  * causing k_malloc failures inside the Zephyr SPI DMA driver when the next
  * display_write() is attempted. */
-typedef struct {
+typedef struct
+{
     struct k_work work;
-    int           slot;
+    int slot;
 } slot_cleanup_ctx_t;
 
 static slot_cleanup_ctx_t g_slot_cleanup[AKIRA_MAX_WASM_INSTANCES];
@@ -97,11 +114,9 @@ static void slot_cleanup_work_fn(struct k_work *work)
      * a short timeout makes this robust against scheduling races. */
     k_thread_join(&g_app_threads[slot], K_MSEC(500));
 
-    if (g_app_stacks[slot]) {
-        k_thread_stack_free(g_app_stacks[slot]);
-        g_app_stacks[slot] = NULL;
-        LOG_DBG("Freed SRAM stack for slot %d (heap reclaimed)", slot);
-    }
+    /* Static stack — pre-allocated at init and held permanently; no heap to
+     * free. Slot is ready for reuse by the next app launch. */
+    LOG_DBG("SRAM stack for slot %d ready for reuse", slot);
 }
 
 /* Protects g_apps[] slot reservation in load_wasm() so concurrent calls
@@ -137,33 +152,37 @@ static void *wamr_malloc(unsigned int size)
     /* Request enough space for padding (up to 7 bytes) + header + data */
     uint8_t *raw = akira_malloc_buffer(sizeof(uint64_t) + 7 + size);
 
-    if (!raw) {
+    if (!raw)
+    {
         return NULL;
     }
     /* Round raw up to next 8-byte boundary */
     uintptr_t hdr_addr = ((uintptr_t)raw + 7) & ~(uintptr_t)7;
-    uint32_t  padding  = (uint32_t)(hdr_addr - (uintptr_t)raw);
+    uint32_t padding = (uint32_t)(hdr_addr - (uintptr_t)raw);
     uint64_t *hdr = (uint64_t *)hdr_addr;
     *hdr = ((uint64_t)padding << 32) | (uint64_t)size;
-    return hdr + 1;   /* user ptr is 8-byte aligned */
+    return hdr + 1; /* user ptr is 8-byte aligned */
 }
 
 static void wamr_free(void *ptr)
 {
-    if (!ptr) {
+    if (!ptr)
+    {
         return;
     }
-    uint64_t *hdr     = (uint64_t *)ptr - 1;
-    uint32_t  padding = (uint32_t)(*hdr >> 32);
+    uint64_t *hdr = (uint64_t *)ptr - 1;
+    uint32_t padding = (uint32_t)(*hdr >> 32);
     akira_free_buffer((uint8_t *)hdr - padding);
 }
 
 static void *wamr_realloc(void *ptr, unsigned int new_size)
 {
-    if (!ptr) {
+    if (!ptr)
+    {
         return wamr_malloc(new_size);
     }
-    if (new_size == 0) {
+    if (new_size == 0)
+    {
         wamr_free(ptr);
         return NULL;
     }
@@ -171,7 +190,8 @@ static void *wamr_realloc(void *ptr, unsigned int new_size)
     uint32_t old_size = (uint32_t)(*((uint64_t *)ptr - 1) & 0xFFFFFFFFu);
     void *new_ptr = wamr_malloc(new_size);
 
-    if (!new_ptr) {
+    if (!new_ptr)
+    {
         return NULL;
     }
 
@@ -184,17 +204,6 @@ static void *wamr_realloc(void *ptr, unsigned int new_size)
 
 /* Capability checking is implemented in src/runtime/security.c */
 
-/* Helper: find free slot */
-static int find_free_slot(void)
-{
-    for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++)
-    {
-        if (!g_apps[i].used)
-            return i;
-    }
-    return -ENOMEM;
-}
-
 /* Helper: find by id validity */
 static bool slot_valid(int id)
 {
@@ -204,20 +213,23 @@ static bool slot_valid(int id)
 /* O(1) cap lookup — slot pointer is stored as WAMR custom data at instantiation */
 uint32_t akira_runtime_get_cap_mask_for_module_inst(wasm_module_inst_t inst)
 {
-    if (!inst) {
+    if (!inst)
+    {
         return 0;
     }
 
     /* Fast path: custom data set in wasm_app_thread_fn */
     akira_managed_app_t *app =
         (akira_managed_app_t *)wasm_runtime_get_custom_data(inst);
-    if (app) {
+    if (app)
+    {
         return app->cap_mask;
     }
 
     /* Fallback: instance map (shouldn't normally reach here) */
     int slot = instance_map_get(inst);
-    if (slot >= 0) {
+    if (slot >= 0)
+    {
         return g_apps[slot].cap_mask;
     }
     return 0;
@@ -225,13 +237,16 @@ uint32_t akira_runtime_get_cap_mask_for_module_inst(wasm_module_inst_t inst)
 
 int akira_runtime_get_name_for_module_inst(wasm_module_inst_t inst, char *buf, size_t buflen)
 {
-    if (!inst || !buf || buflen == 0) return -EINVAL;
+    if (!inst || !buf || buflen == 0)
+        return -EINVAL;
     /* Lock to protect against concurrent slot reuse modifying name/used/instance. */
     k_mutex_lock(&g_runtime_mutex, K_FOREVER);
-    for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++) {
-        if (g_apps[i].used && g_apps[i].instance == inst) {
-            strncpy(buf, g_apps[i].name, buflen-1);
-            buf[buflen-1] = '\0';
+    for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++)
+    {
+        if (g_apps[i].used && g_apps[i].instance == inst)
+        {
+            strncpy(buf, g_apps[i].name, buflen - 1);
+            buf[buflen - 1] = '\0';
             k_mutex_unlock(&g_runtime_mutex);
             return 0;
         }
@@ -243,15 +258,19 @@ int akira_runtime_get_name_for_module_inst(wasm_module_inst_t inst, char *buf, s
 /* Get app slot from module instance - uses O(1) hash map with linear fallback */
 int get_slot_for_module_inst(wasm_module_inst_t inst)
 {
-    if (!inst) return -1;
+    if (!inst)
+        return -1;
 
     /* Fast path: O(1) hash map lookup */
     int slot = instance_map_get(inst);
-    if (slot >= 0) return slot;
+    if (slot >= 0)
+        return slot;
 
     /* Slow path fallback: linear scan (shouldn't normally reach here) */
-    for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++) {
-        if (g_apps[i].used && g_apps[i].instance == inst) {
+    for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++)
+    {
+        if (g_apps[i].used && g_apps[i].instance == inst)
+        {
             /* Repair the map for next lookup */
             instance_map_put(inst, i);
             return i;
@@ -273,8 +292,6 @@ int get_slot_for_module_inst(wasm_module_inst_t inst)
  * - Header stores size for deallocation tracking
  */
 
-
-
 /**
  * @brief Get current memory usage for an app
  *
@@ -283,7 +300,8 @@ int get_slot_for_module_inst(wasm_module_inst_t inst)
  */
 uint32_t akira_runtime_get_memory_used(int instance_id)
 {
-    if (!slot_valid(instance_id)) {
+    if (!slot_valid(instance_id))
+    {
         return 0;
     }
     return (uint32_t)atomic_get(&g_apps[instance_id].memory_used);
@@ -297,7 +315,8 @@ uint32_t akira_runtime_get_memory_used(int instance_id)
  */
 uint32_t akira_runtime_get_memory_quota(int instance_id)
 {
-    if (!slot_valid(instance_id)) {
+    if (!slot_valid(instance_id))
+    {
         return 0;
     }
     return g_apps[instance_id].memory_quota;
@@ -307,7 +326,8 @@ uint32_t akira_runtime_get_memory_quota(int instance_id)
 int akira_runtime_init(void)
 {
     /* Atomic compare-and-swap: first caller wins, subsequent calls are no-ops. */
-    if (!atomic_cas(&g_runtime_initialized, 0, 1)) {
+    if (!atomic_cas(&g_runtime_initialized, 0, 1))
+    {
         return 0;
     }
 
@@ -319,18 +339,19 @@ int akira_runtime_init(void)
     sandbox_init();
     app_signing_init();
 
-    /* WASM app thread stacks are allocated lazily in akira_runtime_start()
-     * and freed by the deferred slot_cleanup_work_fn after the thread exits.
-     * Eager allocation is intentionally avoided: the heap is partially consumed
-     * by BT/WiFi init by the time the runtime initializes, exhausting SRAM.
-     * With CONFIG_AKIRA_APP_MAX_RUNNING=2 at most 2 stacks exist at once
-     * (2 x 8 KB = 16 KB peak SRAM), which fits comfortably in the kernel heap.
-     * Initialize the per-slot cleanup work items here (once). */
-    for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++) {
+    /* WASM app thread stacks were pre-allocated by wasm_stacks_early_alloc()
+     * SYS_INIT hook (APPLICATION, 1) before BT/WiFi/USB could fragment the
+     * heap. Just initialize the per-slot deferred cleanup work items here. */
+    for (int i = 0; i < AKIRA_MAX_WASM_INSTANCES; i++)
+    {
         g_slot_cleanup[i].slot = i;
         k_work_init(&g_slot_cleanup[i].work, slot_cleanup_work_fn);
+        if (!g_app_stacks[i])
+        {
+            LOG_ERR("SRAM stack for slot %d missing (early alloc failed)", i);
+        }
     }
-    LOG_DBG("App thread stacks: lazy SRAM alloc per slot (%u B each, deferred free)",
+    LOG_DBG("App thread stacks: %u B each, pre-allocated at boot",
             CONFIG_AKIRA_WASM_APP_STACK_SIZE);
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
@@ -345,8 +366,8 @@ int akira_runtime_init(void)
      */
     RuntimeInitArgs init_args = {0};
     init_args.mem_alloc_type = Alloc_With_Allocator;
-    init_args.mem_alloc_option.allocator.malloc_func  = wamr_malloc;
-    init_args.mem_alloc_option.allocator.free_func    = wamr_free;
+    init_args.mem_alloc_option.allocator.malloc_func = wamr_malloc;
+    init_args.mem_alloc_option.allocator.free_func = wamr_free;
     init_args.mem_alloc_option.allocator.realloc_func = wamr_realloc;
 
     if (!wasm_runtime_full_init(&init_args))
@@ -355,25 +376,29 @@ int akira_runtime_init(void)
         return -ENODEV;
     }
 
-    #ifdef CONFIG_AKIRA_WASM_API
-    if(!akira_register_native_apis()){
+#ifdef CONFIG_AKIRA_WASM_API
+    if (!akira_register_native_apis())
+    {
         LOG_ERR("Failed to register native APIs");
         return -EIO;
     }
     /* Register modular namespace APIs ("akira_log", "akira_time") for
      * WASM apps that use named imports instead of the flat "env" namespace. */
-    if (akira_register_log_module() < 0) {
+    if (akira_register_log_module() < 0)
+    {
         LOG_WRN("Failed to register akira_log module — log native APIs unavailable");
     }
-    if (akira_register_time_module() < 0) {
+    if (akira_register_time_module() < 0)
+    {
         LOG_WRN("Failed to register akira_time module — time native APIs unavailable");
     }
-    #else
+#else
     LOG_WRN("Native API registration not included - no APIs enabled (CONFIG_AKIRA_WASM_API not set)");
-    #endif /* CONFIG_AKIRA_WASM_API */
+#endif /* CONFIG_AKIRA_WASM_API */
 
     /* Ensure WASM apps dir exists */
-    if(fs_manager_exists("/lfs/apps") != 1){ // Not found
+    if (fs_manager_exists("/lfs/apps") != 1)
+    { // Not found
         fs_manager_mkdir("/lfs/apps");
     }
 
@@ -412,8 +437,10 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
      * concurrent load_wasm() calls cannot pick the same free slot. */
     int slot = -ENOMEM;
     k_mutex_lock(&g_runtime_mutex, K_FOREVER);
-    for (int _i = 0; _i < AKIRA_MAX_WASM_INSTANCES; _i++) {
-        if (!g_apps[_i].used) {
+    for (int _i = 0; _i < AKIRA_MAX_WASM_INSTANCES; _i++)
+    {
+        if (!g_apps[_i].used)
+        {
             slot = _i;
             g_apps[_i].used = true; /* reserve immediately under lock */
             break;
@@ -430,7 +457,8 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
     /* ===== Step 1: Integrity verification ===== */
     uint8_t binary_hash[32];
     int integrity_ret = app_verify_wasm_integrity(buffer, size, binary_hash);
-    if (integrity_ret != 0) {
+    if (integrity_ret != 0)
+    {
         LOG_ERR("WASM binary integrity check failed: %d", integrity_ret);
         sandbox_audit_log(AUDIT_EVENT_INTEGRITY_FAIL, "load", (uint32_t)size);
         g_apps[slot].used = false; /* release reserved slot */
@@ -443,23 +471,27 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
     akira_manifest_t manifest;
     manifest_init_defaults(&manifest);
     int manifest_ret = manifest_parse_wasm_section(buffer, size, &manifest);
-    if (manifest_ret == 0) {
+    if (manifest_ret == 0)
+    {
         LOG_INF("Found embedded manifest: cap_mask=0x%08x, memory_quota=%u",
                 manifest.cap_mask, manifest.memory_quota);
     }
 
     /* ===== Step 4: Load WASM module ===== */
-    /* Allocate chunk buffer from PSRAM if available, else SRAM */
+    /* Allocate a small probe buffer to check if PSRAM is available,
+     * then free it immediately — we only need the source type (chunk_src). */
     mem_source_t chunk_src;
-    uint8_t *chunk_buffer = akira_malloc_buffer_ex(CHUNK_BUFFER_SIZE, &chunk_src);
-    if (!chunk_buffer)
+    uint8_t *chunk_probe = akira_malloc_buffer_ex(CHUNK_BUFFER_SIZE, &chunk_src);
+    if (!chunk_probe)
     {
-        LOG_ERR("Failed to allocate chunk buffer (%d bytes)", CHUNK_BUFFER_SIZE);
+        LOG_ERR("Failed to probe memory source (%d bytes)", CHUNK_BUFFER_SIZE);
         g_apps[slot].used = false; /* release reserved slot */
         return -ENOMEM;
     }
-    LOG_INF("Chunk buffer allocated from %s (%d bytes)",
-            chunk_src == MEM_SOURCE_PSRAM ? "PSRAM" : "SRAM", CHUNK_BUFFER_SIZE);
+    LOG_INF("Memory source: %s",
+            chunk_src == MEM_SOURCE_PSRAM ? "PSRAM" : "SRAM");
+    akira_free_buffer(chunk_probe);
+    chunk_probe = NULL;
 
     /* Use WAMR's streaming loader for chunked loading when available,
      * otherwise fall back to direct load with our buffer management.
@@ -485,13 +517,15 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
         {
             LOG_INF("Staging %u bytes WASM to external memory", size);
 
-            /* Copy in chunks to avoid large stack/heap spikes */
+            /* Copy directly from source to PSRAM in chunks.
+             * No intermediate bounce buffer needed — source is a contiguous
+             * SRAM/flash region, and chunking here only serves to preserve
+             * cache/DMA locality on the PSRAM write path. */
             uint32_t offset = 0;
             while (offset < size)
             {
                 uint32_t chunk_len = MIN(CHUNK_BUFFER_SIZE, size - offset);
-                memcpy(chunk_buffer, buffer + offset, chunk_len);
-                memcpy(staged_buffer + offset, chunk_buffer, chunk_len);
+                memcpy(staged_buffer + offset, buffer + offset, chunk_len);
                 offset += chunk_len;
             }
             load_buffer = staged_buffer;
@@ -512,15 +546,18 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
      * Strategy: reuse staged_buffer if we already copied to PSRAM; otherwise
      * allocate a fresh owned copy. The caller's `buffer` is never borrowed. */
     uint8_t *owned_binary;
-    if (staged_buffer) {
+    if (staged_buffer)
+    {
         /* Transfer ownership — staged_buffer is already a full PSRAM copy */
         owned_binary = staged_buffer;
         staged_buffer = NULL;
-    } else {
+    }
+    else
+    {
         /* load_buffer == buffer (caller-owned) — make our own durable copy */
         owned_binary = akira_malloc_buffer(size);
-        if (!owned_binary) {
-            akira_free_buffer(chunk_buffer);
+        if (!owned_binary)
+        {
             LOG_ERR("OOM: cannot allocate owned WASM binary copy (%u bytes)", size);
             g_apps[slot].used = false; /* release reserved slot */
             return -ENOMEM;
@@ -530,10 +567,6 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
 
     /* Load the WASM module — owned_binary is intentionally NOT freed here */
     module = wasm_runtime_load(owned_binary, size, error_buf, sizeof(error_buf));
-
-    /* chunk_buffer is a scratch pad only — always free after load */
-    akira_free_buffer(chunk_buffer);
-    chunk_buffer = NULL;
 
     if (!module)
     {
@@ -548,7 +581,7 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
 
     /* g_apps[slot].used was already set true during slot reservation */
     g_apps[slot].module = module;
-    g_apps[slot].wasm_binary = owned_binary;  /* kept alive until wasm_runtime_unload */
+    g_apps[slot].wasm_binary = owned_binary; /* kept alive until wasm_runtime_unload */
     g_apps[slot].status = AKIRA_APP_STATUS_CREATED;
     g_apps[slot].exit_code = 0;
     g_apps[slot].tid = NULL;
@@ -573,7 +606,8 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
             slot, g_apps[slot].cap_mask, g_apps[slot].memory_quota, load_time_ms);
     return slot;
 #else
-    (void)buffer; (void)size;
+    (void)buffer;
+    (void)size;
     return -ENOTSUP; /* WASM runtime not available */
 #endif
 }
@@ -595,7 +629,8 @@ int akira_runtime_load_wasm(const uint8_t *buffer, uint32_t size)
 static void wasm_app_thread_fn(void *p1, void *p2, void *p3)
 {
     int slot = (int)(intptr_t)p1;
-    (void)p2; (void)p3;
+    (void)p2;
+    (void)p3;
 
     akira_managed_app_t *app = &g_apps[slot];
 
@@ -614,7 +649,8 @@ static void wasm_app_thread_fn(void *p1, void *p2, void *p3)
         CONFIG_WAMR_STACK_SIZE,
         error_buf, sizeof(error_buf));
 
-    if (!inst) {
+    if (!inst)
+    {
         LOG_ERR("wasm_runtime_instantiate failed (slot %d): %s", slot, error_buf);
         app->exit_code = -EIO;
         app->status = AKIRA_APP_STATUS_ERROR;
@@ -628,7 +664,8 @@ static void wasm_app_thread_fn(void *p1, void *p2, void *p3)
      * table in Alloc_With_Allocator mode, causing wasm_runtime_lookup_function
      * to return NULL even when exports are present in the binary. */
     wasm_exec_env_t exec_env = wasm_runtime_get_exec_env_singleton(inst);
-    if (!exec_env) {
+    if (!exec_env)
+    {
         LOG_ERR("Failed to get singleton exec_env for slot %d", slot);
         wasm_runtime_deinstantiate(inst);
         app->exit_code = -ENOMEM;
@@ -638,7 +675,7 @@ static void wasm_app_thread_fn(void *p1, void *p2, void *p3)
     }
 
     app->instance = inst;
-    app->exec_env = exec_env;  /* singleton — do NOT call destroy_exec_env on it */
+    app->exec_env = exec_env; /* singleton — do NOT call destroy_exec_env on it */
 
     /* O(1) cap lookup: store slot pointer as WAMR custom data */
     wasm_runtime_set_custom_data(inst, &g_apps[slot]);
@@ -659,13 +696,17 @@ static void wasm_app_thread_fn(void *p1, void *p2, void *p3)
      * so all native API calls receive the right context for cap checking. */
     int exit_code = 0;
     bool ran = wasm_application_execute_main(inst, 0, NULL);
-    if (!ran) {
+    if (!ran)
+    {
         const char *ex = wasm_runtime_get_exception(inst);
-        if (ex && strstr(ex, "lookup the entry point")) {
+        if (ex && strstr(ex, "lookup the entry point"))
+        {
             /* No main/start entry point — treat as a reactive (library) module */
             LOG_INF("Slot %d: no entry point — reactive module", slot);
             wasm_runtime_clear_exception(inst);
-        } else if (ex) {
+        }
+        else if (ex)
+        {
             LOG_ERR("WASM exception (slot %d): %s", slot, ex);
             app->perf.trap_count++;
             exit_code = -EIO;
@@ -701,7 +742,8 @@ thread_exit:
      * Use the per-slot exit_mutex — fully isolates concurrent stop() calls
      * on different slots (no false contention across unrelated apps). */
     k_mutex_lock(&app->exit_mutex, K_FOREVER);
-    if (app->status != AKIRA_APP_STATUS_ERROR) {
+    if (app->status != AKIRA_APP_STATUS_ERROR)
+    {
         app->status = AKIRA_APP_STATUS_EXITED;
     }
     k_condvar_broadcast(&app->cond_exit);
@@ -712,25 +754,28 @@ thread_exit:
      * if the exit callback tried to call akira_runtime_destroy().
      * exec_env and instance are already NULL (cleaned up in Step 4 above).
      * Only the module handle and the slot itself remain to free. */
-    if (app->module) {
+    if (app->module)
+    {
         wasm_runtime_unload(app->module);
         app->module = NULL;
     }
     /* Free the owned binary copy now that the module is unloaded.
      * Must come AFTER wasm_runtime_unload() — WAMR holds raw pointers
      * into this buffer for export/import name strings. */
-    if (app->wasm_binary) {
+    if (app->wasm_binary)
+    {
         akira_free_buffer(app->wasm_binary);
         app->wasm_binary = NULL;
     }
-    if (app->hash_valid) {
+    if (app->hash_valid)
+    {
         module_cache_release(app->binary_hash);
         module_cache_invalidate(app->binary_hash);
         app->hash_valid = false;
     }
     app->name[0] = '\0';
-    app->tid    = NULL;
-    app->used   = false;   /* Slot now free — must be LAST write */
+    app->tid = NULL;
+    app->used = false; /* Slot now free — must be LAST write */
 
     /* Invoke registered exit callback (e.g. app_manager state transition).
      * Read g_exit_cb under g_runtime_mutex to guard against a concurrent
@@ -739,7 +784,8 @@ thread_exit:
     k_mutex_lock(&g_runtime_mutex, K_FOREVER);
     cb = g_exit_cb;
     k_mutex_unlock(&g_runtime_mutex);
-    if (cb) {
+    if (cb)
+    {
         cb(slot, app->exit_code);
     }
 
@@ -756,37 +802,32 @@ thread_exit:
 /* Instantiate and run a loaded WASM module in a dedicated thread */
 int akira_runtime_start(int instance_id)
 {
-    if (!slot_valid(instance_id)) {
+    if (!slot_valid(instance_id))
+    {
         return -EINVAL;
     }
 
     akira_managed_app_t *app = &g_apps[instance_id];
 
-    if (app->status == AKIRA_APP_STATUS_RUNNING) {
+    if (app->status == AKIRA_APP_STATUS_RUNNING)
+    {
         return 0; /* already running */
     }
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
-    /* Defensive cleanup: if the deferred work item hasn't run yet (very
-     * unlikely race), drain it now.  Also ensures the previous thread is
-     * fully joined before we reuse g_app_threads[instance_id]. */
-    if (g_app_stacks[instance_id]) {
+    /* Defensive: if a previous thread for this slot hasn't been joined yet,
+     * wait for it now before reusing the pre-allocated stack. */
+    if (app->tid)
+    {
         k_thread_join(&g_app_threads[instance_id], K_MSEC(500));
-        k_thread_stack_free(g_app_stacks[instance_id]);
-        g_app_stacks[instance_id] = NULL;
+        app->tid = NULL;
     }
 
-    /* Allocate the SRAM thread stack lazily — stacks must never be in PSRAM.
-     * On ESP32-S3, PSRAM and flash share SPI0; a flash operation inside
-     * lfs_file_open disables SPI0 cache, crashing any thread with a PSRAM
-     * stack.  k_thread_stack_alloc() draws from the SRAM kernel heap.
-     * We allocate here (not at init) so BT/WiFi heap consumption is already
-     * settled and the allocation succeeds reliably. */
-    g_app_stacks[instance_id] = k_thread_stack_alloc(
-        CONFIG_AKIRA_WASM_APP_STACK_SIZE, 0);
-    if (!g_app_stacks[instance_id]) {
-        LOG_ERR("Failed to alloc SRAM stack for slot %d (%u B)",
-                instance_id, CONFIG_AKIRA_WASM_APP_STACK_SIZE);
+    /* Stack was pre-allocated at init — always available, no allocation needed.
+     * Fail gracefully if init allocation failed (e.g. OOM at boot). */
+    if (!g_app_stacks[instance_id])
+    {
+        LOG_ERR("SRAM stack for slot %d was never allocated (init failure)", instance_id);
         return -ENOMEM;
     }
 
@@ -805,7 +846,8 @@ int akira_runtime_start(int instance_id)
         CONFIG_AKIRA_WASM_APP_PRIORITY,
         0, K_NO_WAIT);
 
-    if (!app->tid) {
+    if (!app->tid)
+    {
         LOG_ERR("Failed to create app thread for slot %d", instance_id);
         return -ENOMEM;
     }
@@ -813,23 +855,21 @@ int akira_runtime_start(int instance_id)
     /* Block until WAMR instantiation succeeds or fails.
      * Hard timeout guards against WAMR deadlock or OOM. */
     int sem_ret = k_sem_take(&app->sem_start, K_MSEC(CONFIG_AKIRA_WASM_START_TIMEOUT_MS));
-    if (sem_ret < 0) {
+    if (sem_ret < 0)
+    {
         LOG_ERR("Timeout waiting for WASM instantiation (slot %d) — aborting", instance_id);
         k_thread_abort(app->tid);
         k_thread_join(&g_app_threads[instance_id], K_MSEC(200));
         app->tid = NULL;
         app->used = false;
-        k_thread_stack_free(g_app_stacks[instance_id]);
-        g_app_stacks[instance_id] = NULL;
         return -ETIMEDOUT;
     }
 
-    if (app->status == AKIRA_APP_STATUS_ERROR) {
+    if (app->status == AKIRA_APP_STATUS_ERROR)
+    {
         LOG_ERR("App failed to start (slot %d)", instance_id);
         k_thread_join(&g_app_threads[instance_id], K_MSEC(500));
         app->tid = NULL;
-        k_thread_stack_free(g_app_stacks[instance_id]);
-        g_app_stacks[instance_id] = NULL;
         return -EIO;
     }
 
@@ -847,21 +887,24 @@ int akira_runtime_start(int instance_id)
 /* Stop a running WASM app: terminate its thread and wait for cleanup */
 int akira_runtime_stop(int instance_id)
 {
-    if (!slot_valid(instance_id)) {
+    if (!slot_valid(instance_id))
+    {
         return -EINVAL;
     }
 
     akira_managed_app_t *app = &g_apps[instance_id];
 
     if (app->status == AKIRA_APP_STATUS_STOPPED ||
-        app->status == AKIRA_APP_STATUS_CREATED) {
+        app->status == AKIRA_APP_STATUS_CREATED)
+    {
         return 0; /* nothing to stop */
     }
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
     /* Ask WAMR to interrupt the running WASM execution.
      * This causes wasm_runtime_call_wasm() to return with an exception. */
-    if (app->instance) {
+    if (app->instance)
+    {
         wasm_runtime_terminate(app->instance);
     }
 
@@ -869,11 +912,13 @@ int akira_runtime_stop(int instance_id)
      * Use per-slot exit_mutex: stop() calls on different slots are fully
      * independent and do not block each other. */
     k_mutex_lock(&app->exit_mutex, K_FOREVER);
-    if (app->status == AKIRA_APP_STATUS_RUNNING) {
+    if (app->status == AKIRA_APP_STATUS_RUNNING)
+    {
         /* 5-second timeout; abort thread if it doesn't respond */
         int wait_ret = k_condvar_wait(&app->cond_exit, &app->exit_mutex,
                                       K_MSEC(CONFIG_AKIRA_WASM_STOP_TIMEOUT_MS));
-        if (wait_ret != 0) {
+        if (wait_ret != 0)
+        {
             LOG_ERR("App thread (slot %d) timed out — aborting", instance_id);
             k_thread_abort(app->tid);
             app->tid = NULL;
@@ -881,16 +926,19 @@ int akira_runtime_stop(int instance_id)
              * exec_env is the singleton — do NOT call wasm_runtime_destroy_exec_env;
              * it will be freed by wasm_runtime_deinstantiate below. */
             app->exec_env = NULL;
-            if (app->instance) {
+            if (app->instance)
+            {
                 instance_map_remove(app->instance);
                 wasm_runtime_deinstantiate(app->instance);
                 app->instance = NULL;
             }
-            if (app->module) {
+            if (app->module)
+            {
                 wasm_runtime_unload(app->module);
                 app->module = NULL;
             }
-            if (app->hash_valid) {
+            if (app->hash_valid)
+            {
                 module_cache_release(app->binary_hash);
                 module_cache_invalidate(app->binary_hash);
                 app->hash_valid = false;
@@ -905,13 +953,10 @@ int akira_runtime_stop(int instance_id)
      * Timeout is 2 s: the join is now always called without the outer
      * g_registry_mutex held so the WASM thread's exit callback can complete
      * without deadlock, and 2 s gives it ample time. */
-    if (app->tid) {
+    if (app->tid)
+    {
         k_thread_join(&g_app_threads[instance_id], K_MSEC(2000));
         app->tid = NULL;
-        if (g_app_stacks[instance_id]) {
-            k_thread_stack_free(g_app_stacks[instance_id]);
-            g_app_stacks[instance_id] = NULL;
-        }
     }
 
     sandbox_audit_log(AUDIT_EVENT_APP_STOPPED, app->name, (uint32_t)instance_id);
@@ -926,7 +971,8 @@ int akira_runtime_stop(int instance_id)
 
 int akira_runtime_install_with_manifest(const char *name, const void *binary, size_t size, const char *manifest_json, size_t manifest_size)
 {
-    if (!name || !binary || size == 0) return -EINVAL;
+    if (!name || !binary || size == 0)
+        return -EINVAL;
 
     /* Parse manifest with fallback: WASM section first, then JSON */
     akira_manifest_t manifest;
@@ -934,29 +980,39 @@ int akira_runtime_install_with_manifest(const char *name, const void *binary, si
                                  manifest_json, manifest_size, &manifest);
 
     /* Save manifest if provided (for external tools/debugging) */
-    if (manifest_json && manifest_size > 0) {
+    if (manifest_json && manifest_size > 0)
+    {
         char mpath[FILE_DIR_MAX_LEN];
         snprintf(mpath, sizeof(mpath), "/lfs/apps/%s.manifest.json", name);
-        if (fs_manager_exists(mpath) ) {
+        if (fs_manager_exists(mpath))
+        {
             ssize_t mv = fs_manager_write_file(mpath, manifest_json, manifest_size);
-            if (mv != (ssize_t)manifest_size) {
+            if (mv != (ssize_t)manifest_size)
+            {
                 LOG_WRN("Failed to write manifest fully for %s", name);
-            } else {
+            }
+            else
+            {
                 LOG_INF("Saved manifest to %s", mpath);
             }
-        } else {
+        }
+        else
+        {
             LOG_WRN("Filesystem not available for manifest save");
         }
     }
 
     /* Load into runtime memory - this will also parse embedded manifest */
     int id = akira_runtime_load_wasm((const uint8_t *)binary, (uint32_t)size);
-    if (id < 0) return id;
+    if (id < 0)
+        return id;
 
     /* Override with external manifest if it has more capabilities */
-    if (manifest.valid && manifest.cap_mask != 0) {
+    if (manifest.valid && manifest.cap_mask != 0)
+    {
         g_apps[id].cap_mask |= manifest.cap_mask;
-        if (manifest.memory_quota > 0) {
+        if (manifest.memory_quota > 0)
+        {
             g_apps[id].memory_quota = manifest.memory_quota;
         }
         LOG_INF("App %s: merged manifest cap_mask=0x%08x, memory_quota=%u",
@@ -964,8 +1020,8 @@ int akira_runtime_install_with_manifest(const char *name, const void *binary, si
     }
 
     /* Store friendly name */
-    strncpy(g_apps[id].name, name, sizeof(g_apps[id].name)-1);
-    g_apps[id].name[sizeof(g_apps[id].name)-1] = '\0';
+    strncpy(g_apps[id].name, name, sizeof(g_apps[id].name) - 1);
+    g_apps[id].name[sizeof(g_apps[id].name) - 1] = '\0';
 
     return id;
 }
@@ -978,7 +1034,8 @@ int akira_runtime_install(const char *name, const void *binary, size_t size)
 /* Destroy: stop if running, then fully unload the module and free the slot */
 int akira_runtime_destroy(int instance_id)
 {
-    if (!slot_valid(instance_id)) {
+    if (!slot_valid(instance_id))
+    {
         return -EINVAL;
     }
 
@@ -986,7 +1043,8 @@ int akira_runtime_destroy(int instance_id)
 
     /* Stop the thread first if it's still running */
     if (app->status == AKIRA_APP_STATUS_RUNNING ||
-        app->status == AKIRA_APP_STATUS_EXITED) {
+        app->status == AKIRA_APP_STATUS_EXITED)
+    {
         akira_runtime_stop(instance_id);
     }
 
@@ -996,26 +1054,31 @@ int akira_runtime_destroy(int instance_id)
      * exec_env is the singleton — freed automatically by deinstantiate, never
      * call wasm_runtime_destroy_exec_env on it. */
     app->exec_env = NULL;
-    if (app->instance) {
+    if (app->instance)
+    {
         instance_map_remove(app->instance);
         wasm_runtime_deinstantiate(app->instance);
         app->instance = NULL;
     }
 
     /* Release module cache reference */
-    if (app->hash_valid) {
+    if (app->hash_valid)
+    {
         module_cache_release(app->binary_hash);
     }
 
-    if (app->module) {
+    if (app->module)
+    {
         wasm_runtime_unload(app->module);
         app->module = NULL;
     }
-    if (app->hash_valid) {
+    if (app->hash_valid)
+    {
         module_cache_invalidate(app->binary_hash);
     }
     /* Free owned binary AFTER unload — WAMR keeps raw string pointers into it */
-    if (app->wasm_binary) {
+    if (app->wasm_binary)
+    {
         akira_free_buffer(app->wasm_binary);
         app->wasm_binary = NULL;
     }
@@ -1036,7 +1099,8 @@ int akira_runtime_destroy(int instance_id)
 /* Uninstall: remove persistent files and destroy runtime slot */
 int akira_runtime_uninstall(const char *name, int instance_id)
 {
-    if (!name) return -EINVAL;
+    if (!name)
+        return -EINVAL;
 
     /* Stop/destroy if running */
     if (instance_id >= 0)
@@ -1054,13 +1118,15 @@ int akira_runtime_uninstall(const char *name, int instance_id)
 
 sandbox_ctx_t *akira_runtime_get_sandbox(int instance_id)
 {
-    if (!slot_valid(instance_id)) return NULL;
+    if (!slot_valid(instance_id))
+        return NULL;
     return &g_apps[instance_id].sandbox;
 }
 
 runtime_perf_stats_t *akira_runtime_get_perf_stats(int instance_id)
 {
-    if (!slot_valid(instance_id)) return NULL;
+    if (!slot_valid(instance_id))
+        return NULL;
     return &g_apps[instance_id].perf;
 }
 

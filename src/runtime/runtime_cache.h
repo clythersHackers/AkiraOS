@@ -9,6 +9,8 @@
  *
  * Memory layout: cache entries are pre-allocated in BSS, no dynamic
  * allocation on the hot path.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_RUNTIME_CACHE_H

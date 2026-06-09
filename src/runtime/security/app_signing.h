@@ -1,6 +1,8 @@
 /**
  * @file app_signing.h
  * @brief AkiraOS App Signing and Verification
+ * @stability stable
+ * @since 1.3
  */
 
 #ifndef AKIRA_APP_SIGNING_H

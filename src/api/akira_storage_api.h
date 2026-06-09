@@ -21,6 +21,8 @@
  *   storage_open  (write/append flags) → AKIRA_CAP_STORAGE_WRITE
  *   storage_write / storage_delete → AKIRA_CAP_STORAGE_WRITE
  *   storage_read  / storage_list  → AKIRA_CAP_STORAGE_READ
+ * @stability stable
+ * @since 1.3
  */
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME

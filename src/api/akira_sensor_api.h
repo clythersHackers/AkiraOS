@@ -4,6 +4,8 @@
  *
  * Uses Zephyr's sensor subsystem directly. Channel IDs are Zephyr
  * enum sensor_channel integers — no chip-specific types here.
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef AKIRA_SENSOR_API_H

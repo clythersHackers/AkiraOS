@@ -453,10 +453,31 @@ log enable <module> 4         # Debug logging
 
 ---
 
+## SD Card Issues
+
+### "SD card not present" / `app scan sd` fails
+
+**Cause:** Card not detected at SPI level — not a filesystem problem.
+
+1. Ensure the card is **fully seated** in the slot.
+2. Format as **FAT32** — exFAT is not supported.
+3. Try a different card (some budget cards have poor SPI compatibility).
+
+See [SD Card Setup](../hardware/sd-card.md) for full formatting instructions and advanced diagnostics.
+
+### "Found 0 apps" on a card that has apps
+
+- Files must be in the `apps/` folder on the card root, not a subfolder.
+- Extension must be `.wasm` (lowercase).
+- Safely eject the card on the PC before removing it to flush write cache.
+
+---
+
 ## Still Stuck?
 
 - Check [SDK Troubleshooting](../development/sdk-troubleshooting.md) for app-level issues
 - Read [Best Practices](../development/best-practices.md) to avoid common pitfalls
+- [SD Card Setup](../hardware/sd-card.md) — full hardware reference for the SD slot
 - Check [GitHub Issues](https://github.com/ArturR0k3r/AkiraOS/issues)
 - Ask in [Discussions](https://github.com/ArturR0k3r/AkiraOS/discussions)
 - Review [Architecture Docs](../architecture)

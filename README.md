@@ -8,12 +8,13 @@
 
 Every app is a sandboxed `.wasm` module. Deploy over-the-air. No firmware flash required.
 
-[![Version](https://img.shields.io/badge/version-1.4.9%20"Gl1tch"-7f5af0?style=flat-square)](https://github.com/ArturR0k3r/AkiraOS/releases)
+[![Version](https://img.shields.io/badge/version-1.5.x-7f5af0?style=flat-square)](https://github.com/ArturR0k3r/AkiraOS/releases)
 [![Zephyr](https://img.shields.io/badge/Zephyr-4.3.0-3b82f6?style=flat-square)](https://zephyrproject.org)
 [![WAMR](https://img.shields.io/badge/WAMR-2.x-22c55e?style=flat-square)](https://github.com/bytecodealliance/wasm-micro-runtime)
 [![License](https://img.shields.io/badge/license-Apache%202.0-22c55e?style=flat-square)](LICENSE)
 [![OSHWA](https://img.shields.io/badge/OSHWA-MD000003-f59e0b?style=flat-square)](https://certification.oshwa.org/md000003.html)
 [![Stars](https://img.shields.io/github/stars/ArturR0k3r/AkiraOS?style=flat-square&color=7f5af0)](https://github.com/ArturR0k3r/AkiraOS/stargazers)
+[![codecov](https://codecov.io/gh/ArturR0k3r/AkiraOS/branch/main/graph/badge.svg)](https://codecov.io/gh/ArturR0k3r/AkiraOS)
 
 [**Quick Start**](#quick-start) · [**Architecture**](#architecture) · [**AkiraSDK**](#wasm-app-development) · [**Hardware**](#supported-hardware) · [**Docs**](https://docs.akiraos.dev)
 
@@ -124,7 +125,7 @@ Full setup guide → [QUICKSTART.md](QUICKSTART.md)
 
 ## WASM App Development
 
-Install the [WASI SDK](https://github.com/WebAssembly/wasi-sdk/releases), then:
+Install the [AkiraSDK toolchain](AkiraSDK/README.md) (clang/wasi-sdk used as a cross-compiler only — AkiraOS apps target the AkiraZ native API, not a WASI runtime), then:
 
 ```bash
 # Build your first app
@@ -168,24 +169,25 @@ Full API reference → [docs.akiraos.dev/api-reference](https://docs.akiraos.dev
 
 ---
 
-## AkiraConsole V3
+## AkiraConsole
 
 The reference hardware platform for AkiraOS.
 
-**OSHWA Certified — UID: [MD000003](https://certification.oshwa.org/md000003.html)**
-Rev A.2 · Engineering samples in production · CrowdSupply campaign coming soon.
+**V3 - OSHWA Certified — UID: [MD000003](https://certification.oshwa.org/md000003.html)**
+
+**Rev A.2:** CrowdSupply campaign coming soon.
 
 → ESP32-S3 dual-core 240MHz · 8MB PSRAM
 → TFT display · ~33 FPS in AkiraOS
-→ 8 tactile buttons · Rotary encoder
-→ CC1121 sub-GHz radio · LoRa
+→ 8 tactile buttons · Dial
+→ CC1121 sub-GHz radio · LR2021 LoRa
 → MicroSD · USB-C · Expansion headers
 
 [akiraos.dev/akiraconsole](https://akiraos.dev/akiraconsole)
 
 ---
 
-## What's in v1.4.9 "Gl1tch"
+## What's in v1.5.x
 
 125 commits · 350 files · ~40,600 lines of changes
 

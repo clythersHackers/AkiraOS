@@ -50,6 +50,8 @@
  *
  *   // poll net_event_pop() for NET_EVT_ACCEPT — extra field = new handle
  *   // then bind TX/RX rings on the accepted handle and exchange data
+ * @stability stable
+ * @since 1.4
  */
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME

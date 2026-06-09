@@ -1,0 +1,40 @@
+# Copyright (c) 2026 AkiraOS Project
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Generic rotary dial / potentiometer input via PWM duty-cycle capture.
+
+  A passive RC relaxation oscillator (resistor + pot + capacitor + Schmitt
+  trigger) produces a PWM whose duty cycle encodes the knob position.
+  This driver captures that duty cycle via MCPWM, maps it to 0-255, and
+  reports it as an INPUT_ABS_WHEEL axis event -- same input subsystem as
+  buttons, so any app (WASM or native) reads it as a generic rotary control.
+
+  On AkiraConsole Production: RK10J12R0A0B (RV1) via D2/D3 + C67 + R58
+  + 74LVC2G14 Schmitt trigger chain -> GPIO48 (MCPWM0 CAP0).
+
+compatible: "akira,pwm-dial"
+
+properties:
+  pwms:
+    type: phandle-array
+    required: true
+    description: MCPWM capture channel for duty-cycle measurement.
+
+  akira,min-pct:
+    type: int
+    required: false
+    default: 9
+    description: Duty cycle % at minimum-position end stop (axis value 0).
+
+  akira,max-pct:
+    type: int
+    required: false
+    default: 91
+    description: Duty cycle % at maximum-position end stop (axis value 255).
+
+  akira,poll-ms:
+    type: int
+    required: false
+    default: 50
+    description: Polling interval in ms (20 Hz default).

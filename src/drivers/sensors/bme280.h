@@ -1,6 +1,8 @@
 /**
  * @file bme280.h
  * @brief BME280 Environmental Sensor Driver
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_BME280_H

@@ -7,6 +7,8 @@
  * - WASM app downloads and updates
  * - Push notifications and commands
  * - Data synchronization
+ * @stability experimental
+ * @since 1.5
  */
 
 #ifndef AKIRA_CLOUD_CLIENT_H

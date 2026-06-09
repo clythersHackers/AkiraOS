@@ -9,6 +9,7 @@
 #include "cloud_client.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include "lib/mem_helper.h"
 #include <string.h>
 
 /* Include app management */
@@ -112,10 +113,6 @@ static void complete_download(struct download_context *ctx, bool success, const 
     {
         LOG_INF("Auto-installing app: %s", ctx->app_id);
 
-        /* Build version from bytes */
-        uint32_t version = (ctx->version[0] << 24) | (ctx->version[1] << 16) |
-                          (ctx->version[2] << 8) | ctx->version[3];
-        
         /* Create manifest */
         app_manifest_t manifest = {0};
         strncpy(manifest.name, ctx->name, APP_NAME_MAX_LEN - 1);
@@ -152,7 +149,7 @@ static void complete_download(struct download_context *ctx, bool success, const 
     /* Cleanup */
     if (ctx->buffer)
     {
-        k_free(ctx->buffer);
+        akira_free_buffer(ctx->buffer);
         ctx->buffer = NULL;
     }
     ctx->active = false;
@@ -201,9 +198,10 @@ static int handle_app_metadata(const cloud_message_t *msg, msg_source_t source)
     /* Allocate buffer */
     if (ctx->buffer)
     {
-        k_free(ctx->buffer);
+        akira_free_buffer(ctx->buffer);
+        ctx->buffer = NULL;
     }
-    ctx->buffer = k_malloc(meta->size);
+    ctx->buffer = akira_malloc_buffer(meta->size);
     if (!ctx->buffer)
     {
         k_mutex_unlock(&handler.mutex);
@@ -256,8 +254,9 @@ static int handle_app_chunk(const cloud_message_t *msg, msg_source_t source)
         return -ENOENT;
     }
 
-    /* Validate chunk */
-    if (chunk->offset + data_len > ctx->buffer_size)
+    /* Validate chunk — avoid overflow in offset + data_len addition */
+    if (data_len > ctx->buffer_size ||
+        (size_t)chunk->offset > ctx->buffer_size - data_len)
     {
         k_mutex_unlock(&handler.mutex);
         LOG_ERR("Chunk exceeds buffer: offset=%u, len=%zu, size=%zu",
@@ -357,7 +356,7 @@ static int handle_app_list_response(const cloud_message_t *msg, msg_source_t sou
     payload_app_entry_t *entries = (payload_app_entry_t *)(msg->payload + sizeof(uint16_t));
 
     /* Allocate result array */
-    app_catalog_entry_t *catalog = k_malloc(count * sizeof(app_catalog_entry_t));
+    app_catalog_entry_t *catalog = akira_malloc_buffer(count * sizeof(app_catalog_entry_t));
     if (!catalog && count > 0)
     {
         handler.catalog_req.callback(NULL, -1, handler.catalog_req.user_data);
@@ -379,7 +378,7 @@ static int handle_app_list_response(const cloud_message_t *msg, msg_source_t sou
 
     handler.catalog_req.callback(catalog, count, handler.catalog_req.user_data);
 
-    k_free(catalog);
+    akira_free_buffer(catalog);
     handler.catalog_req.pending = false;
 
     return 0;

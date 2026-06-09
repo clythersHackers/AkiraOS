@@ -4,6 +4,8 @@
  *
  * Declares the interface for native functions exported to WASM,
  * available for WASM applications to call via the "akira" module.
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef AKIRA_NATIVE_API_H
@@ -25,7 +27,7 @@
  * @return 0 on success, -1 on error
  *
  * Fills buffer with null-terminated system information string.
- * Example: "AkiraOS v1.4.9 Gl1tch (WAMR Runtime)"
+ * Example: "AkiraOS v1.5.8 (WAMR Runtime)"
  */
 int sys_info(char *buffer, int buf_len);
 
@@ -201,60 +203,38 @@ int file_write(const char *filename, const void *buffer, int buf_len);
 /* ===== Input APIs ===== */
 
 /**
- * @brief Button ID constants for gamepad-style input
- *
- * These constants match the akira_button_id_t enum and correspond
- * to the zephyr,code values in the device tree button definitions.
- */
-#define AKIRA_BTN_POWER    0  /* ON/OFF button */
-#define AKIRA_BTN_SETTINGS 1  /* Settings button */
-#define AKIRA_BTN_UP       2  /* D-Pad Up */
-#define AKIRA_BTN_DOWN     3  /* D-Pad Down */
-#define AKIRA_BTN_LEFT     4  /* D-Pad Left */
-#define AKIRA_BTN_RIGHT    5  /* D-Pad Right */
-#define AKIRA_BTN_A        6  /* Action button A */
-#define AKIRA_BTN_B        7  /* Action button B */
-#define AKIRA_BTN_X        8  /* Action button X */
-#define AKIRA_BTN_Y        9  /* Action button Y */
-
-/**
- * @brief Read all button states as bitmask
+ * @brief Read all button states as a bitmask.
  *
  * Signature: "()i"
  *
- * @return Bitmask of pressed buttons. Bit N is set if button N is pressed.
+ * @return Bitmask of pressed buttons. Bit N is set when button N is pressed.
+ *         Button numbering is platform-defined. For AkiraConsole targets,
+ *         include <akiraconsole_native_api.h> for AKIRA_BTN_* constants.
  *
  * Requires: AKIRA_CAP_INPUT_READ capability
  *
  * Example in WASM:
  * @code
+ * // With AkiraConsole — include <akiraconsole_native_api.h> for button IDs:
  * int buttons = input_read_buttons();
  * if (buttons & (1 << AKIRA_BTN_A)) {
  *     // Button A is pressed
- * }
- * if (buttons & (1 << AKIRA_BTN_UP)) {
- *     // D-Pad Up is pressed
  * }
  * @endcode
  */
 int input_read_buttons(void);
 
 /**
- * @brief Check if specific button is pressed
+ * @brief Check if a specific button is pressed.
  *
  * Signature: "(i)i"
  *
- * @param button_id Button ID to check (use AKIRA_BTN_* constants)
- * @return 1 if button is pressed, 0 if not pressed
+ * @param button_id Platform-specific button index.
+ *                  For AkiraConsole, use AKIRA_BTN_* constants from
+ *                  <akiraconsole_native_api.h>.
+ * @return 1 if button is pressed, 0 if not pressed.
  *
  * Requires: AKIRA_CAP_INPUT_READ capability
- *
- * Example in WASM:
- * @code
- * if (input_button_pressed(AKIRA_BTN_A)) {
- *     // A button is pressed
- * }
- * @endcode
  */
 int input_button_pressed(int button_id);
 
@@ -265,21 +245,21 @@ int input_button_pressed(int button_id);
  *
  * These flags can be combined using bitwise OR to configure GPIO pins.
  */
-#define AKIRA_GPIO_INPUT            (1U << 0)  /* Configure as input */
-#define AKIRA_GPIO_OUTPUT           (1U << 1)  /* Configure as output */
-#define AKIRA_GPIO_OUTPUT_INIT_LOW  (1U << 2)  /* Initialize output to low */
-#define AKIRA_GPIO_OUTPUT_INIT_HIGH (1U << 3)  /* Initialize output to high */
-#define AKIRA_GPIO_PULL_UP          (1U << 4)  /* Enable internal pull-up resistor */
-#define AKIRA_GPIO_PULL_DOWN        (1U << 5)  /* Enable internal pull-down resistor */
-#define AKIRA_GPIO_ACTIVE_LOW       (1U << 6)  /* Active-low (inverted logic) */
-#define AKIRA_GPIO_ACTIVE_HIGH      (1U << 7)  /* Active-high (normal logic) */
+#define AKIRA_GPIO_INPUT (1U << 0)            /* Configure as input */
+#define AKIRA_GPIO_OUTPUT (1U << 1)           /* Configure as output */
+#define AKIRA_GPIO_OUTPUT_INIT_LOW (1U << 2)  /* Initialize output to low */
+#define AKIRA_GPIO_OUTPUT_INIT_HIGH (1U << 3) /* Initialize output to high */
+#define AKIRA_GPIO_PULL_UP (1U << 4)          /* Enable internal pull-up resistor */
+#define AKIRA_GPIO_PULL_DOWN (1U << 5)        /* Enable internal pull-down resistor */
+#define AKIRA_GPIO_ACTIVE_LOW (1U << 6)       /* Active-low (inverted logic) */
+#define AKIRA_GPIO_ACTIVE_HIGH (1U << 7)      /* Active-high (normal logic) */
 
 /**
  * @brief Configure a GPIO pin
  *
  * Signature: "(ii)i"
  *
- * @param pin GPIO pin number (0-48 for ESP32-S3)
+ * @param pin GPIO pin number (platform-defined range, e.g. 0–48 on ESP32-S3)
  * @param flags Configuration flags (AKIRA_GPIO_* constants)
  * @return 0 on success, negative error code on failure
  *
@@ -359,7 +339,7 @@ int akira_register_native_apis(void);
  */
 NativeSymbol *akira_get_native_symbols(int *out_count);
 
-#else  /* CONFIG_WAMR_ENABLE not defined */
+#else /* CONFIG_WAMR_ENABLE not defined */
 
 /* Stub functions when WAMR is disabled */
 int akira_register_native_apis(void);

@@ -10,6 +10,8 @@
  * All exported functions require AKIRA_CAP_HID in the app manifest.
  *
  * Manifest entry:  "capabilities": ["hid"]
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_HID_API_H

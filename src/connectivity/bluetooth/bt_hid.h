@@ -3,6 +3,8 @@
  * @brief Bluetooth HID Service for AkiraOS
  *
  * BLE HID device implementation supporting keyboard and gamepad profiles.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_BT_HID_H

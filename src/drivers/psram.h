@@ -2,6 +2,11 @@
  * If CONFIG_AKIRA_PSRAM is enabled, these will allocate via malloc as a placeholder.
  */
 
+/**
+ * @file psram.h
+ * @stability experimental
+ * @since 1.4
+ */
 #ifndef AKIRA_PSRAM_H
 #define AKIRA_PSRAM_H
 

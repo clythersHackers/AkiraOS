@@ -1,9 +1,11 @@
 /**
  * @file akira_shell.h
- * @brief Akira Shell Module for ESP32 Gaming Device
+ * @brief AkiraOS interactive shell and system management commands
  *
- * Provides comprehensive system management commands including
- * hardware control, diagnostics, and gaming-specific features.
+ * Provides system management commands including hardware control,
+ * diagnostics, application management, and connectivity features.
+ * @stability stable
+ * @since 1.3
  */
 
 #ifndef AKIRA_SHELL_H
@@ -19,22 +21,6 @@
 #define SHELL_THREAD_PRIORITY 8
 #define MAX_COMMAND_HISTORY 10
 #define MAX_ALIAS_COUNT 20
-
-/* Gaming button definitions */
-enum gaming_button
-{
-    BTN_NONE = 0,
-    BTN_ONOFF = (1 << 0),
-    BTN_SETTINGS = (1 << 1),
-    BTN_UP = (1 << 2),
-    BTN_DOWN = (1 << 3),
-    BTN_LEFT = (1 << 4),
-    BTN_RIGHT = (1 << 5),
-    BTN_A = (1 << 6),
-    BTN_B = (1 << 7),
-    BTN_X = (1 << 8),
-    BTN_Y = (1 << 9)
-};
 
 /* System statistics */
 struct system_stats

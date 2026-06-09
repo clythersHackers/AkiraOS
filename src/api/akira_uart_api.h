@@ -10,6 +10,8 @@
  * IRQ-driven RX ring buffer, non-blocking uart_read().
  * UART0 (zephyr_console / shell) is reserved.
  * WASM apps access secondary UARTs (port_id 0 = first non-console UART).
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef AKIRA_UART_API_H

@@ -12,6 +12,11 @@
  * Only the system shell (akira_shell) should hold this capability.
  */
 
+/**
+ * @file akira_system_api.h
+ * @stability stable
+ * @since 1.4
+ */
 #ifndef AKIRA_SYSTEM_API_H
 #define AKIRA_SYSTEM_API_H
 

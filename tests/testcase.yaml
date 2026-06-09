@@ -1,0 +1,8 @@
+tests:
+  akiraos.tests:
+    tags: akiraos security ota manifest lifecycle
+    platform_allow: native_sim
+    harness: ztest
+    timeout: 120
+    min_ram: 512
+    filter: CONFIG_ZTEST

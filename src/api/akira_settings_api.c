@@ -23,6 +23,16 @@ LOG_MODULE_REGISTER(akira_settings_api, CONFIG_AKIRA_LOG_LEVEL);
 #include <wasm_export.h>
 #include "settings/settings.h"
 
+static inline uint8_t setting_filter(const char *key)
+{
+    /* Block all system/* keys — reserved for native firmware only */
+    if (strncmp(key, "system/", strlen("system/")) == 0) {
+        return 0;
+    }
+    return 1;
+}
+
+
 /* Pointer-validation helper shared across API modules */
 static inline void *wasm_ptr_to_native(wasm_exec_env_t exec_env,
                                         uint32_t wasm_ptr, uint32_t len)
@@ -46,6 +56,7 @@ int akira_native_settings_get(wasm_exec_env_t exec_env,
     AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_SETTINGS, -EACCES);
 
     if (!key || key[0] == '\0' || buf_len == 0) return -EINVAL;
+    if (!setting_filter(key)) return -EACCES;
 
     char *buf = (char *)wasm_ptr_to_native(exec_env, buf_ptr, buf_len);
     if (!buf) return -EFAULT;
@@ -67,6 +78,7 @@ int akira_native_settings_set(wasm_exec_env_t exec_env,
 
     if (!key || key[0] == '\0') return -EINVAL;
     if (!value) return -EINVAL;
+    if (!setting_filter(key)) return -EACCES;
 
     return akira_settings_set(key, value, 0 /* not encrypted */);
 }
@@ -77,6 +89,7 @@ int akira_native_settings_delete(wasm_exec_env_t exec_env, const char *key)
     AKIRA_CHECK_CAP_OR_RETURN(exec_env, AKIRA_CAP_SETTINGS, -EACCES);
 
     if (!key || key[0] == '\0') return -EINVAL;
+    if (!setting_filter(key)) return -EACCES;
 
     return akira_settings_delete(key);
 }

@@ -4,6 +4,8 @@
  *
  * Manages firmware updates, validation, and rollback functionality
  * with MCUboot integration and web-based upload support.
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef OTA_MANAGER_H
@@ -14,7 +16,7 @@
 #include <stdbool.h>
 
 /* OTA Configuration */
-#define OTA_THREAD_STACK_SIZE 4096
+#define OTA_THREAD_STACK_SIZE CONFIG_AKIRA_OTA_THREAD_STACK_SIZE
 #define OTA_THREAD_PRIORITY 6
 #define OTA_MAX_CHUNK_SIZE 4096
 #define OTA_PROGRESS_REPORT_SIZE (64 * 1024) // Report every 64KB

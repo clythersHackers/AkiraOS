@@ -13,6 +13,7 @@
 #include <string.h>
 #if defined(CONFIG_AKIRA_SD_CARD)
 #include <storage/sd_card.h>
+#include <storage/fs_manager.h>
 #endif
 
 LOG_MODULE_REGISTER(sd_manager, CONFIG_AKIRA_LOG_LEVEL);
@@ -63,13 +64,20 @@ int sd_manager_mount(void)
 
 #if defined(CONFIG_AKIRA_SD_CARD)
     /* sd_card.c already mounted the filesystem at /SD: via SYS_INIT.
-     * Just verify the card is present and adopt the existing mount. */
+     * If the card was absent at boot (hot-plug), attempt a re-probe now. */
     if (!akira_sd_card_is_present())
     {
-        LOG_ERR("SD card not present");
-        notify_state_change(SD_STATE_ERROR);
-        k_mutex_unlock(&g_sd_mutex);
-        return -ENODEV;
+        int ret = akira_sd_card_init();
+        if (ret < 0)
+        {
+            LOG_ERR("SD card not present: %d", ret);
+            notify_state_change(SD_STATE_ERROR);
+            k_mutex_unlock(&g_sd_mutex);
+            return -ENODEV;
+        }
+        LOG_INF("SD card detected after hot-plug");
+        /* Update fs_manager's availability flag so SD paths are recognized */
+        fs_manager_reinit_sd();
     }
     notify_state_change(SD_STATE_MOUNTED);
     LOG_INF("SD card available at %s (via sd_card driver)", SD_MOUNT_POINT);
@@ -197,12 +205,24 @@ int sd_manager_scan_apps(char names[][32], int max_count)
             break;
         }
 
-        /* Check for .wasm extension */
+        /* Check for .wasm/.WASM or .aot/.AOT extension (case-insensitive) */
         size_t len = strlen(entry.name);
-        if (len > 5 && strcmp(&entry.name[len - 5], ".wasm") == 0)
+        bool is_wasm = len > 5 &&
+            entry.name[len - 5] == '.' &&
+            ((entry.name[len - 4] | 0x20) == 'w') &&
+            ((entry.name[len - 3] | 0x20) == 'a') &&
+            ((entry.name[len - 2] | 0x20) == 's') &&
+            ((entry.name[len - 1] | 0x20) == 'm');
+        bool is_aot = len > 4 &&
+            entry.name[len - 4] == '.' &&
+            ((entry.name[len - 3] | 0x20) == 'a') &&
+            ((entry.name[len - 2] | 0x20) == 'o') &&
+            ((entry.name[len - 1] | 0x20) == 't');
+        int ext_len = is_wasm ? 5 : (is_aot ? 4 : 0);
+        if (ext_len > 0)
         {
             /* Extract name without extension */
-            size_t name_len = len - 5;
+            size_t name_len = len - (size_t)ext_len;
             if (name_len >= APP_NAME_MAX)
             {
                 name_len = APP_NAME_MAX - 1;

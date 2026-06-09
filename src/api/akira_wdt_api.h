@@ -20,6 +20,8 @@ extern "C" {
  * that the application is still alive.
  *
  * Capability: AKIRA_CAP_WDT ("wdt")
+ * @stability stable
+ * @since 1.4
  */
 int akira_native_wdt_pet(wasm_exec_env_t exec_env);
 #endif /* CONFIG_AKIRA_WASM_RUNTIME */

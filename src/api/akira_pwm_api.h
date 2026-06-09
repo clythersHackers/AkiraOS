@@ -10,6 +10,8 @@
  * Channel-indexed interface. WASM passes a logical channel number,
  * frequency in Hz, and duty cycle as a percentage (0–100).
  * Period and pulse width are derived internally.
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef AKIRA_PWM_API_H

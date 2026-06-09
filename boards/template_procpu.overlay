@@ -1,0 +1,236 @@
+// SPDX-License-Identifier: Apache-2.0
+// AkiraOS — Application-level DTS overlay for your board
+//
+// FIXME: Rename this file to <your-board-identifier-with-slashes-replaced-by-underscores>.overlay
+// Example: board identifier "my_sensor_node/nrf54l15/cpuapp"
+//          → filename: my_sensor_node_nrf54l15_cpuapp.overlay
+//
+// This overlay is applied on top of your board's base DTS (template_procpu.dts)
+// by the AkiraOS build system.  It enables/configures the peripherals needed at
+// application runtime.  MCUboot builds use only a subset of this file (nodes
+// inside #ifndef CONFIG_MCUBOOT blocks are skipped).
+//
+// Reference implementation: boards/akiraconsole_prod_esp32s3_procpu.overlay
+
+#include <zephyr/dt-bindings/gpio/gpio.h>
+// FIXME: Uncomment if using the MIPI DBI display option (ST7789V / GC9A01 etc.):
+// #include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
+
+// =============================================================================
+// Core peripherals — always enabled
+// =============================================================================
+&gpio0 { status = "okay"; };
+// &gpio1 { status = "okay"; }; // FIXME: uncomment if your SoC has gpio1
+&uart0 { status = "okay"; current-speed = <115200>; };
+&wdt0  { status = "okay"; };
+// &wifi  { status = "okay"; }; // FIXME: ESP32 only — uncomment to enable WiFi
+
+// =============================================================================
+// PSRAM (optional — required for >2 concurrent WASM apps)
+// =============================================================================
+// FIXME: Uncomment and adjust size for your module.  Common values:
+//   2 MB: DT_SIZE_M(2)   4 MB: DT_SIZE_M(4)   8 MB: DT_SIZE_M(8)
+// Requires CONFIG_ESP_SPIRAM=y in your .conf and a PSRAM-capable SoC/module.
+// Not available on nRF / STM32 — use external SRAM via SPI/FMC instead.
+//
+// &psram0 {
+//     size   = <DT_SIZE_M(8)>;   // FIXME: match your module spec
+//     status = "okay";
+// };
+
+// =============================================================================
+// SPI — cs-gpios assignment
+//
+// List ALL chip-select lines used by SPI devices, in reg-index order.
+// FIXME: Replace gpio0/pin numbers with your board's CS GPIO assignments.
+//        Add or remove entries to match your cs-gpios count.
+// =============================================================================
+&spi0 {   // FIXME: match your SPI node label (&spi1, &spi2, etc.)
+	cs-gpios =
+		<&gpio0 /* FIXME_CS0_PIN */ GPIO_ACTIVE_LOW>,  // [0] FIXME: device name
+		<&gpio0 /* FIXME_CS1_PIN */ GPIO_ACTIVE_LOW>;  // [1] FIXME: device name
+		// Add more entries if you have more SPI devices.
+		// NOTE: Sharp Memory LCD uses GPIO_ACTIVE_HIGH for SCS — see
+		//       boards/akiraconsole_prod_esp32s3_procpu.overlay for example.
+};
+
+// =============================================================================
+// I2C — enabled for app build only (skip during MCUboot)
+// =============================================================================
+#ifndef CONFIG_MCUBOOT
+&i2c0 { status = "okay"; };
+
+// FIXME: Enable/disable sensor nodes as fitted on your hardware.
+// Example:
+// &bme280  { status = "okay"; };   // Bosch BME280 environmental sensor
+// &lis2dh  { status = "okay"; };   // ST LIS2DH12 accelerometer
+#endif /* !CONFIG_MCUBOOT */
+
+// =============================================================================
+// ADC
+// =============================================================================
+// FIXME: Uncomment and set alias to your ADC node label.
+// / {
+//     aliases {
+//         akira-adc = &adc0;  // FIXME: &adc0 | &adc1 — match your SoC's label
+//     };
+// };
+
+// =============================================================================
+// Display
+//
+// Choose ONE of the three options below and uncomment its block.
+// All three use the same physical wiring (SPI + DC + RST + CS).
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Display option 1 (recommended): ST7789V / GC9A01 via MIPI DBI
+//
+// Activate: CONFIG_DISPLAY=y, CONFIG_MIPI_DBI=y, CONFIG_ST7789V=y
+// Requires mipi_dbi node to exist in your board DTS.  Reference:
+//   boards/akiraconsole_prod/akiraconsole_prod_esp32s3_procpu.dts → &mipi_dbi_prod
+// This option uses Zephyr's generic display driver — widest app compatibility.
+// FIXME: Uncomment and adjust the mipi_dbi node label for your board.
+// -----------------------------------------------------------------------------
+// &mipi_dbi_FIXME {
+//     status = "okay";
+// };
+
+// -----------------------------------------------------------------------------
+// Display option 2: AkiraOS ILI9341 direct-SPI driver
+//
+// Activate: CONFIG_AKIRA_ILI9341_DRIVER=y
+// Drop CONFIG_ST7789V and CONFIG_MIPI_DBI_SPI from your .conf.
+// FIXME: Set dc-gpios, reset-gpios, reg (cs-gpios index), and dimensions.
+// -----------------------------------------------------------------------------
+#ifdef CONFIG_AKIRA_ILI9341_DRIVER
+/ {
+	chosen {
+		zephyr,display = &akira_ili9341_template;
+	};
+};
+
+// FIXME: Disable MIPI DBI node if present on your board:
+// &mipi_dbi_FIXME { status = "disabled"; };
+
+&spi0 {    // FIXME: match your SPI node label
+	akira_ili9341_template: akira_ili9341@0 {  // FIXME: reg = cs-gpios index
+		compatible        = "akira,ili9341";
+		reg               = <0>;                                   // FIXME: cs-gpios index
+		spi-max-frequency = <25000000>;
+		dc-gpios          = <&gpio0 /* FIXME_DC_PIN  */ GPIO_ACTIVE_HIGH>;
+		reset-gpios       = <&gpio0 /* FIXME_RST_PIN */ GPIO_ACTIVE_LOW>;
+		width             = <320>;   // FIXME: 320 | 240 | ...
+		height            = <240>;   // FIXME: 240 | 320 | ...
+		status            = "okay";
+	};
+};
+#endif /* CONFIG_AKIRA_ILI9341_DRIVER */
+
+// -----------------------------------------------------------------------------
+// Display option 3: Sharp LS027B7DH01 Memory LCD
+//
+// Activate: CONFIG_AKIRA_SHARP_DISPLAY=y
+// KEY DIFFERENCE: Sharp SCS is ACTIVE HIGH (unusual SPI CS polarity).
+// VDD/VDDA require +5V from a charge pump; check your power design.
+// FIXME: Set cs-gpios[N] for SCS to GPIO_ACTIVE_HIGH.
+// -----------------------------------------------------------------------------
+#ifdef CONFIG_AKIRA_SHARP_DISPLAY
+/ {
+	chosen {
+		zephyr,display = &ls027b7dh01_template;
+	};
+};
+
+&spi0 {    // FIXME: match your SPI node label
+	// Override cs-gpios: SCS polarity is ACTIVE HIGH for Sharp.
+	// FIXME: Restate ALL cs-gpios entries — DTS overlay fully replaces the list.
+	cs-gpios =
+		<&gpio0 /* FIXME_OTHER_CS */ GPIO_ACTIVE_LOW>,    // [0] other device
+		<&gpio0 /* FIXME_SCS_PIN  */ GPIO_ACTIVE_HIGH>;   // [1] Sharp SCS — ACTIVE HIGH
+
+	ls027b7dh01_template: ls027b7dh01@1 {   // FIXME: reg = SCS index in cs-gpios
+		status = "okay";
+	};
+};
+#endif /* CONFIG_AKIRA_SHARP_DISPLAY */
+
+// =============================================================================
+// USB Device — HID interface (optional)
+// =============================================================================
+// FIXME: Uncomment if your board has USB OTG and you want USB HID.
+// Node name is &zephyr_udc0 for Zephyr UDC-class drivers, or &usbd for older HAL.
+// &zephyr_udc0 {
+//     status = "okay";
+//
+//     hid_dev_0: hid_dev_0 {
+//         compatible            = "zephyr,hid-device";
+//         protocol-code         = "none";
+//         in-polling-period-us  = <1000>;
+//         out-polling-period-us = <1000>;
+//         in-report-size        = <9>;
+//         out-report-size       = <2>;
+//     };
+// };
+
+// =============================================================================
+// Flash partition layout
+//
+// FIXME: Adjust offsets and sizes to match your flash chip capacity and the
+// MCUboot partition table defined in your board DTS.
+//
+// These partitions must NOT overlap with MCUboot (boot, slot0, slot1).
+// A safe rule: start NVS immediately after slot1_partition ends.
+//
+// Sizing guide (see docs/hardware/min-hw-requirements.md):
+//   NVS settings: minimum 2 × erase_block_size (32 KB on most NOR flash)
+//   LittleFS:     minimum 256 KB for app filesystem; 512 KB recommended
+//
+// Example for 4 MB flash (MCUboot ends at 0x220000):
+//   NVS:      @0x220000, size DT_SIZE_K(32)
+//   LittleFS: @0x228000, size DT_SIZE_K(256)
+//
+// Example for 16 MB flash (MCUboot ends at 0x400000 via partitions_0x0_amp.dtsi):
+//   NVS:      @0x400000, size DT_SIZE_K(32)
+//   LittleFS: @0x408000, size DT_SIZE_K(512)
+// =============================================================================
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells    = <1>;
+
+		akira_settings_nvs_partition: partition@FIXME_NVS_OFFSET {
+			// FIXME: Replace FIXME_NVS_OFFSET with hex offset (e.g. 0x00220000)
+			label = "akira_settings_nvs";
+			reg   = <0x00FIXME DT_SIZE_K(32)>;
+		};
+
+		lfs1_partition: partition@FIXME_LFS_OFFSET {
+			// FIXME: Replace FIXME_LFS_OFFSET with hex offset (e.g. 0x00228000)
+			label = "lfs_storage";
+			reg   = <0x00FIXME DT_SIZE_K(512)>;  // FIXME: 256K min, 512K recommended
+		};
+	};
+};
+
+/ {
+	chosen {
+		zephyr,settings-partition = &akira_settings_nvs_partition;
+	};
+
+	fstab {
+		compatible = "zephyr,fstab";
+
+		lfs1: lfs1 {
+			compatible     = "zephyr,fstab,littlefs";
+			read-size      = <1>;
+			prog-size      = <16>;
+			cache-size     = <256>;
+			lookahead-size = <32>;
+			block-cycles   = <512>;
+			partition      = <&lfs1_partition>;
+			mount-point    = "/lfs";
+		};
+	};
+};

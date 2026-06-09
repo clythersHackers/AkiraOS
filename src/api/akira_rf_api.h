@@ -1,6 +1,8 @@
 /**
  * @file akira_rf_api.h
  * @brief RF API declarations for WASM exports
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_RF_API_H
@@ -33,7 +35,7 @@ int akira_rf_get_rssi(int16_t *rssi);
 int akira_native_rf_send(wasm_exec_env_t exec_env, uint32_t payload_ptr, uint32_t len);
 int akira_native_rf_receive(wasm_exec_env_t exec_env, uint32_t buffer_ptr, uint32_t max_len, uint32_t timeout_ms);
 int akira_native_rf_set_frequency(wasm_exec_env_t exec_env, uint32_t freq_hz);
-int akira_native_rf_get_rssi(wasm_exec_env_t exec_env, int16_t *rssi);
+int akira_native_rf_get_rssi(wasm_exec_env_t exec_env);
 int akira_native_rf_set_power(wasm_exec_env_t exec_env, int8_t dbm);
 #endif /* CONFIG_AKIRA_WASM_RUNTIME */
 

@@ -4,6 +4,8 @@
  *
  * Defines WAMR initialization parameters, memory management,
  * and native API registration for AkiraOS.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef WAMR_CONFIG_H

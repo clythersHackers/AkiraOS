@@ -241,22 +241,34 @@ static int akira_ili9341_init(const struct device *dev)
 		return ret;
 	}
 
-	/* Optional hardware reset */
+	/* Hardware reset (optional — may route through I2C GPIO expander on some boards).
+	 * TCA6408 P2 = RST on prod board; GPIO45 direct on non-prod board.
+	 * gpio_pca_series_pin_configure writes the output latch HIGH before enabling
+	 * output direction, so RST is correctly deasserted before any commands.
+	 */
 	if (cfg->reset_gpio.port != NULL) {
 		if (!gpio_is_ready_dt(&cfg->reset_gpio)) {
-			LOG_ERR("%s: RST GPIO not ready", dev->name);
-			return -ENODEV;
+			LOG_WRN("%s: RST GPIO not ready — skipping HW reset", dev->name);
+			goto do_swreset;
 		}
 		ret = gpio_pin_configure_dt(&cfg->reset_gpio, GPIO_OUTPUT_INACTIVE);
 		if (ret < 0) {
-			LOG_ERR("%s: RST GPIO configure failed: %d", dev->name, ret);
-			return ret;
+			LOG_WRN("%s: RST configure failed %d — skipping HW reset", dev->name, ret);
+			goto do_swreset;
 		}
-		gpio_pin_set_dt(&cfg->reset_gpio, 1);  /* assert reset (pin LOW) */
-		k_msleep(10);
-		gpio_pin_set_dt(&cfg->reset_gpio, 0);  /* release reset (pin HIGH) */
-		k_msleep(120);                          /* wait for display to stabilize */
+		ret = gpio_pin_set_dt(&cfg->reset_gpio, 0);  /* ensure deasserted */
+		if (ret < 0) { goto do_swreset; }
+		k_msleep(5);
+		ret = gpio_pin_set_dt(&cfg->reset_gpio, 1);  /* assert reset */
+		if (ret < 0) { goto do_swreset; }
+		k_msleep(15);
+		ret = gpio_pin_set_dt(&cfg->reset_gpio, 0);  /* deassert reset */
+		if (ret < 0) { goto do_swreset; }
+		k_msleep(120);
+		LOG_DBG("%s: HW reset done", dev->name);
 	}
+
+do_swreset:
 
 	/* Software reset + sleep out */
 	ret = send_cmd(dev, 0x01);   /* SWRESET */
@@ -266,6 +278,9 @@ static int akira_ili9341_init(const struct device *dev)
 	ret = send_cmd(dev, 0x11);   /* SLPOUT  */
 	if (ret < 0) { return ret; }
 	k_msleep(120);
+
+	send_cmd(dev, 0x13);         /* NORON   — Normal Display Mode On */
+	send_cmd(dev, 0x20);         /* INVOFF  — Display Inversion Off  */
 
 	/* Power / timing control (vendor init sequence) */
 	const uint8_t power_a[]  = { 0x39, 0x2C, 0x00, 0x34, 0x02 };

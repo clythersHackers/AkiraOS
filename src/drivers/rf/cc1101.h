@@ -1,6 +1,8 @@
 /**
  * @file cc1101.h
  * @brief CC1101 Sub-GHz Transceiver Driver
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_CC1101_H

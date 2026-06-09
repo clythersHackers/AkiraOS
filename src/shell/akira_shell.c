@@ -39,6 +39,9 @@
 #ifdef CONFIG_WIFI
 #include <zephyr/net/wifi_mgmt.h>
 #endif
+#ifdef CONFIG_AKIRA_WIFI_MANAGER
+#include <connectivity/wifi/wifi_manager.h>
+#endif
 #include <zephyr/net/net_mgmt.h>
 #include <string.h>
 #include <stdio.h>
@@ -173,7 +176,7 @@ static int cmd_app_start(const struct shell *sh, size_t argc, char **argv)
     int ret = app_manager_start(argv[1]);
     if (ret < 0)
     {
-        AKIRA_SHELL_ERROR(sh, "Failed to start app: %s", argv[1]);
+        AKIRA_SHELL_ERROR(sh, "Failed to start app: %s  (%d)", argv[1], ret);
         return ret;
     }
     AKIRA_SHELL_PRINT(sh, "App started: %s", argv[1]);
@@ -1277,7 +1280,7 @@ static int cmd_benchmark(const struct shell *sh, size_t argc, char **argv)
     return 0;
 }
 
-#if defined(CONFIG_BT) && defined(CONFIG_AKIRA_BT_HID)
+#if defined(CONFIG_BT)
 /* ===== Bluetooth commands ===== */
 static int cmd_bt_info(const struct shell *sh, size_t argc, char **argv)
 {
@@ -1427,6 +1430,18 @@ static int cmd_bt_echo(const struct shell *sh, size_t argc, char **argv)
         return 0;
     }
 
+    else if (strcmp(argv[1], "send") == 0)
+    {
+        const char *msg = (argc >= 3) ? argv[2] : "hello from AkiraOS";
+        int rc = bt_echo_send((const uint8_t *)msg, strlen(msg));
+        if (rc < 0) {
+            AKIRA_SHELL_ERROR(sh, "Send failed: %d", rc);
+        } else {
+            AKIRA_SHELL_PRINT(sh, "Sent %d bytes: %s", (int)strlen(msg), msg);
+        }
+        return rc;
+    }
+
     AKIRA_SHELL_ERROR(sh, "Unknown arg: %s", argv[1]);
     return -EINVAL;
 }
@@ -1445,7 +1460,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(bt_cmds,
                                SHELL_CMD(disconnect, NULL, "Disconnect current connection", cmd_bt_disconnect),
                                SHELL_CMD(unpair, NULL, "Delete all bonds", cmd_bt_unpair),
 #if defined(CONFIG_AKIRA_BT_ECHO)
-                               SHELL_CMD(echo, NULL, "Echo service control: <on|off|status>", cmd_bt_echo),
+                               SHELL_CMD(echo, NULL, "Echo service: <on|off|status|send [msg]>", cmd_bt_echo),
 #endif
                                SHELL_CMD(adv, &bt_adv_cmds, "Advertising control", NULL),
                                SHELL_SUBCMD_SET_END);
@@ -1461,7 +1476,7 @@ static const struct shell *scan_sh_ctx;
 static int scan_result_count;
 
 static void wifi_scan_shell_handler(struct net_mgmt_event_callback *cb,
-                                    uint32_t event, struct net_if *iface)
+                                    uint64_t event, struct net_if *iface)
 {
     ARG_UNUSED(iface);
 
@@ -1550,46 +1565,22 @@ static int cmd_wifi_connect(const struct shell *sh, size_t argc, char **argv)
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
 
-    struct net_if *iface = net_if_get_default();
-    if (!iface)
-    {
-        shell_print(sh, "No network interface available");
-        return -ENODEV;
+#ifdef CONFIG_AKIRA_WIFI_MANAGER
+    int ret = wifi_manager_connect();
+    if (ret == -ENOENT) {
+        shell_print(sh, "No WiFi credentials saved. Use: settings set_wifi <ssid> <psk>");
+    } else if (ret == -EALREADY) {
+        shell_print(sh, "Already connected or connecting");
+    } else if (ret) {
+        shell_print(sh, "WiFi connect failed: %d", ret);
+    } else {
+        shell_print(sh, "Connection request sent");
     }
-
-    /* Get settings */
-    char ssid[MAX_VALUE_LEN];
-    char psk[MAX_VALUE_LEN];
-
-    if(!akira_settings_get(AKIRA_SETTINGS_WIFI_SSID_KEY, ssid, MAX_VALUE_LEN) && !akira_settings_get(AKIRA_SETTINGS_WIFI_PSK_KEY, psk, MAX_VALUE_LEN)){
-        LOG_INF("Loaded ssid and psk succesfully fron NVS succesfully");
-    }
-    else{
-        LOG_INF("Failed to load ssid and psk fron NVS");
-        return -EINVAL;
-    }
-
-    shell_print(sh, "Connecting to WiFi: %s", ssid);
-
-    struct wifi_connect_req_params wifi_params = {
-        .ssid = (uint8_t *)ssid,
-        .ssid_length = strlen(ssid),
-        .psk = (uint8_t *)psk,
-        .psk_length = strlen(psk),
-        .channel = WIFI_CHANNEL_ANY,
-        .security = strlen(psk) > 0 ? WIFI_SECURITY_TYPE_PSK : WIFI_SECURITY_TYPE_NONE,
-        .mfp = WIFI_MFP_OPTIONAL,
-    };
-
-    int ret = net_mgmt(NET_REQUEST_WIFI_CONNECT, iface, &wifi_params, sizeof(wifi_params));
-    if (ret)
-    {
-        shell_print(sh, "WiFi connection request failed: %d", ret);
-        return ret;
-    }
-
-    shell_print(sh, "Connection request sent. Check wifi_status in a few seconds.");
-    return 0;
+    return ret;
+#else
+    shell_print(sh, "WiFi manager not enabled (CONFIG_AKIRA_WIFI_MANAGER)");
+    return -ENOTSUP;
+#endif
 }
 
 /* WiFi scan command */

@@ -133,6 +133,7 @@ Real-time kernel providing threading, networking, drivers, and file system.
 | Transport Interface | Protocol routing | [Connectivity](connectivity.md) |
 | OTA Manager | Firmware updates | [Connectivity](connectivity.md) |
 | HTTP Server | Network API | [Connectivity](connectivity.md) |
+| Scheduling & Watchdog | Cooperative yield + HW/SW WDT | [scheduling-and-watchdog.md](scheduling-and-watchdog.md) |
 
 ## Data Flow
 

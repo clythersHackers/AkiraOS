@@ -6,13 +6,15 @@
 #include "bt_app_transfer.h"
 #include <runtime/app_loader/app_loader.h>
 #include <runtime/app_manager/app_manager.h>
+#include <lib/akpkg.h>
+#include <lib/mem_helper.h>
+#include <storage/fs_manager.h>
 #include <zephyr/kernel.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/crc.h>
-#include <zephyr/fs/fs.h>
 #include <string.h>
 
 LOG_MODULE_REGISTER(bt_app_xfer, CONFIG_AKIRA_LOG_LEVEL);
@@ -40,9 +42,6 @@ LOG_MODULE_REGISTER(bt_app_xfer, CONFIG_AKIRA_LOG_LEVEL);
 #endif
 #define MAX_APP_SIZE (CONFIG_AKIRA_APP_MAX_SIZE_KB * 1024)
 
-/* Temp file for receiving app */
-#define TEMP_APP_PATH "/lfs/apps/.tmp_xfer.wasm"
-
 /* Transfer context */
 static struct
 {
@@ -52,12 +51,11 @@ static struct
     uint32_t received_bytes;
     uint32_t expected_crc;
     uint32_t running_crc;
-    struct fs_file_t file;
-    bool file_open;
+    uint8_t *buf; /* heap buffer for incoming data */
     bt_app_xfer_complete_cb_t callback;
 } g_xfer = {
     .state = BT_APP_XFER_IDLE,
-    .file_open = false};
+    .buf = NULL};
 
 static K_MUTEX_DEFINE(xfer_mutex);
 
@@ -123,12 +121,8 @@ static void send_status(bt_app_status_t status, uint8_t progress)
 
 static void cleanup_transfer(void)
 {
-    if (g_xfer.file_open)
-    {
-        fs_close(&g_xfer.file);
-        g_xfer.file_open = false;
-    }
-    fs_unlink(TEMP_APP_PATH);
+    akira_free_buffer(g_xfer.buf);
+    g_xfer.buf = NULL;
     memset(g_xfer.app_name, 0, sizeof(g_xfer.app_name));
     g_xfer.total_size = 0;
     g_xfer.received_bytes = 0;
@@ -157,15 +151,13 @@ static int start_transfer(const struct bt_app_xfer_header *header)
     g_xfer.received_bytes = 0;
     g_xfer.running_crc = 0;
 
-    /* Open temp file */
-    fs_file_t_init(&g_xfer.file);
-    int ret = fs_open(&g_xfer.file, TEMP_APP_PATH, FS_O_CREATE | FS_O_WRITE | FS_O_TRUNC);
-    if (ret < 0)
+    /* Allocate heap buffer for the incoming data */
+    g_xfer.buf = akira_malloc_buffer(header->total_size);
+    if (!g_xfer.buf)
     {
-        LOG_ERR("Failed to create temp file: %d", ret);
-        return ret;
+        LOG_ERR("bt_xfer: cannot allocate %u B", header->total_size);
+        return -ENOMEM;
     }
-    g_xfer.file_open = true;
 
     g_xfer.state = BT_APP_XFER_RECEIVING;
     LOG_INF("Starting transfer: %s (%u bytes)", g_xfer.app_name, g_xfer.total_size);
@@ -182,13 +174,6 @@ static int finalize_transfer(void)
     }
 
     g_xfer.state = BT_APP_XFER_VALIDATING;
-
-    /* Close file */
-    if (g_xfer.file_open)
-    {
-        fs_close(&g_xfer.file);
-        g_xfer.file_open = false;
-    }
 
     /* Verify size */
     if (g_xfer.received_bytes != g_xfer.total_size)
@@ -214,7 +199,29 @@ static int finalize_transfer(void)
     g_xfer.state = BT_APP_XFER_INSTALLING;
     LOG_INF("Installing app: %s", g_xfer.app_name);
 
-    int ret = app_manager_install_from_path(TEMP_APP_PATH);
+    /* Data is already in the heap buffer — dispatch based on format */
+    uint8_t *pkg = g_xfer.buf;
+    size_t pkg_len = g_xfer.total_size;
+    int ret;
+
+    if (akpkg_is_gzip(pkg, pkg_len))
+    {
+        LOG_INF("bt_xfer: detected .akpkg format");
+        char name_buf[APP_NAME_MAX_LEN];
+        strncpy(name_buf, g_xfer.app_name, sizeof(name_buf) - 1);
+        name_buf[sizeof(name_buf) - 1] = '\0';
+        ret = app_manager_install_akpkg(name_buf, sizeof(name_buf),
+                                        pkg, pkg_len,
+                                        APP_SOURCE_BLE);
+        /* Write back resolved name so callback sees manifest name */
+        strncpy(g_xfer.app_name, name_buf, sizeof(g_xfer.app_name) - 1);
+    }
+    else
+    {
+        ret = app_manager_install(g_xfer.app_name, pkg, pkg_len,
+                                  NULL, APP_SOURCE_BLE);
+    }
+
     if (ret < 0)
     {
         LOG_ERR("Install failed: %d", ret);
@@ -237,9 +244,6 @@ static int finalize_transfer(void)
     {
         g_xfer.callback(true, g_xfer.app_name, 0);
     }
-
-    /* Cleanup temp file */
-    fs_unlink(TEMP_APP_PATH);
 
     /* Reset to idle */
     g_xfer.state = BT_APP_XFER_IDLE;
@@ -274,16 +278,8 @@ static ssize_t rx_data_write(struct bt_conn *conn,
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
 
-    /* Write to file */
-    ssize_t written = fs_write(&g_xfer.file, buf, len);
-    if (written != len)
-    {
-        LOG_ERR("Write failed: %d", (int)written);
-        k_mutex_unlock(&xfer_mutex);
-        g_xfer.state = BT_APP_XFER_ERROR;
-        send_status(BT_APP_STATUS_ERROR, 0);
-        return BT_GATT_ERR(BT_ATT_ERR_UNLIKELY);
-    }
+    /* Copy chunk into heap buffer */
+    memcpy(g_xfer.buf + g_xfer.received_bytes, buf, len);
 
     /* Update CRC */
     g_xfer.running_crc = crc32_ieee_update(g_xfer.running_crc, buf, len);
@@ -296,6 +292,19 @@ static ssize_t rx_data_write(struct bt_conn *conn,
     k_mutex_unlock(&xfer_mutex);
     return len;
 }
+
+/* Work handler that runs finalize_transfer on the system workqueue.
+ * This avoids a stack overflow on the BT RX WQ (2 KB) by executing
+ * the heavy install chain on the sys workqueue (4 KB). */
+static void finalize_work_handler(struct k_work *work)
+{
+    ARG_UNUSED(work);
+    k_mutex_lock(&xfer_mutex, K_FOREVER);
+    finalize_transfer();
+    k_mutex_unlock(&xfer_mutex);
+}
+
+static K_WORK_DEFINE(g_finalize_work, finalize_work_handler);
 
 static ssize_t control_write(struct bt_conn *conn,
                              const struct bt_gatt_attr *attr,
@@ -336,7 +345,7 @@ static ssize_t control_write(struct bt_conn *conn,
         break;
 
     case BT_APP_CMD_COMMIT:
-        finalize_transfer();
+        k_work_submit(&g_finalize_work);
         break;
 
     case BT_APP_CMD_STATUS:
@@ -347,6 +356,57 @@ static ssize_t control_write(struct bt_conn *conn,
             progress = (g_xfer.received_bytes * 100) / g_xfer.total_size;
         }
         send_status(BT_APP_STATUS_OK, progress);
+    }
+    break;
+
+    case BT_APP_CMD_APP_START:
+    {
+        if (len < 2)
+        {
+            k_mutex_unlock(&xfer_mutex);
+            return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
+        }
+        char name[32] = {0};
+        strncpy(name, (const char *)&data[1],
+                MIN((int)(len - 1), (int)sizeof(name) - 1));
+        k_mutex_unlock(&xfer_mutex);
+        int ret = app_manager_start(name);
+        k_mutex_lock(&xfer_mutex, K_FOREVER);
+        send_status(ret < 0 ? BT_APP_STATUS_ERROR : BT_APP_STATUS_OK, 0);
+    }
+    break;
+
+    case BT_APP_CMD_APP_STOP:
+    {
+        if (len < 2)
+        {
+            k_mutex_unlock(&xfer_mutex);
+            return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
+        }
+        char name[32] = {0};
+        strncpy(name, (const char *)&data[1],
+                MIN((int)(len - 1), (int)sizeof(name) - 1));
+        k_mutex_unlock(&xfer_mutex);
+        int ret = app_manager_stop(name);
+        k_mutex_lock(&xfer_mutex, K_FOREVER);
+        send_status(ret < 0 ? BT_APP_STATUS_ERROR : BT_APP_STATUS_OK, 0);
+    }
+    break;
+
+    case BT_APP_CMD_APP_DELETE:
+    {
+        if (len < 2)
+        {
+            k_mutex_unlock(&xfer_mutex);
+            return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
+        }
+        char name[32] = {0};
+        strncpy(name, (const char *)&data[1],
+                MIN((int)(len - 1), (int)sizeof(name) - 1));
+        k_mutex_unlock(&xfer_mutex);
+        int ret = app_manager_uninstall(name);
+        k_mutex_lock(&xfer_mutex, K_FOREVER);
+        send_status(ret < 0 ? BT_APP_STATUS_ERROR : BT_APP_STATUS_OK, 0);
     }
     break;
 

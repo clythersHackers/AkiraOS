@@ -4,6 +4,8 @@
  *
  * Provides a simple buffer pool without Zephyr NET_BUF dependency.
  * Configuration: 8 buffers x 1536 bytes = 12KB total pool size.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_BUF_POOL_H

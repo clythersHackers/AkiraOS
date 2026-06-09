@@ -8,6 +8,8 @@
  * - Local web server
  *
  * All sources use the same message format for consistency.
+ * @stability experimental
+ * @since 1.5
  */
 
 #ifndef AKIRA_CLOUD_PROTOCOL_H

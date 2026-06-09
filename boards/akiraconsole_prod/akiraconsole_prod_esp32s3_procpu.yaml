@@ -1,0 +1,19 @@
+identifier: akiraconsole_prod/esp32s3/procpu
+name: AkiraConsole Production PROCPU
+type: mcu
+arch: xtensa
+toolchain:
+  - zephyr
+supported:
+  - gpio
+  - uart
+  - i2c
+  - spi
+  - watchdog
+  - entropy
+  - pwm
+  - dma
+  - input
+  - crypto
+  - sensor
+vendor: penengineering

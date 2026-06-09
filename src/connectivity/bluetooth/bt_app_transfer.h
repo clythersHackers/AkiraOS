@@ -10,6 +10,8 @@
  *   - RX_DATA:   Write without response - receives app chunks
  *   - TX_STATUS: Notify - transfer status updates
  *   - CONTROL:   Write - transfer control (start/abort/commit)
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef BT_APP_TRANSFER_H
@@ -41,10 +43,13 @@ extern "C"
      */
     typedef enum
     {
-        BT_APP_CMD_START = 0x01,  /**< Start new transfer */
-        BT_APP_CMD_ABORT = 0x02,  /**< Abort current transfer */
-        BT_APP_CMD_COMMIT = 0x03, /**< Finalize and install */
-        BT_APP_CMD_STATUS = 0x04  /**< Request status update */
+        BT_APP_CMD_START = 0x01,      /**< Start new transfer */
+        BT_APP_CMD_ABORT = 0x02,      /**< Abort current transfer */
+        BT_APP_CMD_COMMIT = 0x03,     /**< Finalize and install */
+        BT_APP_CMD_STATUS = 0x04,     /**< Request status update */
+        BT_APP_CMD_APP_START = 0x05,  /**< Start installed app by name */
+        BT_APP_CMD_APP_STOP = 0x06,   /**< Stop running app by name */
+        BT_APP_CMD_APP_DELETE = 0x07, /**< Uninstall app by name */
     } bt_app_cmd_t;
 
     /**

@@ -5,6 +5,11 @@
  * and is robust against whitespace and simple escapes.
  */
 
+/**
+ * @file simple_json.h
+ * @stability stable
+ * @since 1.4
+ */
 #ifndef SIMPLE_JSON_H
 #define SIMPLE_JSON_H
 

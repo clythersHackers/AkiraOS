@@ -1,6 +1,8 @@
 /**
  * @file akira_common_api.h
  * @brief Common API declarations for WASM exports
+ * @stability stable
+ * @since 1.0
  */
 
 #ifndef AKIRA_COMMON_API_H

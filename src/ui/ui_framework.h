@@ -4,6 +4,8 @@
  * 
  * Lightweight UI framework for embedded displays.
  * Supports widgets, layouts, and touch/button input.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_UI_FRAMEWORK_H

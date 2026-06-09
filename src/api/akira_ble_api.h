@@ -27,6 +27,8 @@
  *       int evt = ble_event_pop(buf, sizeof(buf));
  *       if (evt == BLE_EVT_CHAR_WRITTEN) { ... }
  *   }
+ * @stability stable
+ * @since 1.4
  */
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME

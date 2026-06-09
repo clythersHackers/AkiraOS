@@ -1,6 +1,8 @@
 /**
  * @file akira_memory_api.h
  * @brief Memory API declarations for WASM exports
+ * @stability stable
+ * @since 1.2
  */
 
 #ifndef AKIRA_MEMORY_API_H

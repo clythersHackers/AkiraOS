@@ -11,6 +11,8 @@
  * No callbacks — apps poll elapsed time and call delay() to yield.
  * All handles are process-scoped: a WASM app cannot access timers
  * created by another app instance.
+ * @stability stable
+ * @since 1.3
  */
 
 #ifndef AKIRA_TIMER_API_H

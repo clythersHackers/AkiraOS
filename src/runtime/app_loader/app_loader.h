@@ -1,3 +1,8 @@
+/**
+ * @file app_loader.h
+ * @stability experimental
+ * @since 1.4
+ */
 #ifndef AKIRA_APP_LOADER_H
 #define AKIRA_APP_LOADER_H
 

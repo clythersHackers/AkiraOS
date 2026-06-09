@@ -7,6 +7,8 @@
  * - REST API
  * - OTA uploads (when requested)
  * - Real-time data streaming (WebSocket)
+ * @stability experimental
+ * @since 1.5
  */
 
 #ifndef AKIRA_HTTP_SERVER_H
@@ -75,6 +77,12 @@ extern "C"
         http_content_type_t content_type;
         size_t content_length;
 
+        /* Raw request buffer — used by handlers that need header access
+         * (e.g. Authorization: Bearer check) or streaming recv */
+        const char *raw;
+        /** Socket fd — allows streaming handlers to recv remaining body */
+        int client_fd;
+
         /* Headers access */
         const char *(*get_header)(const char *name);
     } http_request_t;
@@ -84,6 +92,10 @@ extern "C"
     {
         int status_code;
         http_content_type_t content_type;
+
+        /* Simple response: handler sets body + optional body_len (0 = auto strlen) */
+        const char *body;
+        size_t body_len;
 
         int (*set_header)(const char *name, const char *value);
         int (*send)(const char *data, size_t len);
@@ -116,7 +128,7 @@ extern "C"
     typedef struct
     {
         http_method_t method;
-        const char *path; /**< Path pattern (supports wildcards: /api/*) */
+        const char *path; /**< Path pattern (supports wildcards, e.g. /api/x) */
         http_handler_t handler;
         void *user_data;
     } http_route_t;
@@ -193,6 +205,14 @@ extern "C"
      * @param ip_address IP address string
      */
     void akira_http_notify_network(bool connected, const char *ip_address);
+
+    /**
+     * @brief Set the JSON response string to be sent after a streaming upload
+     *        completes. Called from within an upload_chunk_cb_t on the last chunk.
+     * @param json Pointer to a null-terminated JSON string (must remain valid
+     *             until the HTTP response is sent — use a static buffer).
+     */
+    void akira_http_set_upload_response(const char *json);
 
     /*===========================================================================*/
     /* WebSocket API                                                             */

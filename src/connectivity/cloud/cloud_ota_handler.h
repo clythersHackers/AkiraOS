@@ -8,6 +8,8 @@
  * - Local web server
  *
  * Integrates with OTA manager for flashing.
+ * @stability experimental
+ * @since 1.5
  */
 
 #ifndef AKIRA_CLOUD_OTA_HANDLER_H

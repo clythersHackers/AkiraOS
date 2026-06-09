@@ -8,6 +8,8 @@
  * - App management commands (install, start, stop, uninstall)
  *
  * Integrates with app_loader and wasm_app_manager.
+ * @stability experimental
+ * @since 1.5
  */
 
 #ifndef AKIRA_CLOUD_APP_HANDLER_H

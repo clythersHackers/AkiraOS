@@ -13,3 +13,10 @@ description: |
 compatible: "akira,lsm6ds3"
 
 include: [sensor-device.yaml, i2c-device.yaml]
+
+properties:
+  irq-gpios:
+    type: phandle-array
+    description: |
+      GPIO connected to INT1 (interrupt output, push-pull by default).
+      Used for free-fall detection, activity detection, and data-ready events.

@@ -20,6 +20,8 @@ extern "C" {
  * the auto-feed worker that pets it every CONFIG_AKIRA_WDT_FEED_INTERVAL_MS.
  *
  * @return 0 on success, negative error code on failure.
+ * @stability stable
+ * @since 1.4
  */
 int akira_wdt_init(void);
 

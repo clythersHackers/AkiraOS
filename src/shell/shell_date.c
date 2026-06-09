@@ -33,7 +33,8 @@ LOG_MODULE_REGISTER(akira_date, CONFIG_AKIRA_LOG_LEVEL);
 
 #ifdef CONFIG_AKIRA_SETTINGS
 #include <settings/settings.h>
-#define TIME_BASE_KEY  "system/time_base"
+#include <settings/system_settings.h>
+#define TIME_BASE_KEY  AKIRA_SETTINGS_TIME_BASE_KEY
 #endif
 
 /* Offset such that: real_epoch = s_time_base + uptime_s */
@@ -157,7 +158,12 @@ static void format_datetime(int64_t epoch, char *buf, size_t len)
     }
     int d = (int)days + 1;
 
-    snprintf(buf, len, "%04d-%02d-%02d %02d:%02d:%02d", y, mo, d, h, mi, s);
+    /* Use a fixed-size local buffer so the compiler can verify no truncation,
+     * then copy to the caller-supplied buffer. */
+    char tmp[64];
+    snprintf(tmp, sizeof(tmp), "%04d-%02d-%02d %02d:%02d:%02d", y, mo, d, h, mi, s);
+    strncpy(buf, tmp, len - 1);
+    buf[len - 1] = '\0';
 }
 
 /* ------------------------------------------------------------------ */
@@ -169,7 +175,7 @@ static int cmd_date_get(const struct shell *sh, size_t argc, char **argv)
     ARG_UNUSED(argv);
 
     int64_t epoch = akira_time_get_epoch();
-    char buf[24];
+    char buf[32];
 
     if (!s_clock_set) {
         shell_print(sh, "Clock not set (showing uptime)");
@@ -194,7 +200,7 @@ static int cmd_date_set(const struct shell *sh, size_t argc, char **argv)
 
     akira_time_set_epoch(epoch);
 
-    char buf[24];
+    char buf[32];
     format_datetime(epoch, buf, sizeof(buf));
     shell_print(sh, "Clock set: %s", buf);
     return 0;

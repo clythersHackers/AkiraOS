@@ -3,6 +3,8 @@
  * @brief USB Mass Storage Manager for App Discovery
  *
  * Handles USB storage mounting and WASM app scanning.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_USB_STORAGE_H

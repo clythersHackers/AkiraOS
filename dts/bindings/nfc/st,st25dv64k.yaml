@@ -1,0 +1,55 @@
+# Copyright (c) 2026 AkiraOS Project
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  STMicroelectronics ST25DV64K Dynamic NFC/RFID Tag with EEPROM.
+
+  The IC has two I2C addresses on the same bus:
+    - reg (this node)   : user memory, FTM mailbox (default 0x53)
+    - system-reg        : system configuration registers (default 0x57)
+
+  All configuration applied at init is taken from device-tree; no
+  driver changes required when GPO sources or I2C addresses differ.
+
+compatible: "st,st25dv64k"
+
+include: i2c-device.yaml
+
+properties:
+
+  system-reg:
+    type: int
+    required: false
+    default: 0x57
+    description: |
+      7-bit I2C address for the system configuration register space.
+      On a standard ST25DV64K this is always 0x57 (user reg + 4).
+      Override only if an alternative address variant is used.
+
+  gpo-gpios:
+    type: phandle-array
+    required: false
+    description: |
+      GPIO connected to the GPO pin (open-drain, active low).
+      Signals RF field presence, write completion, or mailbox events
+      depending on the akira,gpo-sources bitmask below.
+      On AkiraConsole Production: NFC_INT → GPIO21.
+
+  akira,gpo-sources:
+    type: int
+    required: false
+    default: 0x89
+    description: |
+      Bitmask of GPO interrupt sources enabled at driver init.
+      Each bit corresponds to one GPO_CTRL register source:
+        Bit 0 (0x01): RF user-memory write completed
+        Bit 1 (0x02): Any RF activity
+        Bit 2 (0x04): RF interrupt command received
+        Bit 3 (0x08): RF field rising edge (field appears)
+        Bit 4 (0x10): RF field falling edge (field disappears)
+        Bit 5 (0x20): RF put message into FTM mailbox
+        Bit 6 (0x40): RF get message from FTM mailbox
+        Bit 7 (0x80): Master GPO enable (must be set for any output)
+
+      Default 0x89 = GPO_ENABLE | GPO_FIELDRISING | GPO_RFUSERWRITE.
+      Set to 0x00 to leave GPO unconfigured (driven by application).

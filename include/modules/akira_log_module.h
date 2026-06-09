@@ -3,6 +3,8 @@
  * @brief Modular WASM Logging API for AkiraOS (WAMR)
  *
  * Declares the registration function for the log module.
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef AKIRA_LOG_MODULE_H

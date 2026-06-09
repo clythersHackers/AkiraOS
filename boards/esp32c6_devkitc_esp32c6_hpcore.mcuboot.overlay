@@ -1,0 +1,37 @@
+/*
+ * SPDX-FileCopyrightText: 2025 Akira Technology
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Minimal MCUboot overlay for esp32c6_devkitc/esp32c6/hpcore.
+ *
+ * The ESP32-C6 base DTS enables wifi, ieee802154, and esp32_bt_hci which pull
+ * in modem_clock HAL functions (~0x390 B) with IRAM_ATTR, overflowing the
+ * 48 KB iram_seg.  MCUboot only needs the flash driver; all radio drivers are
+ * disabled here to fit within the bootloader IRAM budget.
+ */
+
+&wifi {
+	status = "disabled";
+};
+
+&ieee802154 {
+	status = "disabled";
+};
+
+&esp32_bt_hci {
+	status = "disabled";
+};
+
+&flash0 {
+	partitions {
+		akira_settings_nvs_partition: partition@400000 {
+			label = "akira_settings_nvs";
+			reg = <0x00400000 DT_SIZE_K(32)>;
+		};
+
+		lfs1_partition: partition@408000 {
+			label = "lfs_storage";
+			reg = <0x00408000 DT_SIZE_K(512)>;
+		};
+	};
+};

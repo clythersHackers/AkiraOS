@@ -6,7 +6,9 @@
  * Implements Thread network formation, joining, and border router functionality.
  *
  * @copyright Copyright (c) 2026 PenEngineering S.R.L
-*/
+ * @stability experimental
+ * @since 1.5
+ */
 
 #ifndef AKIRA_THREAD_MANAGER_H
 #define AKIRA_THREAD_MANAGER_H

@@ -6,6 +6,8 @@
 /**
  * @file power_manager.h
  * @brief AkiraOS Power Management — sleep modes, battery, wake sources.
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef AKIRA_POWER_MANAGER_H

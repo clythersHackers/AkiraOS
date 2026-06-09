@@ -7,6 +7,8 @@
  * - Bluetooth (BLE OTA)
  * - USB (USB OTA)
  * - Cloud (future AkiraHub)
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_OTA_TRANSPORT_H

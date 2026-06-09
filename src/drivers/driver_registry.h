@@ -4,6 +4,8 @@
  * 
  * Allows runtime driver registration and lookup.
  * Decouples API layer from specific driver implementations.
+ * @stability stable
+ * @since 1.3
  */
 
 #ifndef AKIRA_DRIVER_REGISTRY_H

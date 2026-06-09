@@ -3,6 +3,8 @@
  * @brief Modular WASM Time API for AkiraOS (WAMR)
  *
  * Declares the registration function for the time module.
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef AKIRA_TIME_MODULE_H

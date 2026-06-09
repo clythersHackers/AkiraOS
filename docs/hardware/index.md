@@ -14,18 +14,17 @@ AkiraOS custom hardware designs and specifications.
 
 Handheld gaming console powered by AkiraOS.
 
-**Location:** `/docs/AkiraConsole/`
 
-- [3D Model](../AkiraConsole/Akira.stl)
-- [Schematic](../AkiraConsole/Schematic_Akira_Console.pdf)
+- [SD Card Setup](sd-card.md)
 
 ### Specifications
 
 - **Platform:** ESP32-S3
-- **Display:** 2.8" TFT LCD
+- **Display:** 2.8" TFT LCD 
 - **Input:** D-pad + 4 buttons
-- **Battery:** LiPo rechargeable
-- **Connectivity:** WiFi + Bluetooth
+- **Storage:** microSD card slot (FAT32, up to 32 GB)
+- **Battery:** LiPo rechargeable with fuel gauge and bettery control accesible fromm software
+- **Connectivity:** WiFi + Bluetooth + LoRa 2.4 and 868/915 + SubGHz + NFC 
 
 ---
 
@@ -33,18 +32,15 @@ Handheld gaming console powered by AkiraOS.
 
 Compact wearable platform.
 
-**Location:** `/docs/AkiraMicro/`
-
-- [3D Model](../AkiraMicro/AkiraMicro.stl)
-- [Schematic](../AkiraMicro/Schematic_Akira_Micro.pdf)
+**Coming soon...:** `/docs/AkiraMicro/`
 
 ### Specifications
 
-- **Platform:** ESP32-C3
+- **Platform:** ESP32-C6
 - **Display:** 1.3" OLED
-- **Sensors:** IMU, temperature
-- **Battery:** Coin cell
-- **Form Factor:** Watch-style
+- **Sensors:** ???
+- **Battery:** ???
+- **Form Factor:** ???
 
 ---
 
@@ -52,27 +48,43 @@ Compact wearable platform.
 
 See [Platform Guides](../platform) for supported development kits:
 
-- ESP32-S3 DevKitM
-- nRF54L15 DK
-- STM32 Discovery boards
+- ESP32 boards
+- nRF boards
+- STM32 boards
 
 ---
 
 ## Custom Hardware
 
-AkiraOS can run on custom hardware with:
-- Zephyr RTOS support
-- Minimum 256KB RAM
-- 2MB+ flash
-- Optional PSRAM for multiple apps
+AkiraOS can run on custom hardware. OEM porting resources:
 
-Add board overlays and configuration files under the `boards/` directory to target new hardware.
+- [**Porting Guide**](porting-guide.md) — end-to-end walkthrough: BSP files, display, WASM runtime, OTA, and a day-by-day week plan to first running app.
+- [**BSP Template Scaffold**](../../boards/template/) — copy-and-rename starting point with FIXME markers for GPIO, SPI, I2C, PSRAM, display, and flash partitions.
+
+### Using AkiraOS as a west module
+
+Third-party projects can import AkiraOS without forking:
+
+```yaml
+# your-project/west.yml
+manifest:
+  projects:
+    - name: akira-os
+      url: https://github.com/your-org/AkiraOS.git
+      revision: v1.5.6
+      path: akira-os
+  self:
+    path: my-app
+```
+
+After `west update`, board definitions, DTS bindings, Kconfig symbols, and the
+full WASM runtime are available automatically — no `-DMODULE_EXT_ROOT` needed.
 
 ---
 
 ## Schematics & Design Files
 
-All hardware designs are open source.
+Aki hardware designs are open source.
 
 **License:** [CERN Open Hardware License](https://ohwr.org/cern_ohl_s_v2.txt)
 

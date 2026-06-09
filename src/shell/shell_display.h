@@ -1,6 +1,8 @@
 /**
  * @file shell_display.h
  * @brief Shell output rendering on ILI9341 display
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef SHELL_DISPLAY_H

@@ -5,6 +5,8 @@
  * Provides a unified, zero-copy data dispatch mechanism for different
  * data types (WASM apps, firmware, files, config). Uses O(1) lookup
  * with a thread-safe registry supporting up to 8 handlers.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef TRANSPORT_INTERFACE_H

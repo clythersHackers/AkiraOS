@@ -4,6 +4,8 @@
  *
  * Centralized path handling to ensure consistent security checks
  * across storage, filesystem, and app management modules.
+ * @stability stable
+ * @since 1.3
  */
 
 #ifndef AKIRA_PATH_UTILS_H

@@ -6,6 +6,8 @@
 /**
  * @file akira_display_api.h
  * @brief Display API declarations for WASM native exports.
+ * @stability stable
+ * @since 1.2
  */
 
 #ifndef AKIRA_DISPLAY_API_H

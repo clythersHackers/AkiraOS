@@ -19,6 +19,8 @@ extern "C" {
  * If the clock has been set via akira_time_set_epoch(), returns the real
  * wall-clock time derived from the stored offset.  Otherwise returns
  * (k_uptime_get() / 1000), i.e. seconds since boot.
+ * @stability stable
+ * @since 1.3
  */
 int64_t akira_time_get_epoch(void);
 

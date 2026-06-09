@@ -1,0 +1,19 @@
+# FIXME: Rename this file to Kconfig.<your-board-name>
+# Board Kconfig configuration
+# Copyright (c) FIXME: Year  FIXME: Your Name / Company
+# SPDX-License-Identifier: Apache-2.0
+
+# FIXME: Replace BOARD_TEMPLATE with BOARD_<YOUR_BOARD_NAME_UPPER>.
+# The name must match the uppercase version of the board name in board.yml.
+# Example (board name "my_sensor_node"): config BOARD_MY_SENSOR_NODE
+config BOARD_TEMPLATE
+	# FIXME: Replace SOC_FIXME with your SoC Kconfig symbol. Examples:
+	#   ESP32-S3 N8 module:      SOC_ESP32S3_MINI_N8
+	#   ESP32-S3 WROOM-1 N16R8: SOC_ESP32S3_MINI_N8   (same symbol, flash set in conf)
+	#   Nordic nRF54L15 app:     SOC_NRF54L15_CPUAPP
+	#   STM32U585:               SOC_STM32U585XX
+	#   STM32L476:               SOC_STM32L476XX
+	#
+	# Browse zephyr/soc/ tree for the full list. The symbol is defined in
+	# the Kconfig file inside the SoC directory.
+	select SOC_FIXME

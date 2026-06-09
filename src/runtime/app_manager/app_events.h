@@ -4,6 +4,8 @@
  * 
  * Breaks circular dependency between app_manager and akira_runtime
  * by using event-driven architecture.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_APP_EVENTS_H

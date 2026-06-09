@@ -1,0 +1,26 @@
+# FIXME: Rename to <your-board-name>_<soc>_<cpu>_defconfig
+# Minimum Kconfig symbols required to boot.
+# These are baked into the board and cannot be overridden by prj.conf.
+# Only put symbols here that are always required regardless of application config.
+# All feature-specific settings (WiFi, BT, display, WASM tuning) belong in
+# boards/template_procpu.conf (the application overlay conf).
+#
+# SPDX-License-Identifier: Apache-2.0
+
+CONFIG_CONSOLE=y
+CONFIG_SERIAL=y
+CONFIG_UART_CONSOLE=y
+CONFIG_GPIO=y
+CONFIG_CLOCK_CONTROL=y
+
+# FIXME: Add SoC-specific mandatory symbols here.  Examples:
+#
+# ESP32 family:
+#   CONFIG_XIP=n                    # ESP32 loads from flash via ROM, not XIP
+#   CONFIG_ESP_SPIRAM=n             # disabled until PSRAM is confirmed in hardware
+#
+# Nordic nRF54L:
+#   CONFIG_CLOCK_CONTROL_NRF=y
+#
+# STM32:
+#   CONFIG_CLOCK_CONTROL_STM32_CUBE=y

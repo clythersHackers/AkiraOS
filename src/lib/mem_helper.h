@@ -4,6 +4,8 @@
  *
  * Provides a unified allocation API that attempts PSRAM first,
  * falling back to internal SRAM when PSRAM is unavailable.
+ * @stability stable
+ * @since 1.2
  */
 
 #ifndef AKIRA_MEM_HELPER_H

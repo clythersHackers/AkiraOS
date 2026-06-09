@@ -23,6 +23,8 @@
  *   6. ble_app_char_write(char_h, data, len)   // notify peer
  *   7. ble_app_event_pop(evt)                  // drain event queue
  *   8. ble_app_svc_deinit()
+ * @stability experimental
+ * @since 1.4
  */
 
 #include <stdint.h>

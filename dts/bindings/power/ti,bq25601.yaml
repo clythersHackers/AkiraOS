@@ -1,0 +1,23 @@
+# Copyright (c) 2026 AkiraOS Project
+# SPDX-License-Identifier: Apache-2.0
+
+description: BQ25601 I2C-controlled 3A Li-Ion battery charger (TI)
+
+compatible: "ti,bq25601"
+
+include: i2c-device.yaml
+
+properties:
+  constant-charge-current-max-microamp:
+    type: int
+    description: Maximum constant charge current in microamperes.
+
+  constant-charge-voltage-max-microvolt:
+    type: int
+    description: Maximum constant charge voltage in microvolts.
+
+  int-gpios:
+    type: phandle-array
+    description: |
+      GPIO connected to the ~INT / STAT pin (active low interrupt).
+      Asserted when a fault or status change occurs.

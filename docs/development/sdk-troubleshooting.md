@@ -1,6 +1,6 @@
 # Akira SDK Troubleshooting
 
-> **The canonical Troubleshooting guide lives in the [AkiraSDK submodule](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/TROUBLESHOOTING.md).**
+> **The canonical Troubleshooting guide lives in the [AkiraSDK submodule](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.5.x/docs/TROUBLESHOOTING.md).**
 >
 > To avoid duplicating content that evolves with the SDK, this guide is maintained in AkiraSDK. Refer to it directly — the local copy in the submodule is always in sync.
 
@@ -8,7 +8,7 @@
 
 | Location | Path |
 |----------|------|
-| **Online (canonical)** | [github.com/ArturR0k3r/AkiraSDK — TROUBLESHOOTING.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.4.x/docs/TROUBLESHOOTING.md) |
+| **Online (canonical)** | [github.com/ArturR0k3r/AkiraSDK — TROUBLESHOOTING.md](https://github.com/ArturR0k3r/AkiraSDK/blob/v1.5.x/docs/TROUBLESHOOTING.md) |
 | **Local submodule** | `AkiraSDK/docs/TROUBLESHOOTING.md` |
 
 ## Topics Covered

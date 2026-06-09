@@ -1,6 +1,8 @@
 /**
  * @file lvgl_input_driver.h
  * @brief LVGL input driver for touch/buttons
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef LVGL_INPUT_DRIVER_H

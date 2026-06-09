@@ -42,17 +42,16 @@ static uint32_t *shared_buttons = NULL;
 /* On hardware platforms the framebuffer lives in SPIRAM/PSRAM.
  * ESP32 family uses CONFIG_ESP_SPIRAM + __attribute__((section(".ext_ram.bss"))).
  * Other platforms with Zephyr MEMC/PSRAM support use CONFIG_AKIRA_FRAMEBUFFER_IN_PSRAM.
- * 320×240×2 = 153 600 B — fits easily in the 8 MB SPIRAM on AkiraConsole.
+ * 400×240×2 = 192 000 B — sized for the largest supported display (Sharp LS027B7DH01
+ * 400×240).  Boards with smaller displays simply leave the tail unused.
  */
+#define AKIRA_FB_MAX_PIXELS (400 * 240)
 #if defined(CONFIG_ESP_SPIRAM)
-__attribute__((section(".ext_ram.bss"), aligned(4)))
-static uint16_t hw_framebuffer[320 * 240];
+__attribute__((section(".ext_ram.bss"), aligned(4))) static uint16_t hw_framebuffer[AKIRA_FB_MAX_PIXELS];
 #elif defined(CONFIG_AKIRA_FRAMEBUFFER_IN_PSRAM) && defined(CONFIG_MEMC)
-__attribute__((section(".ext_ram.bss"), aligned(4)))
-static uint16_t hw_framebuffer[320 * 240];
-#else
-static uint16_t hw_framebuffer[1]; /* placeholder — no SPIRAM on this target */
+__attribute__((section(".ext_ram.bss"), aligned(4))) static uint16_t hw_framebuffer[AKIRA_FB_MAX_PIXELS];
 #endif
+/* On targets without SPIRAM/MEMC, akira_framebuffer_get() returns NULL — no buffer needed. */
 
 int akira_hal_init(void)
 {
@@ -130,7 +129,8 @@ int akira_hal_init(void)
 #if defined(CONFIG_DISPLAY)
     {
         int ret = akira_display_hal_init();
-        if (ret < 0 && ret != -ENOTSUP) {
+        if (ret < 0 && ret != -ENOTSUP)
+        {
             LOG_WRN("Display HAL initialization failed: %d", ret);
         }
     }
@@ -142,7 +142,8 @@ int akira_hal_init(void)
 #if defined(CONFIG_DISPLAY)
     {
         int ret = akira_display_hal_init();
-        if (ret < 0 && ret != -ENOTSUP) {
+        if (ret < 0 && ret != -ENOTSUP)
+        {
             LOG_WRN("Display HAL initialization failed: %d", ret);
         }
     }
@@ -154,7 +155,8 @@ int akira_hal_init(void)
 #if defined(CONFIG_DISPLAY)
     {
         int ret = akira_display_hal_init();
-        if (ret < 0 && ret != -ENOTSUP) {
+        if (ret < 0 && ret != -ENOTSUP)
+        {
             LOG_WRN("Display HAL initialization failed: %d", ret);
         }
     }
@@ -166,7 +168,8 @@ int akira_hal_init(void)
 #if defined(CONFIG_DISPLAY)
     {
         int ret = akira_display_hal_init();
-        if (ret < 0 && ret != -ENOTSUP) {
+        if (ret < 0 && ret != -ENOTSUP)
+        {
             LOG_WRN("Display HAL initialization failed: %d", ret);
         }
     }
@@ -239,9 +242,11 @@ const struct device *akira_get_gpio_device(const char *label)
     return &sim_gpio_dev;
 #elif AKIRA_PLATFORM_STM32
     /* STM32 uses gpioa, gpiob, gpioc, etc. Try DT alias for generic gpio0 */
-    if (label && strcmp(label, "gpio0") == 0) {
+    if (label && strcmp(label, "gpio0") == 0)
+    {
         const struct device *dev = DEVICE_DT_GET_OR_NULL(DT_NODELABEL(gpio0));
-        if (dev && device_is_ready(dev)) {
+        if (dev && device_is_ready(dev))
+        {
             return dev;
         }
         LOG_WRN("gpio0 alias not available on this board");

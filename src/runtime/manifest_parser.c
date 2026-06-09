@@ -23,21 +23,21 @@
 LOG_MODULE_REGISTER(manifest_parser, CONFIG_AKIRA_LOG_LEVEL);
 
 /* WASM section IDs */
-#define WASM_SECTION_CUSTOM     0
-#define WASM_SECTION_TYPE       1
-#define WASM_SECTION_IMPORT     2
-#define WASM_SECTION_FUNCTION   3
-#define WASM_SECTION_TABLE      4
-#define WASM_SECTION_MEMORY     5
-#define WASM_SECTION_GLOBAL     6
-#define WASM_SECTION_EXPORT     7
-#define WASM_SECTION_START      8
-#define WASM_SECTION_ELEMENT    9
-#define WASM_SECTION_CODE       10
-#define WASM_SECTION_DATA       11
+#define WASM_SECTION_CUSTOM 0
+#define WASM_SECTION_TYPE 1
+#define WASM_SECTION_IMPORT 2
+#define WASM_SECTION_FUNCTION 3
+#define WASM_SECTION_TABLE 4
+#define WASM_SECTION_MEMORY 5
+#define WASM_SECTION_GLOBAL 6
+#define WASM_SECTION_EXPORT 7
+#define WASM_SECTION_START 8
+#define WASM_SECTION_ELEMENT 9
+#define WASM_SECTION_CODE 10
+#define WASM_SECTION_DATA 11
 
 /* Custom section name we're looking for */
-#define AKIRA_MANIFEST_SECTION  ".akira.manifest"
+#define AKIRA_MANIFEST_SECTION ".akira.manifest"
 
 /**
  * @brief Read LEB128 unsigned integer from WASM binary
@@ -48,17 +48,19 @@ static size_t read_leb128_u32(const uint8_t *data, size_t max_len, uint32_t *res
     size_t shift = 0;
     size_t i = 0;
 
-    while (i < max_len && i < 5) {  /* Max 5 bytes for u32 LEB128 */
+    while (i < max_len && i < 5)
+    { /* Max 5 bytes for u32 LEB128 */
         uint8_t byte = data[i++];
         value |= (uint32_t)(byte & 0x7F) << shift;
-        if ((byte & 0x80) == 0) {
+        if ((byte & 0x80) == 0)
+        {
             *result = value;
             return i;
         }
         shift += 7;
     }
 
-    return 0;  /* Error: incomplete LEB128 */
+    return 0; /* Error: incomplete LEB128 */
 }
 
 /**
@@ -66,7 +68,8 @@ static size_t read_leb128_u32(const uint8_t *data, size_t max_len, uint32_t *res
  */
 static const char *json_skip_ws(const char *p, const char *end)
 {
-    while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) {
+    while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r'))
+    {
         p++;
     }
     return p;
@@ -77,29 +80,48 @@ static const char *json_skip_ws(const char *p, const char *end)
  */
 static const char *json_parse_string(const char *p, const char *end, char *out, size_t out_size)
 {
-    if (p >= end || *p != '"') return NULL;
+    if (p >= end || *p != '"')
+        return NULL;
     p++;
 
     size_t i = 0;
-    while (p < end && *p != '"' && i < out_size - 1) {
-        if (*p == '\\' && p + 1 < end) {
+    while (p < end && *p != '"' && i < out_size - 1)
+    {
+        if (*p == '\\' && p + 1 < end)
+        {
             p++;
-            switch (*p) {
-                case 'n': out[i++] = '\n'; break;
-                case 'r': out[i++] = '\r'; break;
-                case 't': out[i++] = '\t'; break;
-                case '"': out[i++] = '"'; break;
-                case '\\': out[i++] = '\\'; break;
-                default: out[i++] = *p; break;
+            switch (*p)
+            {
+            case 'n':
+                out[i++] = '\n';
+                break;
+            case 'r':
+                out[i++] = '\r';
+                break;
+            case 't':
+                out[i++] = '\t';
+                break;
+            case '"':
+                out[i++] = '"';
+                break;
+            case '\\':
+                out[i++] = '\\';
+                break;
+            default:
+                out[i++] = *p;
+                break;
             }
-        } else {
+        }
+        else
+        {
             out[i++] = *p;
         }
         p++;
     }
     out[i] = '\0';
 
-    if (p >= end || *p != '"') return NULL;
+    if (p >= end || *p != '"')
+        return NULL;
     return p + 1;
 }
 
@@ -109,36 +131,41 @@ static const char *json_parse_string(const char *p, const char *end, char *out, 
 static const char *json_parse_int(const char *p, const char *end, uint32_t *out)
 {
     p = json_skip_ws(p, end);
-    
+
     uint32_t value = 0;
     bool found = false;
 
-    while (p < end && *p >= '0' && *p <= '9') {
+    while (p < end && *p >= '0' && *p <= '9')
+    {
         value = value * 10 + (*p - '0');
         p++;
         found = true;
     }
 
-    if (!found) return NULL;
+    if (!found)
+        return NULL;
     *out = value;
     return p;
 }
 
 void manifest_init_defaults(akira_manifest_t *manifest)
 {
-    if (!manifest) return;
+    if (!manifest)
+        return;
 
     memset(manifest, 0, sizeof(*manifest));
     manifest->cap_mask = 0;
-    manifest->memory_quota = 0;  /* 0 = use default */
+    manifest->memory_quota = 0; /* 0 = use default */
     manifest->name[0] = '\0';
     manifest->version[0] = '\0';
     manifest->valid = false;
+    /* net_policy zeroed by memset — present=false, deny_all=false, counts=0 */
 }
 
 int manifest_parse_json(const char *json, size_t json_len, akira_manifest_t *manifest)
 {
-    if (!json || json_len == 0 || !manifest) {
+    if (!json || json_len == 0 || !manifest)
+    {
         return -EINVAL;
     }
 
@@ -150,36 +177,43 @@ int manifest_parse_json(const char *json, size_t json_len, akira_manifest_t *man
     char str_val[64];
 
     p = json_skip_ws(p, end);
-    if (p >= end || *p != '{') {
+    if (p >= end || *p != '{')
+    {
         LOG_ERR("Invalid JSON: expected '{'");
         return -EINVAL;
     }
     p++;
 
-    while (p < end) {
+    while (p < end)
+    {
         p = json_skip_ws(p, end);
-        if (p >= end) break;
-        
-        if (*p == '}') {
+        if (p >= end)
+            break;
+
+        if (*p == '}')
+        {
             /* End of object */
             manifest->valid = true;
             return 0;
         }
 
-        if (*p == ',') {
+        if (*p == ',')
+        {
             p++;
             continue;
         }
 
         /* Parse key */
         p = json_parse_string(p, end, key, sizeof(key));
-        if (!p) {
+        if (!p)
+        {
             LOG_ERR("Invalid JSON: expected key string");
             return -EINVAL;
         }
 
         p = json_skip_ws(p, end);
-        if (p >= end || *p != ':') {
+        if (p >= end || *p != ':')
+        {
             LOG_ERR("Invalid JSON: expected ':'");
             return -EINVAL;
         }
@@ -187,43 +221,56 @@ int manifest_parse_json(const char *json, size_t json_len, akira_manifest_t *man
         p = json_skip_ws(p, end);
 
         /* Parse value based on key */
-        if (strcmp(key, "name") == 0) {
+        if (strcmp(key, "name") == 0)
+        {
             p = json_parse_string(p, end, manifest->name, sizeof(manifest->name));
-            if (!p) return -EINVAL;
+            if (!p)
+                return -EINVAL;
         }
-        else if (strcmp(key, "version") == 0) {
+        else if (strcmp(key, "version") == 0)
+        {
             p = json_parse_string(p, end, manifest->version, sizeof(manifest->version));
-            if (!p) return -EINVAL;
+            if (!p)
+                return -EINVAL;
         }
-        else if (strcmp(key, "memory_quota") == 0) {
+        else if (strcmp(key, "memory_quota") == 0)
+        {
             p = json_parse_int(p, end, &manifest->memory_quota);
-            if (!p) return -EINVAL;
+            if (!p)
+                return -EINVAL;
         }
-        else if (strcmp(key, "capabilities") == 0) {
+        else if (strcmp(key, "capabilities") == 0)
+        {
             /* Parse array of capability strings */
             p = json_skip_ws(p, end);
-            if (p >= end || *p != '[') {
+            if (p >= end || *p != '[')
+            {
                 LOG_ERR("Invalid JSON: capabilities must be array");
                 return -EINVAL;
             }
             p++;
 
-            while (p < end) {
+            while (p < end)
+            {
                 p = json_skip_ws(p, end);
-                if (p >= end) break;
+                if (p >= end)
+                    break;
 
-                if (*p == ']') {
+                if (*p == ']')
+                {
                     p++;
                     break;
                 }
 
-                if (*p == ',') {
+                if (*p == ',')
+                {
                     p++;
                     continue;
                 }
 
                 p = json_parse_string(p, end, str_val, sizeof(str_val));
-                if (!p) {
+                if (!p)
+                {
                     LOG_ERR("Invalid capability string");
                     return -EINVAL;
                 }
@@ -233,22 +280,202 @@ int manifest_parse_json(const char *json, size_t json_len, akira_manifest_t *man
                 LOG_DBG("Parsed capability: %s -> 0x%08x", str_val, cap);
             }
         }
-        else {
+        else if (strcmp(key, "network_policy") == 0)
+        {
+            /* Parse: { "deny_all": true } or
+             *         { "allowed_hosts": [...], "allowed_ports": [...] } */
+            p = json_skip_ws(p, end);
+            if (p >= end || *p != '{')
+            {
+                LOG_ERR("network_policy must be an object");
+                return -EINVAL;
+            }
+            p++;
+            manifest->net_policy.present = true;
+
+            while (p < end)
+            {
+                p = json_skip_ws(p, end);
+                if (p >= end)
+                    break;
+                if (*p == '}')
+                {
+                    p++;
+                    break;
+                }
+                if (*p == ',')
+                {
+                    p++;
+                    continue;
+                }
+
+                char npkey[32];
+                p = json_parse_string(p, end, npkey, sizeof(npkey));
+                if (!p)
+                    return -EINVAL;
+                p = json_skip_ws(p, end);
+                if (p >= end || *p != ':')
+                    return -EINVAL;
+                p++;
+                p = json_skip_ws(p, end);
+
+                if (strcmp(npkey, "deny_all") == 0)
+                {
+                    /* Accept boolean true/false */
+                    if (p + 4 <= end && memcmp(p, "true", 4) == 0)
+                    {
+                        manifest->net_policy.deny_all = true;
+                        p += 4;
+                    }
+                    else if (p + 5 <= end && memcmp(p, "false", 5) == 0)
+                    {
+                        manifest->net_policy.deny_all = false;
+                        p += 5;
+                    }
+                    else
+                    {
+                        return -EINVAL;
+                    }
+                }
+                else if (strcmp(npkey, "allowed_hosts") == 0)
+                {
+                    p = json_skip_ws(p, end);
+                    if (p >= end || *p != '[')
+                        return -EINVAL;
+                    p++;
+                    while (p < end)
+                    {
+                        p = json_skip_ws(p, end);
+                        if (p >= end)
+                            break;
+                        if (*p == ']')
+                        {
+                            p++;
+                            break;
+                        }
+                        if (*p == ',')
+                        {
+                            p++;
+                            continue;
+                        }
+                        if (manifest->net_policy.host_count < MANIFEST_NET_MAX_HOSTS)
+                        {
+                            uint8_t idx = manifest->net_policy.host_count;
+                            p = json_parse_string(p, end,
+                                                  manifest->net_policy.allowed_hosts[idx],
+                                                  MANIFEST_NET_HOST_LEN);
+                            if (!p)
+                                return -EINVAL;
+                            manifest->net_policy.host_count++;
+                        }
+                        else
+                        {
+                            /* Skip excess entries */
+                            p = json_parse_string(p, end, str_val, sizeof(str_val));
+                            if (!p)
+                                return -EINVAL;
+                        }
+                    }
+                }
+                else if (strcmp(npkey, "allowed_ports") == 0)
+                {
+                    p = json_skip_ws(p, end);
+                    if (p >= end || *p != '[')
+                        return -EINVAL;
+                    p++;
+                    while (p < end)
+                    {
+                        p = json_skip_ws(p, end);
+                        if (p >= end)
+                            break;
+                        if (*p == ']')
+                        {
+                            p++;
+                            break;
+                        }
+                        if (*p == ',')
+                        {
+                            p++;
+                            continue;
+                        }
+                        uint32_t portval = 0;
+                        p = json_parse_int(p, end, &portval);
+                        if (!p)
+                            return -EINVAL;
+                        if (portval > 65535)
+                            return -EINVAL;
+                        if (manifest->net_policy.port_count < MANIFEST_NET_MAX_PORTS)
+                        {
+                            manifest->net_policy.allowed_ports[manifest->net_policy.port_count++] = (uint16_t)portval;
+                        }
+                    }
+                }
+                else
+                {
+                    /* Skip unknown sub-key */
+                    int depth = 0;
+                    bool in_str = false;
+                    while (p < end)
+                    {
+                        if (!in_str)
+                        {
+                            if (*p == '"')
+                                in_str = true;
+                            else if (*p == '{' || *p == '[')
+                                depth++;
+                            else if (*p == '}' || *p == ']')
+                            {
+                                if (depth == 0)
+                                    break;
+                                depth--;
+                            }
+                            else if (*p == ',' && depth == 0)
+                                break;
+                        }
+                        else
+                        {
+                            if (*p == '\\' && p + 1 < end)
+                                p++;
+                            else if (*p == '"')
+                                in_str = false;
+                        }
+                        p++;
+                    }
+                }
+            }
+            LOG_DBG("Parsed network_policy: deny_all=%d hosts=%d ports=%d",
+                    manifest->net_policy.deny_all,
+                    manifest->net_policy.host_count,
+                    manifest->net_policy.port_count);
+        }
+        else
+        {
             /* Skip unknown keys - find end of value */
             int depth = 0;
             bool in_string = false;
-            while (p < end) {
-                if (!in_string) {
-                    if (*p == '"') in_string = true;
-                    else if (*p == '{' || *p == '[') depth++;
-                    else if (*p == '}' || *p == ']') {
-                        if (depth == 0) break;
+            while (p < end)
+            {
+                if (!in_string)
+                {
+                    if (*p == '"')
+                        in_string = true;
+                    else if (*p == '{' || *p == '[')
+                        depth++;
+                    else if (*p == '}' || *p == ']')
+                    {
+                        if (depth == 0)
+                            break;
                         depth--;
                     }
-                    else if (*p == ',' && depth == 0) break;
-                } else {
-                    if (*p == '\\' && p + 1 < end) p++;
-                    else if (*p == '"') in_string = false;
+                    else if (*p == ',' && depth == 0)
+                        break;
+                }
+                else
+                {
+                    if (*p == '\\' && p + 1 < end)
+                        p++;
+                    else if (*p == '"')
+                        in_string = false;
                 }
                 p++;
             }
@@ -273,30 +500,36 @@ static int manifest_parse_wasm_binary(const uint8_t *data, size_t size,
 {
     size_t pos = 8; /* skip magic + version */
 
-    while (pos < size) {
+    while (pos < size)
+    {
         uint8_t section_id = data[pos++];
-        if (pos >= size) break;
+        if (pos >= size)
+            break;
 
         uint32_t section_size;
         size_t leb_len = read_leb128_u32(data + pos, size - pos, &section_size);
-        if (leb_len == 0) {
+        if (leb_len == 0)
+        {
             LOG_ERR("Invalid section size LEB128");
             return -EINVAL;
         }
         pos += leb_len;
 
-        if (pos + section_size > size) {
+        if (pos + section_size > size)
+        {
             LOG_ERR("Section extends past end of file");
             return -EINVAL;
         }
 
-        if (section_id == WASM_SECTION_CUSTOM) {
+        if (section_id == WASM_SECTION_CUSTOM)
+        {
             const uint8_t *sd = data + pos;
             size_t sr = section_size;
 
             uint32_t name_len;
             leb_len = read_leb128_u32(sd, sr, &name_len);
-            if (leb_len == 0 || leb_len + name_len > sr) {
+            if (leb_len == 0 || leb_len + name_len > sr)
+            {
                 pos += section_size;
                 continue;
             }
@@ -304,7 +537,8 @@ static int manifest_parse_wasm_binary(const uint8_t *data, size_t size,
             sr -= leb_len;
 
             if (name_len == strlen(AKIRA_MANIFEST_SECTION) &&
-                memcmp(sd, AKIRA_MANIFEST_SECTION, name_len) == 0) {
+                memcmp(sd, AKIRA_MANIFEST_SECTION, name_len) == 0)
+            {
                 sd += name_len;
                 sr -= name_len;
                 LOG_INF("Found akira.manifest section (%zu bytes)", sr);
@@ -319,7 +553,7 @@ static int manifest_parse_wasm_binary(const uint8_t *data, size_t size,
 }
 
 /* AOT section types (from WAMR aot_runtime.h) */
-#define AOT_SECTION_TYPE_CUSTOM  100
+#define AOT_SECTION_TYPE_CUSTOM 100
 
 /**
  * @brief Parse manifest from an AOT binary custom section.
@@ -333,38 +567,45 @@ static int manifest_parse_aot_binary(const uint8_t *data, size_t size,
 {
     size_t pos = 8; /* skip magic + version */
 
-    while (pos + 8 <= size) {
+    while (pos + 8 <= size)
+    {
         /* AOT loader aligns to 4 bytes before each uint32 read */
         pos = (pos + 3) & ~(size_t)3;
-        if (pos + 8 > size) break;
+        if (pos + 8 > size)
+            break;
 
         uint32_t sec_type, sec_size;
         memcpy(&sec_type, data + pos, 4);
         memcpy(&sec_size, data + pos + 4, 4);
         pos += 8; /* body starts here */
 
-        if (pos + sec_size > size) break;
+        if (pos + sec_size > size)
+            break;
 
-        if (sec_type == AOT_SECTION_TYPE_CUSTOM && sec_size > 8) {
+        if (sec_type == AOT_SECTION_TYPE_CUSTOM && sec_size > 8)
+        {
             const uint8_t *body = data + pos;
 
             /* sub_section_type: uint32 at offset 0 */
             uint32_t sub_type;
             memcpy(&sub_type, body, 4);
 
-            if (sub_type == 0) { /* AOT_CUSTOM_SECTION_RAW */
+            if (sub_type == 0)
+            { /* AOT_CUSTOM_SECTION_RAW */
                 /* name_len: uint16 at offset 4, then name bytes */
                 uint16_t name_len;
                 memcpy(&name_len, body + 4, 2);
 
-                if (6 + name_len <= sec_size) {
+                if (6 + name_len <= sec_size)
+                {
                     const char *name = (const char *)(body + 6);
                     size_t manifest_name_len = strlen(AKIRA_MANIFEST_SECTION);
 
                     /* name may be NUL-terminated; compare without trailing NUL */
                     if (name_len >= manifest_name_len &&
                         memcmp(name, AKIRA_MANIFEST_SECTION,
-                               manifest_name_len) == 0) {
+                               manifest_name_len) == 0)
+                    {
                         const uint8_t *json = body + 6 + name_len;
                         size_t json_len = sec_size - 6 - name_len;
                         LOG_INF("Found akira.manifest in AOT (%zu bytes)",
@@ -385,17 +626,20 @@ static int manifest_parse_aot_binary(const uint8_t *data, size_t size,
 int manifest_parse_wasm_section(const uint8_t *wasm_data, size_t wasm_size,
                                 akira_manifest_t *manifest)
 {
-    if (!wasm_data || wasm_size < 8 || !manifest) {
+    if (!wasm_data || wasm_size < 8 || !manifest)
+    {
         return -EINVAL;
     }
 
     manifest_init_defaults(manifest);
 
-    if (memcmp(wasm_data, "\0aot", 4) == 0) {
+    if (memcmp(wasm_data, "\0aot", 4) == 0)
+    {
         return manifest_parse_aot_binary(wasm_data, wasm_size, manifest);
     }
 
-    if (memcmp(wasm_data, "\0asm", 4) == 0) {
+    if (memcmp(wasm_data, "\0asm", 4) == 0)
+    {
         return manifest_parse_wasm_binary(wasm_data, wasm_size, manifest);
     }
 
@@ -407,16 +651,19 @@ int manifest_parse_with_fallback(const uint8_t *wasm_data, size_t wasm_size,
                                  const char *fallback_json, size_t fallback_len,
                                  akira_manifest_t *manifest)
 {
-    if (!manifest) {
+    if (!manifest)
+    {
         return -EINVAL;
     }
 
     manifest_init_defaults(manifest);
 
     /* Try WASM custom section first */
-    if (wasm_data && wasm_size > 0) {
+    if (wasm_data && wasm_size > 0)
+    {
         int ret = manifest_parse_wasm_section(wasm_data, wasm_size, manifest);
-        if (ret == 0) {
+        if (ret == 0)
+        {
             LOG_INF("Manifest loaded from WASM custom section");
             return 0;
         }
@@ -425,9 +672,11 @@ int manifest_parse_with_fallback(const uint8_t *wasm_data, size_t wasm_size,
     }
 
     /* Try fallback JSON */
-    if (fallback_json && fallback_len > 0) {
+    if (fallback_json && fallback_len > 0)
+    {
         int ret = manifest_parse_json(fallback_json, fallback_len, manifest);
-        if (ret == 0) {
+        if (ret == 0)
+        {
             LOG_INF("Manifest loaded from fallback JSON");
             return 0;
         }

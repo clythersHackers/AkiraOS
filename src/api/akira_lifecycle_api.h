@@ -12,6 +12,8 @@
  * to untrusted apps.
  *
  * Manifest entry:  "capabilities": ["app.control"]
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef AKIRA_LIFECYCLE_API_H

@@ -4,6 +4,8 @@
  *
  * Manages Bluetooth stack initialization, advertising, connections,
  * and coordinates BLE services (HID, OTA, Shell).
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_BT_MANAGER_H
@@ -37,9 +39,10 @@ extern "C"
     /** Bluetooth services */
     typedef enum
     {
-        BT_SERVICE_HID = 0x01,
-        BT_SERVICE_OTA = 0x02,
-        BT_SERVICE_ALL = 0x03
+        BT_SERVICE_HID       = 0x01,
+        BT_SERVICE_OTA       = 0x02,
+        BT_SERVICE_COMPANION = 0x04, /**< BLE Companion (AkiraApp) service */
+        BT_SERVICE_ALL       = 0x07
     } bt_service_t;
 
     /**
@@ -52,9 +55,10 @@ extern "C"
      */
     typedef enum
     {
-        BT_MODE_NONE    = 0, /**< Stack enabled but no service active */
-        BT_MODE_HID     = 1, /**< BLE HID profile owns the radio */
-        BT_MODE_BLE_APP = 2, /**< WASM BLE app service owns the radio */
+        BT_MODE_NONE      = 0, /**< Stack enabled but no service active */
+        BT_MODE_HID       = 1, /**< BLE HID profile owns the radio */
+        BT_MODE_BLE_APP   = 2, /**< WASM BLE app service owns the radio */
+        BT_MODE_COMPANION = 3, /**< AkiraApp companion service owns the radio */
     } bt_manager_mode_t;
 
     /** Bluetooth configuration */

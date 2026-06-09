@@ -12,6 +12,8 @@
  * - Auto-restart with configurable retries
  * - Persistent registry in LittleFS
  * - Optional manifest with defaults
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef AKIRA_APP_MANAGER_H
@@ -55,9 +57,9 @@ extern "C"
 #define CONFIG_AKIRA_APP_RESTART_DELAY_MS 1000
 #endif
 
-#define APP_NAME_MAX_LEN 32
-#define APP_VERSION_MAX_LEN 16
-#define APP_PATH_MAX_LEN 64
+#define APP_NAME_MAX_LEN CONFIG_AKIRA_APP_NAME_MAX_LEN
+#define APP_VERSION_MAX_LEN CONFIG_AKIRA_APP_VERSION_MAX_LEN
+#define APP_PATH_MAX_LEN CONFIG_AKIRA_APP_PATH_MAX_LEN
 
     /**
      * @brief App state machine
@@ -434,6 +436,23 @@ extern "C"
      * @return Source name (e.g., "HTTP")
      */
     const char *app_source_to_str(app_source_t source);
+
+    /**
+     * @brief Install an .akpkg archive from an in-memory buffer.
+     *
+     * Decompresses the gzip-wrapped tar archive, extracts app.wasm and
+     * manifest.json, installs the app, and persists the manifest so that
+     * app_manager_start() can forward it to the WASM runtime.
+     *
+     * @param name    App name override (NULL or empty to use manifest "name").
+     * @param pkg     .akpkg data in memory.
+     * @param pkg_len Length of @p pkg in bytes.
+     * @param source  Installation source (e.g., APP_SOURCE_HTTP).
+     * @return App ID (>= 1) on success, negative errno on error.
+     */
+    int app_manager_install_akpkg(char *name, size_t name_size,
+                                  const uint8_t *pkg, size_t pkg_len,
+                                  app_source_t source);
 
 #ifdef __cplusplus
 }

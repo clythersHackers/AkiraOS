@@ -135,15 +135,22 @@ int module_cache_store(const uint8_t *hash, wasm_module_t module,
 
     /* Evict if occupied */
     if (slot->used) {
+        /* Safety: cache_find_lru_locked() must never return a slot with
+         * live references.  Refuse here as a hard backstop so that a
+         * future change to the LRU policy cannot silently cause
+         * use-after-free in running instances. */
+        if (slot->ref_count > 0) {
+            k_mutex_unlock(&g_cache_mutex);
+            LOG_ERR("BUG: cache eviction refused — slot has %u active refs",
+                    slot->ref_count);
+            return -EBUSY;
+        }
 #ifdef CONFIG_AKIRA_WASM_RUNTIME
-        if (slot->ref_count == 0 && slot->module) {
+        if (slot->module) {
             LOG_INF("Evicting cached module (size=%u, age=%lldms)",
                     slot->binary_size,
                     k_uptime_get() - slot->last_used_ms);
             wasm_runtime_unload(slot->module);
-        } else {
-            LOG_WRN("Evicting module with %u active refs", slot->ref_count);
-            /* Don't unload - instances still reference it */
         }
 #endif
         g_cache.stats.evictions++;

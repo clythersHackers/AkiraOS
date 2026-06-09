@@ -21,6 +21,8 @@
  *   CONFIG_AKIRA_IPC_MAX_SUBS_PER_TOPIC  (default 4)
  *   CONFIG_AKIRA_IPC_MSG_MAX_SIZE        (default 256 bytes)
  *   CONFIG_AKIRA_IPC_QUEUE_DEPTH         (default 4 messages)
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_IPC_H

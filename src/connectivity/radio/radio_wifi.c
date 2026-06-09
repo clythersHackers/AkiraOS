@@ -15,7 +15,7 @@
 #include <zephyr/net/net_mgmt.h>
 #include <string.h>
 
-LOG_MODULE_REGISTER(radio_wifi, CONFIG_AKIRA_LOG_LEVEL);
+LOG_MODULE_REGISTER(radio_wifi, LOG_LEVEL_INF);
 
 #ifdef CONFIG_WIFI
 
@@ -23,6 +23,7 @@ LOG_MODULE_REGISTER(radio_wifi, CONFIG_AKIRA_LOG_LEVEL);
 struct wifi_radio_data {
     struct net_if *iface;
     struct net_mgmt_event_callback mgmt_cb;
+    struct net_mgmt_event_callback ipv4_cb;
     struct k_sem scan_sem;
     radio_stats_t stats;
 };
@@ -30,12 +31,26 @@ struct wifi_radio_data {
 static struct wifi_radio_data wifi_data;
 static radio_handle_t wifi_handle;
 
+/* IPv4 address event handler.
+ * NET_EVENT_IPV4_ADDR_ADD fires when ESP-IDF's DHCP assigns an IP.
+ * At this point ESP-IDF's DNS resolver has a server and getaddrinfo works. */
+static void ipv4_mgmt_event_handler(struct net_mgmt_event_callback *cb,
+                                    uint64_t mgmt_event, struct net_if *iface)
+{
+    ARG_UNUSED(cb);
+    ARG_UNUSED(iface);
+
+    if (mgmt_event == NET_EVENT_IPV4_ADDR_ADD) {
+        LOG_INF("IPv4 address assigned — DNS ready");
+    }
+}
+
 /* WiFi management event handler */
 static void wifi_mgmt_event_handler(struct net_mgmt_event_callback *cb,
-                                   uint32_t mgmt_event, struct net_if *iface)
+                                   uint64_t mgmt_event, struct net_if *iface)
 {
     struct wifi_radio_data *data = CONTAINER_OF(cb, struct wifi_radio_data, mgmt_cb);
-    
+
     switch (mgmt_event) {
     case NET_EVENT_WIFI_SCAN_DONE:
         LOG_DBG("WiFi scan completed");
@@ -55,7 +70,6 @@ static void wifi_mgmt_event_handler(struct net_mgmt_event_callback *cb,
         LOG_INF("WiFi connected");
         data->stats.rx_packets = 0;  /* Reset stats on reconnect */
         data->stats.tx_packets = 0;
-        
         if (wifi_handle.event_cb) {
             radio_event_t event = {
                 .type = RADIO_EVENT_CONNECTED,
@@ -104,7 +118,12 @@ static int wifi_radio_init(radio_handle_t *handle)
                                 NET_EVENT_WIFI_CONNECT_RESULT |
                                 NET_EVENT_WIFI_DISCONNECT_RESULT);
     net_mgmt_add_event_callback(&data->mgmt_cb);
-    
+
+    /* Register for IPv4 addr add — fires when DHCP assigns IP on ESP32 */
+    net_mgmt_init_event_callback(&data->ipv4_cb, ipv4_mgmt_event_handler,
+                                NET_EVENT_IPV4_ADDR_ADD);
+    net_mgmt_add_event_callback(&data->ipv4_cb);
+
     LOG_INF("WiFi radio initialized");
     handle->state = RADIO_STATE_IDLE;
     
@@ -117,7 +136,8 @@ static int wifi_radio_deinit(radio_handle_t *handle)
     
     /* Unregister management events */
     net_mgmt_del_event_callback(&data->mgmt_cb);
-    
+    net_mgmt_del_event_callback(&data->ipv4_cb);
+
     handle->state = RADIO_STATE_OFF;
     LOG_INF("WiFi radio deinitialized");
     
@@ -254,7 +274,7 @@ static int wifi_radio_get_hw_addr(radio_handle_t *handle, uint8_t *addr, size_t 
     }
     
     link_addr = net_if_get_link_addr(data->iface);
-    if (!link_addr || !link_addr->addr) {
+    if (!link_addr) {
         return -ENOENT;
     }
     

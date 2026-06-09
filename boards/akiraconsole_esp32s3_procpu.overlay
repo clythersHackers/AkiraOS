@@ -26,6 +26,26 @@
         };
     };
 
+    // UART1: secondary UART for WASM apps (TX=GPIO47, RX=GPIO48)
+    uart1m0_default: uart1m0_default {
+        group1 {
+            pinmux = <UART1_TX_GPIO47>;
+            output-enable;
+        };
+        group2 {
+            pinmux = <UART1_RX_GPIO48>;
+            bias-pull-up;
+        };
+    };
+
+    // LEDC CH0: PWM output for WASM apps (GPIO40)
+    ledc0_default: ledc0_default {
+        group1 {
+            pinmux = <LEDC_CH0_GPIO40>;
+            output-enable;
+        };
+    };
+
     // I2C0: LSM6DS3 IMU (SDA=GPIO8, SCL=GPIO18)
     i2cm0_default: i2cm0_default {
         group1 {
@@ -42,7 +62,7 @@
     status = "okay";
     pinctrl-0 = <&spim2_default>;
     pinctrl-names = "default";
-    clock-frequency = <80000000>; // 20 MHz for display (LR1121 will override with its own max)
+    clock-frequency = <1600000000>; // For display (LR1121 will override with its own max)
     
     // CS GPIO array: GPIO38 for LR1121, GPIO10 for ST7789, GPIO14 for SD card
     cs-gpios = <&gpio1 6 GPIO_ACTIVE_LOW>,  // CS0: GPIO38 for LR1121
@@ -127,7 +147,7 @@
 
         st7789v_akiraconsole: st7789v@1 {
             compatible = "sitronix,st7789v";
-            mipi-max-frequency = <60000000>;
+            mipi-max-frequency = <1600000000>;
             reg = <1>;
             width = <320>;
             height = <240>;
@@ -155,48 +175,13 @@
 };
 
 // ============================================================================
-// ILI9341 override — only active when CONFIG_ILI9341=y is in the board .conf.
-// Replaces the chosen pointer and adds a 2nd child to the shared MIPI DBI bus.
-// Pins are identical: DC=GPIO9, RST=GPIO45, CS=GPIO10 (reg=<1>).
-//
-// To activate:  uncomment CONFIG_ILI9341=y in akiraconsole_esp32s3_procpu.conf
-//               and comment out CONFIG_ST7789V=y
+// Display:
+// Default (ST7789V): zephyr,display → &st7789v_akiraconsole as in board DTS.
+// ILI9341 override:  set CONFIG_AKIRA_ILI9341_DRIVER=y in
+//   boards/akiraconsole_esp32s3_procpu.conf — CMakeLists.txt will then append
+//   boards/akiraconsole/akiraconsole_esp32s3_procpu_ili9341.overlay which
+//   overrides chosen and disables the ST7789V/MIPI-DBI nodes.
 // ============================================================================
-// ============================================================================
-// AkiraOS ILI9341 override — only active when CONFIG_AKIRA_ILI9341_DRIVER=y.
-//
-// Uses akira,ili9341 (direct SPI) instead of the upstream ilitek,ili9341
-// (MIPI DBI) driver whose init sequence leaves the display white.
-// Pins are identical: DC=GPIO9, RST=GPIO45, CS=GPIO10 (spi2 reg=1).
-//
-// To activate: set CONFIG_AKIRA_ILI9341_DRIVER=y in the board .conf and
-//              comment out CONFIG_ST7789V=y / CONFIG_MIPI_DBI_SPI=y.
-// ============================================================================
-#ifdef CONFIG_AKIRA_ILI9341_DRIVER
-/ {
-    chosen {
-        zephyr,display = &akira_ili9341_akiraconsole;
-    };
-};
-
-// Disable the MIPI DBI bus and ST7789V — direct SPI takes over CS1.
-&mipi_dbi_ctrl {
-    status = "disabled";
-};
-
-&spi2 {
-    akira_ili9341_akiraconsole: akira_ili9341@1 {
-        compatible = "akira,ili9341";
-        reg = <1>;                                 /* cs-gpios[1] = GPIO10 */
-        spi-max-frequency = <25000000>;
-        dc-gpios    = <&gpio0 9  GPIO_ACTIVE_HIGH>; /* TFT_DC  - GPIO9  */
-        reset-gpios = <&gpio0 45 GPIO_ACTIVE_LOW>;  /* TFT_RST - GPIO45 */
-        width  = <320>;
-        height = <240>;
-        status = "okay";
-    };
-};
-#endif /* CONFIG_AKIRA_ILI9341_DRIVER */
 
 // ============================================================================
 // GPIO Configuration
@@ -282,6 +267,32 @@
     current-speed = <115200>;
 };
 
+// UART1 — secondary UART exposed to WASM apps via akira_uart_api
+// TX=GPIO47  RX=GPIO48  (both free on AkiraConsole DIY)
+&uart1
+{
+    status = "okay";
+    current-speed = <115200>;
+    pinctrl-0 = <&uart1m0_default>;
+    pinctrl-names = "default";
+};
+
+// LEDC — hardware PWM controller exposed to WASM apps via akira_pwm_api
+// CH0 output on GPIO40 (free pin on AkiraConsole DIY)
+&ledc0
+{
+    pinctrl-0 = <&ledc0_default>;
+    pinctrl-names = "default";
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    channel0@0 {
+        reg = <0x0>;
+        timer = <0>;
+    };
+};
+
 // I2C configuration - LSM6DS3 IMU on SDA=GPIO8, SCL=GPIO18
 &i2c0
 {
@@ -308,8 +319,8 @@
         protocol-code = "none";
         in-polling-period-us = <1000>;
         out-polling-period-us = <1000>;
-        in-report-size = <9>;
-        out-report-size = <2>;
+        in-report-size = <64>;
+        out-report-size = <64>;
     };
 };
 
@@ -354,7 +365,16 @@
 
         lfs1_partition: partition@408000 {
 			label = "lfs_storage";
-			reg = <0x00408000 DT_SIZE_K(512)>;
+			reg = <0x00408000 DT_SIZE_K(1024)>;
 		};
+
+        /* Hub credentials NVS — device_id + auth token
+         * 2 × 4 KB sectors; placed after LittleFS well within 8 MB flash. */
+        hub_nvs_partition: partition@488000 {
+            label = "hub_nvs";
+            reg = <0x00488000 DT_SIZE_K(8)>;
+        };
     };
 };
+
+

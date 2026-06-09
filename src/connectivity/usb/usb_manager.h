@@ -8,6 +8,8 @@
  * - State management and tracking
  * - Callback registration for USB events
  * - Support for multiple USB classes (HID, Mass Storage, etc.)
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef USB_MANAGER_H_

@@ -55,6 +55,8 @@ uint32_t akira_capability_str_to_mask(const char *cap)
     if (strcmp(cap, "storage.*") == 0)      return AKIRA_CAP_STORAGE_READ | AKIRA_CAP_STORAGE_WRITE;
     if (strcmp(cap, "gpio.*") == 0)         return AKIRA_CAP_GPIO_READ | AKIRA_CAP_GPIO_WRITE;
     if (strcmp(cap, "network.*") == 0)      return AKIRA_CAP_NETWORK;
+    if (strcmp(cap, "network.use") == 0)    return AKIRA_CAP_NETWORK;
+    if (strcmp(cap, "network.connect") == 0) return AKIRA_CAP_NETWORK;
     if (strcmp(cap, "hw.*") == 0)           return AKIRA_CAP_TIMER | AKIRA_CAP_UART | AKIRA_CAP_I2C | AKIRA_CAP_PWM;
     if (strcmp(cap, "*") == 0)              return 0xFFFFFFFF;
     return 0;
@@ -70,6 +72,7 @@ char* akira_capability_mask_to_str(uint32_t cap)
     if (cap & AKIRA_CAP_BLE) return "ble";
     if (cap & AKIRA_CAP_STORAGE_READ) return "storage.read";
     if (cap & AKIRA_CAP_STORAGE_WRITE) return "storage.write";
+    if (cap & AKIRA_CAP_NETWORK)       return "network.use";
     if (cap & AKIRA_CAP_GPIO_READ) return "gpio.read";
     if (cap & AKIRA_CAP_GPIO_WRITE) return "gpio.write";
     if (cap & AKIRA_CAP_TIMER) return "timer";
@@ -86,6 +89,7 @@ char* akira_capability_mask_to_str(uint32_t cap)
     if (cap & AKIRA_CAP_POWER_CTRL)  return "power.control";
     if (cap & AKIRA_CAP_ADC)         return "adc";
     if (cap & AKIRA_CAP_WDT)         return "wdt";
+    if (cap & AKIRA_CAP_SETTINGS)    return "settings.*";
     return "unknown";
 }
 
@@ -115,10 +119,10 @@ bool akira_security_check_exec(wasm_exec_env_t exec_env, uint32_t capability)
         wasm_module_inst_t inst = wasm_runtime_get_module_inst(exec_env);
         char namebuf[32];
         if (akira_runtime_get_name_for_module_inst(inst, namebuf, sizeof(namebuf)) == 0) {
-            LOG_WRN("Security: capability denied for app %s: %s", namebuf, akira_capability_mask_to_str(capability));
+            LOG_WRN("Security: capability denied for app %s: %s (0x%08x)", namebuf, akira_capability_mask_to_str(capability), capability);
             sandbox_audit_log(AUDIT_EVENT_CAPABILITY_DENIED, namebuf, capability);
         } else {
-            LOG_WRN("Security: capability denied for unknown app: %s", akira_capability_mask_to_str(capability));
+            LOG_WRN("Security: capability denied for unknown app: %s (0x%08x)", akira_capability_mask_to_str(capability), capability);
             sandbox_audit_log(AUDIT_EVENT_CAPABILITY_DENIED, "unknown", capability);
         }
     }

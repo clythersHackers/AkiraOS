@@ -18,6 +18,8 @@ extern "C" {
  *
  * @param channel  ADC channel index (0 .. CONFIG_AKIRA_WASM_ADC_MAX_CHANNELS-1)
  * @return Raw ADC sample value, or negative error code.
+ * @stability stable
+ * @since 1.4
  */
 int akira_adc_read(int channel);
 

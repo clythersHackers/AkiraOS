@@ -1,0 +1,7 @@
+/*
+ * Test-only DTS overlay for native_sim.
+ *
+ * The native_sim board DTS already provides slot0_partition, slot1_partition
+ * and storage_partition — no redefinition needed here.
+ * This file intentionally left minimal to avoid duplicate-label errors.
+ */

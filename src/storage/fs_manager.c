@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include "../lib/mem_helper.h"
 
 LOG_MODULE_REGISTER(fs_manager, CONFIG_AKIRA_LOG_LEVEL);
 
@@ -118,9 +119,9 @@ static int ram_write_file(const char *path, const void *data, size_t size)
     {
         if (file->data)
         {
-            k_free(file->data);
+            akira_free_buffer(file->data);
         }
-        file->data = k_malloc(size);
+        file->data = akira_malloc_buffer(size);
         if (!file->data)
         {
             file->in_use = false;
@@ -168,7 +169,7 @@ static int ram_delete_file(const char *path)
 
     if (file->data)
     {
-        k_free(file->data);
+        akira_free_buffer(file->data);
     }
     memset(file, 0, sizeof(*file));
 
@@ -209,16 +210,17 @@ static int init_internal_storage(void)
     fs_state.internal_available = false;
 
     int ret;
-    
-    #define PARTITION_NODE DT_NODELABEL(lfs1)
+
+#define PARTITION_NODE DT_NODELABEL(lfs1)
 
     FS_FSTAB_DECLARE_ENTRY(PARTITION_NODE);
-    
-    struct fs_mount_t* mp = &FS_FSTAB_ENTRY(PARTITION_NODE);
+
+    struct fs_mount_t *mp = &FS_FSTAB_ENTRY(PARTITION_NODE);
 
     ret = fs_mount(mp);
-    if(ret < 0){
-        LOG_INF("Failed to mount lfs: (%d)",ret);
+    if (ret < 0)
+    {
+        LOG_INF("Failed to mount lfs: (%d)", ret);
     }
 
     struct fs_dirent entry;
@@ -248,14 +250,15 @@ static int init_internal_storage(void)
 static int init_sd_storage(void)
 {
 #if defined(CONFIG_FAT_FILESYSTEM_ELM) && \
-    (defined(CONFIG_AKIRA_SD_CARD) || \
+    (defined(CONFIG_AKIRA_SD_CARD) ||     \
      defined(CONFIG_DISK_DRIVER_SDMMC))
 
     /* When CONFIG_AKIRA_SD_CARD is set, sd_card.c (SYS_INIT priority 38) has
      * already probed and mounted /SD: before fs_manager runs (priority 40).
      * Just check if the mount is live via the public helper. */
 #ifdef CONFIG_AKIRA_SD_CARD
-    if (!akira_sd_card_is_present()) {
+    if (!akira_sd_card_is_present())
+    {
         LOG_DBG("SD card not present");
         return -ENODEV;
     }
@@ -282,6 +285,17 @@ static int init_sd_storage(void)
 #endif
 }
 
+/**
+ * Re-probe SD card and update availability flag (call after hot-plug).
+ */
+int fs_manager_reinit_sd(void)
+{
+    if (!fs_state.initialized)
+    {
+        return -EINVAL;
+    }
+    return init_sd_storage();
+}
 
 /**
  * Initialize filesystem manager
@@ -422,7 +436,8 @@ int fs_manager_mkdir(const char *path)
         return -EINVAL;
     }
 
-    if(fs_manager_exists(path)){
+    if (fs_manager_exists(path))
+    {
         return 0;
     }
 
@@ -569,7 +584,7 @@ ssize_t fs_manager_append_file(const char *path, const void *data, size_t size)
     if (is_ram_path(path))
     {
         /* Simple implementation: read existing, append, write back */
-        uint8_t *temp = k_malloc(RAM_FILE_MAX_SIZE);
+        uint8_t *temp = akira_malloc_buffer(RAM_FILE_MAX_SIZE);
         if (!temp)
         {
             return -ENOMEM;
@@ -583,13 +598,13 @@ ssize_t fs_manager_append_file(const char *path, const void *data, size_t size)
 
         if (existing + size > RAM_FILE_MAX_SIZE)
         {
-            k_free(temp);
+            akira_free_buffer(temp);
             return -ENOSPC;
         }
 
         memcpy(temp + existing, data, size);
         ssize_t ret = ram_write_file(path, temp, existing + size);
-        k_free(temp);
+        akira_free_buffer(temp);
         return ret < 0 ? ret : (ssize_t)size;
     }
 

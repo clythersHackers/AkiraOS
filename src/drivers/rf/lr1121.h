@@ -1,6 +1,8 @@
 /**
  * @file lr1121.h
  * @brief LR1121 LoRa/GFSK Transceiver Driver
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_LR1121_H

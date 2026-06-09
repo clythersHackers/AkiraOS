@@ -120,7 +120,7 @@ static gpio_flags_t akira_gpio_flags_to_zephyr(uint32_t akira_flags)
 
 int akira_gpio_configure(uint32_t pin, uint32_t flags)
 {
-    gpio_pin_t gpio_pin;
+    gpio_pin_t gpio_pin = 0;
     const struct device *dev = akira_gpio_get_device(pin, &gpio_pin);
     
     if (!dev) {
@@ -141,7 +141,7 @@ int akira_gpio_configure(uint32_t pin, uint32_t flags)
 
 int akira_gpio_read(uint32_t pin)
 {
-    gpio_pin_t gpio_pin;
+    gpio_pin_t gpio_pin = 0;
     const struct device *dev = akira_gpio_get_device(pin, &gpio_pin);
     
     if (!dev) {
@@ -160,7 +160,7 @@ int akira_gpio_read(uint32_t pin)
 
 int akira_gpio_write(uint32_t pin, uint32_t value)
 {
-    gpio_pin_t gpio_pin;
+    gpio_pin_t gpio_pin = 0;
     const struct device *dev = akira_gpio_get_device(pin, &gpio_pin);
     
     if (!dev) {

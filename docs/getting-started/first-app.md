@@ -12,10 +12,10 @@ Create, build, and deploy a "Hello World" WebAssembly application on AkiraOS.
 ## Prerequisites
 
 - AkiraOS firmware flashed and running on a device (or `native_sim` built)
-- WASI SDK installed (see below)
+- WASI SDK installed as build toolchain (see below — provides clang/lld, not WASI runtime)
 - Basic C programming knowledge
 
-## Install WASI SDK
+## Install WASI SDK (build toolchain)
 
 ```bash
 WASI_VERSION=24
@@ -24,7 +24,7 @@ sudo tar xvf wasi-sdk-${WASI_VERSION}.0-x86_64-linux.tar.gz -C /opt
 sudo ln -sf /opt/wasi-sdk-${WASI_VERSION}.0 /opt/wasi-sdk
 ```
 
-> **Note:** Install to `/opt/wasi-sdk` (the default path all sample Makefiles expect) or set `WASI_SDK=/your/path`.
+> **Note:** The WASI SDK is used as a compiler toolchain only (clang + lld targeting `wasm32-unknown-unknown`). AkiraOS apps do **not** use WASI interfaces at runtime — install to `/opt/wasi-sdk` (the default path all sample Makefiles expect) or set `WASI_SDK=/your/path`.
 
 ---
 
@@ -104,7 +104,23 @@ file bin/hello_world.wasm     # "WebAssembly (wasm) binary module"
 
 ## Deploy to Hardware
 
-### Upload via HTTP (recommended)
+Three methods are available; SD card is the simplest for development.
+
+### Option 1: SD Card (simplest)
+
+Prepare a FAT32-formatted microSD card (see [SD Card Setup](../hardware/sd-card.md)), copy your `.wasm` into the `apps/` directory, insert the card, and scan:
+
+```bash
+# On your PC — copy the app to the SD card
+cp bin/hello_world.wasm /media/$USER/AKIRA/apps/
+
+# On the device shell
+AkiraOS:~$ app scan sd
+AkiraOS:~$ app install hello_world
+AkiraOS:~$ app run hello_world
+```
+
+### Option 2: HTTP Upload (over WiFi)
 
 The device must be connected to WiFi. Find its IP from the serial console (`net iface`).
 
@@ -112,16 +128,6 @@ The device must be connected to WiFi. Find its IP from the serial console (`net 
 curl -X POST -F "file=@bin/hello_world.wasm" http://<device-ip>/upload
 ```
 
-### Run from the shell
-
-```bash
-# Connect to serial console
-west espmonitor
-
-# In the shell:
-AkiraOS:~$ wasm load /apps/hello_world.wasm
-AkiraOS:~$ wasm start hello_world
-```
 
 Expected output:
 ```

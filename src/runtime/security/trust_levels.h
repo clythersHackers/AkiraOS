@@ -1,6 +1,8 @@
 /**
  * @file trust_levels.h
  * @brief AkiraOS Trust Level Definitions
+ * @stability stable
+ * @since 1.3
  */
 
 #ifndef AKIRA_TRUST_LEVELS_H

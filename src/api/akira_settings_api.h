@@ -15,6 +15,8 @@
  *
  * Key format:  "namespace/key"   e.g. "nes/frameskip", "wifi/ssid"
  * Values are plain strings (max AKIRA_SETTINGS_WASM_VAL_MAX bytes).
+ * @stability stable
+ * @since 1.4
  */
 
 #ifdef CONFIG_AKIRA_WASM_RUNTIME

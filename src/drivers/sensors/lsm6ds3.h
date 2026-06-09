@@ -124,7 +124,9 @@ extern "C"
      *
      * @param config Configuration structure
      * @return 0 on success, negative errno on failure
-     */
+ * @stability experimental
+ * @since 1.4
+ */
     int lsm6ds3_init(struct lsm6ds3_config *config);
 
     /**

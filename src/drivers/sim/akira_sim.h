@@ -4,6 +4,8 @@
  *
  * Provides a graphical simulation window showing the Akira Console
  * with interactive display and buttons.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_SIM_H
@@ -11,6 +13,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <akiraconsole_native_api.h>
 
 /* Display dimensions (ILI9341) */
 #define SIM_DISPLAY_WIDTH 240
@@ -28,20 +31,8 @@
 #define SIM_BUTTON_RADIUS 25
 #define SIM_NUM_BUTTONS 10
 
-/* Button IDs matching hardware */
-typedef enum
-{
-    AKIRA_BTN_POWER = 0, /* ON/OFF button */
-    AKIRA_BTN_SETTINGS,  /* Settings button */
-    AKIRA_BTN_UP,        /* D-Pad Up */
-    AKIRA_BTN_DOWN,      /* D-Pad Down */
-    AKIRA_BTN_LEFT,      /* D-Pad Left */
-    AKIRA_BTN_RIGHT,     /* D-Pad Right */
-    AKIRA_BTN_A,         /* Action button A */
-    AKIRA_BTN_B,         /* Action button B */
-    AKIRA_BTN_X,         /* Action button X */
-    AKIRA_BTN_Y          /* Action button Y */
-} akira_button_id_t;
+/* Button IDs — defined as AKIRA_BTN_* macros in <akiraconsole_native_api.h> */
+typedef int akira_button_id_t;
 
 /* Button state structure */
 typedef struct

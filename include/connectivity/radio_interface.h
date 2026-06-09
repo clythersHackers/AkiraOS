@@ -12,7 +12,9 @@
  * - Thread-safe: Concurrent protocol access to different radios
  *
  * @copyright Copyright (c) 2026 PenEngineering S.R.L
-*/
+ * @stability experimental
+ * @since 1.5
+ */
 
 #ifndef AKIRA_RADIO_INTERFACE_H
 #define AKIRA_RADIO_INTERFACE_H

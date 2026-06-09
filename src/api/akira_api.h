@@ -4,6 +4,8 @@
  *
  * All functions exported to WASM applications.
  * Each API requires specific capabilities granted in app manifest.
+ * @stability stable
+ * @since 1.0
  */
 
 #ifndef AKIRA_API_H

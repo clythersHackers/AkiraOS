@@ -1,5 +1,20 @@
 # Commercial Licensing
 
+## Dual License Model
+
+AkiraOS is distributed under a **dual license** — the same model used by FreeRTOS (before AWS) and ThreadX (before Microsoft):
+
+| Use case | License |
+|----------|---------|
+| Open-source products, research, personal projects | [Apache License 2.0](LICENSE) — free, no fee |
+| Commercial / OEM products that cannot comply with Apache 2.0 attribution, or that require AkiraHub SaaS, signing services, or an enterprise SLA | **AkiraOS Commercial License** — contact below |
+
+Under the **Apache 2.0** tier you may use, modify, and distribute AkiraOS freely provided you retain copyright notices and the `NOTICE` file in any distribution.  Your application code (including WASM apps) remains fully proprietary — Apache 2.0 is not a copyleft license.
+
+Under the **Commercial License** tier all open-source obligations are replaced by a paid agreement that additionally grants access to platform services, legal indemnification, and enterprise support.  See tiers below.
+
+---
+
 AkiraOS is open source under the **Apache License 2.0**, which permits free use for personal projects, research, and open source products.
 
 If you are building a **commercial product** — embedded firmware, an OEM device, or a managed IoT service — a commercial license removes the attribution requirements and adds enterprise support, legal indemnification, and access to the Akira Platform.

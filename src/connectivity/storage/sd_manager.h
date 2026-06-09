@@ -3,6 +3,8 @@
  * @brief SD Card Manager for App Discovery
  *
  * Handles SD card mounting and WASM app scanning.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_SD_MANAGER_H

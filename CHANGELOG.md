@@ -7,6 +7,71 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.5.8] — 2026-05-29
+
+### Added
+- `feat(connectivity SPI)`: USB CDC serial interface (`usb_cdc_serial`) and BLE companion service for host pairing.
+- `feat(power)`: BQ28Z610 fuel gauge driver with DTS binding (`ti,bq28z610`).
+- `feat(runtime)`: Pre-allocate WASM thread stacks via `SYS_INIT` to prevent heap fragmentation at runtime.
+- `feat(boot animation)`: Boot animation configurable via `CONFIG_AKIRA_BOOT_ANIMATION`, fps and colors tunable via Kconfig.
+- `feat(boards)`: nucleo_l476rg board support.
+- `feat(security)`: Watchdog hardening, HTTP upload auth, signing enforcement; drop legacy local web UI.
+- `feat(connectivity)`: USB web serial interface and BLE companion service.
+
+### Fixed
+- `fix(security)`: Missing `NETWORK`/`SETTINGS` entries in capability name lookup table.
+- `fix(storage)`: SD hot-plug — deinit before reinit, retry on init failure, case-insensitive `.wasm`/`.aot` scan.
+- `fix(wdt)`: Replace deprecated `wdt_enable()` with `wdt_setup()` (Zephyr 4.3 API).
+- `fix(connectivity)`: Miscellaneous BT transfer, HTTP, OTA, and settings fixes.
+- `fix(build)`: All-board build — resolve Kconfig orphans, web server link errors, and display guards.
+- `fix(build)`: Boot animation source guard; drop `lvgl_input_driver` from OS shell build.
+- `fix(ci)`: `dorny/test-reporter` git exit 128 in test job.
+- `refactor(config)`: Use native Zephyr driver selectors for display panel (remove manual `#define` guards).
+- `style(akpkg)`: Reformat `akpkg.c` to project K&R coding style.
+
+### Changed
+- Version bumped from 1.5.6 → 1.5.8 across all files.
+
+---
+
+## [1.5.6] — "C1PH3R" — 2026-05-14
+
+### Added
+- Track B: WASM native APIs for Filesystem (`akira_fs_api`), Crypto (`akira_crypto_api`), and RTC (`akira_rtc_api`) with capability-gated sandbox.
+- Track A: OTA delta update engine (`akira_delta`), boot guard with automatic rollback (`akira_boot_guard`), and OTA WASM native API (`akira_ota_api`).
+- Track D: `akira` shell command tree (`akira_runtime_cmds`), structured telemetry sink (`akira_telemetry`), and panic handler with NVS crash storage (`akira_panic`).
+- New capability bits 26–31: `AKIRA_CAP_FS_READ/WRITE`, `AKIRA_CAP_CRYPTO`, `AKIRA_CAP_RTC_READ/WRITE`, `AKIRA_CAP_OTA_TRIGGER`.
+- `docs/ota_design.md` — OTA architecture design document.
+
+### Fixed
+- SD card hot-plug: if the card was absent at boot, inserting it later now works. `sd_manager_mount()` re-probes via `akira_sd_card_init()` instead of returning `-ENODEV` immediately, and `fs_manager_reinit_sd()` updates the availability flag so all SD paths become accessible without reboot.
+- `ota_request_rollback()` implemented (was declared but never defined).
+- `ota_manager.c` compile guard aligned with `CONFIG_AKIRA_OTA` (fixes undeclared `CONFIG_AKIRA_OTA_THREAD_STACK_SIZE` on boards with OTA disabled).
+- Pre-existing warnings: nested `/*` in Doxygen comments, `printf` format mismatch (`off_t` vs `%x`), unused static functions.
+- All WASM allocations migrated to `akira_malloc_buffer()` / `akira_free_buffer()`.
+
+### Changed
+- Version bumped from 1.5.4 → 1.5.6 across all files.
+- Log banner updated to `AkiraOS v1.5.6 `.
+
+---
+
+## [1.5.4] — 2026-04-29
+
+### Added
+- API stability annotations (`@stability`, `@since`) on every public header.
+- `docs/api-stability-policy.md` — formal 2-release deprecation policy.
+- Cooperative scheduling model and watchdog contract documented in
+  `docs/architecture/scheduling-and-watchdog.md`.
+- Full ztest suite (54 tests) covering security, OTA, app lifecycle,
+  manifest parser; GitHub Actions CI with gcov/Codecov coverage badge.
+
+### Changed
+- Version bumped from 1.5.1 → 1.5.4 across all files.
+- Log banner updated to `AkiraOS v1.5.4 - Hardened Runtime`.
+
+---
+
 ## [1.4.9] — "Gl1tch" — 2026-03-21
 
 > **Release branch:** `v1.4.x` | **PR:** [#52](https://github.com/ArturR0k3r/AkiraOS/pull/52)

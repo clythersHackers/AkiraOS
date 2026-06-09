@@ -16,6 +16,8 @@
  *
  * Enable with CONFIG_AKIRA_SD_CARD=y in the board .conf file.
  * Init runs automatically via SYS_INIT at CONFIG_AKIRA_SD_INIT_PRIORITY (38).
+ * @stability stable
+ * @since 1.4
  */
 
 #include <stdbool.h>

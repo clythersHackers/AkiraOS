@@ -4,6 +4,8 @@
  *
  * Unified HID device management supporting keyboard and gamepad profiles
  * over multiple transports (BLE, USB, Simulation).
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_HID_MANAGER_H

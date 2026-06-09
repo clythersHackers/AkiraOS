@@ -1,3 +1,8 @@
+/**
+ * @file display_ili9341.h
+ * @stability experimental
+ * @since 1.4
+ */
 #ifndef __DISPLAY_ILI9341_H__
 #define __DISPLAY_ILI9341_H__
 #include <zephyr/device.h>

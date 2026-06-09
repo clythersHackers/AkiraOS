@@ -1,6 +1,8 @@
 /**
  * @file akira_gpio_api.h
  * @brief GPIO API declarations for WASM exports
+ * @stability stable
+ * @since 1.3
  */
 
 #ifndef AKIRA_GPIO_API_H

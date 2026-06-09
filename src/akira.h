@@ -6,7 +6,9 @@
  * Include this file to access all core OS features.
  *
  * @author Artur R0K3R
- * @version 1.4.8
+ * @version 1.5.8
+ * @stability stable
+ * @since 1.0
  */
 
 #ifndef AKIRA_CORE_H
@@ -27,14 +29,21 @@ extern "C"
     /* Version Information                                                       */
     /*===========================================================================*/
 
+#ifndef AKIRA_VERSION_MAJOR
 #define AKIRA_VERSION_MAJOR 1
-#define AKIRA_VERSION_MINOR 4
+#endif
+#ifndef AKIRA_VERSION_MINOR
+#define AKIRA_VERSION_MINOR 5
+#endif
+#ifndef AKIRA_VERSION_PATCH
 #define AKIRA_VERSION_PATCH 8
-#define AKIRA_VERSION_STRING "1.4.x"
-#define AKIRA_CODENAME "GL1TCH"
+#endif
+#define AKIRA_VERSION_STRING "1.5.8"
+#define AKIRA_CODENAME "C1PH3R"
 
     /* Simple version struct */
-    typedef struct {
+    typedef struct
+    {
         int major;
         int minor;
         int patch;

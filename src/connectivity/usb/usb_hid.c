@@ -1,7 +1,7 @@
 /**
  * @file usb_hid.c
  * @brief USB HID Transport Implementation for HID Manager
- * 
+ *
  * Implements USB HID keyboard transport using Zephyr 4.3 new USBD HID API.
  * Integrates with both USB Manager and HID Manager for complete USB HID support.
  */
@@ -24,55 +24,201 @@ LOG_MODULE_REGISTER(usb_hid, CONFIG_LOG_DEFAULT_LEVEL);
 
 /**
  * @brief USB HID Boot Keyboard Report Descriptor
- * 
+ *
  * Standard boot keyboard protocol compatible with BIOS and all operating systems.
- * 
+ *
  * Report Structure (8 bytes):
  * - Byte 0: Modifier keys (Ctrl, Shift, Alt, GUI) - 8 bits
  * - Byte 1: Reserved (always 0)
  * - Bytes 2-7: Up to 6 simultaneous key codes
  */
 static const uint8_t hid_report_desc[] = {
-   /* Keyboard — Report ID 1 */
-    0x05, 0x01, 0x09, 0x06, 0xA1, 0x01,
-    0x85, 0x01,                          /* Report ID (1) */
-    0x05, 0x07, 0x19, 0xE0, 0x29, 0xE7,
-    0x15, 0x00, 0x25, 0x01,
-    0x75, 0x01, 0x95, 0x08, 0x81, 0x02, /* Modifiers */
-    0x75, 0x08, 0x95, 0x01, 0x81, 0x01, /* Reserved */
-    0x05, 0x08, 0x19, 0x01, 0x29, 0x05, /* LED output */
-    0x75, 0x01, 0x95, 0x05, 0x91, 0x02,
-    0x75, 0x03, 0x95, 0x01, 0x91, 0x01,
-    0x05, 0x07, 0x19, 0x00, 0x29, 0x65,
-    0x15, 0x00, 0x25, 0x65,
-    0x75, 0x08, 0x95, 0x06, 0x81, 0x00, /* Keys */
+    /* Keyboard — Report ID 1 */
+    0x05,
+    0x01,
+    0x09,
+    0x06,
+    0xA1,
+    0x01,
+    0x85,
+    0x01, /* Report ID (1) */
+    0x05,
+    0x07,
+    0x19,
+    0xE0,
+    0x29,
+    0xE7,
+    0x15,
+    0x00,
+    0x25,
+    0x01,
+    0x75,
+    0x01,
+    0x95,
+    0x08,
+    0x81,
+    0x02, /* Modifiers */
+    0x75,
+    0x08,
+    0x95,
+    0x01,
+    0x81,
+    0x01, /* Reserved */
+    0x05,
+    0x08,
+    0x19,
+    0x01,
+    0x29,
+    0x05, /* LED output */
+    0x75,
+    0x01,
+    0x95,
+    0x05,
+    0x91,
+    0x02,
+    0x75,
+    0x03,
+    0x95,
+    0x01,
+    0x91,
+    0x01,
+    0x05,
+    0x07,
+    0x19,
+    0x00,
+    0x29,
+    0x65,
+    0x15,
+    0x00,
+    0x25,
+    0x65,
+    0x75,
+    0x08,
+    0x95,
+    0x06,
+    0x81,
+    0x00, /* Keys */
     0xC0,
 
     /* Mouse — Report ID 2 */
-    0x05, 0x01, 0x09, 0x02, 0xA1, 0x01,
-    0x85, 0x02,                          /* Report ID (2) */
-    0x09, 0x01, 0xA1, 0x00,
-    0x05, 0x09, 0x19, 0x01, 0x29, 0x05, /* 5 buttons */
-    0x15, 0x00, 0x25, 0x01,
-    0x75, 0x01, 0x95, 0x05, 0x81, 0x02,
-    0x75, 0x03, 0x95, 0x01, 0x81, 0x01, /* padding */
-    0x05, 0x01, 0x09, 0x30, 0x09, 0x31, /* X, Y */
-    0x15, 0x81, 0x25, 0x7F,
-    0x75, 0x08, 0x95, 0x02, 0x81, 0x06,
-    0x09, 0x38,                          /* Wheel */
-    0x15, 0x81, 0x25, 0x7F,
-    0x75, 0x08, 0x95, 0x01, 0x81, 0x06,
-    0xC0, 0xC0,
+    0x05,
+    0x01,
+    0x09,
+    0x02,
+    0xA1,
+    0x01,
+    0x85,
+    0x02, /* Report ID (2) */
+    0x09,
+    0x01,
+    0xA1,
+    0x00,
+    0x05,
+    0x09,
+    0x19,
+    0x01,
+    0x29,
+    0x05, /* 5 buttons */
+    0x15,
+    0x00,
+    0x25,
+    0x01,
+    0x75,
+    0x01,
+    0x95,
+    0x05,
+    0x81,
+    0x02,
+    0x75,
+    0x03,
+    0x95,
+    0x01,
+    0x81,
+    0x01, /* padding */
+    0x05,
+    0x01,
+    0x09,
+    0x30,
+    0x09,
+    0x31, /* X, Y */
+    0x15,
+    0x81,
+    0x25,
+    0x7F,
+    0x75,
+    0x08,
+    0x95,
+    0x02,
+    0x81,
+    0x06,
+    0x09,
+    0x38, /* Wheel */
+    0x15,
+    0x81,
+    0x25,
+    0x7F,
+    0x75,
+    0x08,
+    0x95,
+    0x01,
+    0x81,
+    0x06,
+    0xC0,
+    0xC0,
+
+    /* Vendor — Report ID 3 (AkiraOS 64-byte raw HID channel) */
+    /* Usage Page 0xFF60 / Usage 0x61 matches QMK RAW HID convention */
+    0x06,
+    0x60,
+    0xFF, /* Usage Page (Vendor 0xFF60) */
+    0x09,
+    0x61, /* Usage (0x61) */
+    0xA1,
+    0x01, /* Collection (Application) */
+    0x85,
+    0x03, /* Report ID (3) */
+    /* IN: device → host (responses / notifications) */
+    0x09,
+    0x62, /* Usage (0x62) */
+    0x15,
+    0x00, /* Logical Minimum (0) */
+    0x26,
+    0xFF,
+    0x00, /* Logical Maximum (255) */
+    0x75,
+    0x08, /* Report Size (8 bits) */
+    0x95,
+    0x3F, /* Report Count (63 bytes) */
+    0x81,
+    0x02, /* Input (Data, Var, Abs) */
+    /* OUT: host → device (commands) */
+    0x09,
+    0x63, /* Usage (0x63) */
+    0x15,
+    0x00, /* Logical Minimum (0) */
+    0x26,
+    0xFF,
+    0x00, /* Logical Maximum (255) */
+    0x75,
+    0x08, /* Report Size (8 bits) */
+    0x95,
+    0x3F, /* Report Count (63 bytes) */
+    0x91,
+    0x02, /* Output (Data, Var, Abs) */
+    0xC0, /* End Collection */
 };
 
 /*===========================================================================*/
 /* Constants                                                                  */
 /*===========================================================================*/
 
-#define USB_HID_KEYBOARD_REPORT_SIZE    9
-#define USB_HID_MOUSE_REPORT_SIZE       5
-#define USB_HID_PROTOCOL_BOOT           0
-#define USB_HID_PROTOCOL_REPORT         1
+#define USB_HID_KEYBOARD_REPORT_SIZE 9
+#define USB_HID_MOUSE_REPORT_SIZE 5
+#define USB_HID_RAW_REPORT_SIZE 64 /* Report ID (1) + 63-byte payload */
+#define USB_HID_RAW_PAYLOAD_SIZE 63
+#define USB_HID_RAW_REPORT_ID 3
+#define USB_HID_PROTOCOL_BOOT 0
+#define USB_HID_PROTOCOL_REPORT 1
 
 /*===========================================================================*/
 /* USB HID Context                                                           */
@@ -81,15 +227,20 @@ static const uint8_t hid_report_desc[] = {
 /**
  * @brief USB HID transport context
  */
-static struct {
-    const struct device *hid_dev;        /* HID device from device tree */
-    bool initialized;                     /* Transport initialized */
-    bool interface_ready;                 /* USB interface ready for reports */
-    bool enabled;                         /* Transport enabled */
-    uint8_t protocol;                     /* Current protocol (boot/report) */
-    uint8_t idle_rate;                    /* Current idle rate */
-    struct k_mutex mutex;                 /* Thread safety */
-    struct k_sem report_sem;              /* Report completion semaphore */
+/** Callback invoked when an OUT report with Report ID 3 arrives */
+typedef void (*usb_hid_raw_handler_t)(const uint8_t *data, uint8_t len);
+
+static struct
+{
+    const struct device *hid_dev;      /* HID device from device tree */
+    bool initialized;                  /* Transport initialized */
+    bool interface_ready;              /* USB interface ready for reports */
+    bool enabled;                      /* Transport enabled */
+    uint8_t protocol;                  /* Current protocol (boot/report) */
+    uint8_t idle_rate;                 /* Current idle rate */
+    struct k_mutex mutex;              /* Thread safety */
+    struct k_sem report_sem;           /* Report completion semaphore */
+    usb_hid_raw_handler_t raw_handler; /* Raw OUT report handler (Report ID 3) */
 } usb_hid_ctx = {
     .initialized = false,
     .interface_ready = false,
@@ -115,18 +266,19 @@ static int usb_hid_transport_send_gamepad(const hid_gamepad_report_t *report);
 
 /**
  * @brief Interface ready callback
- * 
+ *
  * Called when the HID interface becomes active or inactive.
  */
 static void usb_hid_iface_ready(const struct device *dev, const bool ready)
 {
     ARG_UNUSED(dev);
-    
+
     LOG_INF("HID interface %s", ready ? "ready" : "not ready");
-    
+
     k_mutex_lock(&usb_hid_ctx.mutex, K_FOREVER);
     usb_hid_ctx.interface_ready = ready;
-    if (ready) {
+    if (ready)
+    {
         usb_hid_ctx.enabled = true;
     }
     k_mutex_unlock(&usb_hid_ctx.mutex);
@@ -134,7 +286,7 @@ static void usb_hid_iface_ready(const struct device *dev, const bool ready)
 
 /**
  * @brief Get HID report
- * 
+ *
  * Called by USB stack when host requests a report (GET_REPORT).
  */
 static int usb_hid_get_report(const struct device *dev,
@@ -143,21 +295,30 @@ static int usb_hid_get_report(const struct device *dev,
 {
     ARG_UNUSED(dev);
     ARG_UNUSED(id);
-    
-    if (type != HID_REPORT_TYPE_INPUT) return -ENOTSUP;
 
-    if (id == 1) {
-        if (len < USB_HID_KEYBOARD_REPORT_SIZE){
+    if (type != HID_REPORT_TYPE_INPUT)
+        return -ENOTSUP;
+
+    if (id == 1)
+    {
+        if (len < USB_HID_KEYBOARD_REPORT_SIZE)
             return -ENOBUFS;
-        }
         memset(buf, 0, USB_HID_KEYBOARD_REPORT_SIZE);
         return USB_HID_KEYBOARD_REPORT_SIZE;
-    } else if (id == 2) {
-        if (len < USB_HID_MOUSE_REPORT_SIZE){
+    }
+    else if (id == 2)
+    {
+        if (len < USB_HID_MOUSE_REPORT_SIZE)
             return -ENOBUFS;
-        }
         memset(buf, 0, USB_HID_MOUSE_REPORT_SIZE);
         return USB_HID_MOUSE_REPORT_SIZE;
+    }
+    else if (id == USB_HID_RAW_REPORT_ID)
+    {
+        if (len < USB_HID_RAW_REPORT_SIZE)
+            return -ENOBUFS;
+        memset(buf, 0, USB_HID_RAW_REPORT_SIZE);
+        return USB_HID_RAW_REPORT_SIZE;
     }
 
     return -ENOTSUP;
@@ -165,7 +326,7 @@ static int usb_hid_get_report(const struct device *dev,
 
 /**
  * @brief Set HID report
- * 
+ *
  * Called by USB stack when host sends a report (SET_REPORT).
  * This is a required callback but we don't handle output reports.
  */
@@ -174,26 +335,46 @@ static int usb_hid_set_report(const struct device *dev,
                               const uint16_t len, const uint8_t *const buf)
 {
     ARG_UNUSED(dev);
-    ARG_UNUSED(id);
-    ARG_UNUSED(len);
-    ARG_UNUSED(buf);
-    
-    /* Accept but ignore all output reports */
+
+    /* Raw vendor report ID 3: dispatch to registered handler */
+    if (id == USB_HID_RAW_REPORT_ID && type == HID_REPORT_TYPE_OUTPUT)
+    {
+        usb_hid_raw_handler_t handler;
+        k_mutex_lock(&usb_hid_ctx.mutex, K_FOREVER);
+        handler = usb_hid_ctx.raw_handler;
+        k_mutex_unlock(&usb_hid_ctx.mutex);
+        if (handler && len > 0)
+        {
+            const uint8_t *data = buf;
+            uint16_t dlen = len;
+            /* Some Windows HID drivers include the Report ID as the first
+             * byte of the SET_REPORT data phase even though the HID spec
+             * says it should not be present (the ID is in the SETUP wValue).
+             * Strip it BEFORE clamping so the handler always receives a full
+             * USB_HID_RAW_PAYLOAD_SIZE-byte payload (not one byte short). */
+            if (dlen > 1 && data[0] == USB_HID_RAW_REPORT_ID)
+            {
+                data++;
+                dlen--;
+            }
+            handler(data, (uint8_t)MIN(dlen, (uint16_t)USB_HID_RAW_PAYLOAD_SIZE));
+        }
+    }
     return 0;
 }
 
 /**
  * @brief Protocol change callback
- * 
+ *
  * Called by USB stack when host changes protocol (boot vs report).
  */
 static void usb_hid_set_protocol(const struct device *dev, const uint8_t proto)
 {
     ARG_UNUSED(dev);
-    
-    LOG_INF("Protocol changed to: %s", 
+
+    LOG_INF("Protocol changed to: %s",
             proto == USB_HID_PROTOCOL_BOOT ? "Boot" : "Report");
-    
+
     k_mutex_lock(&usb_hid_ctx.mutex, K_FOREVER);
     usb_hid_ctx.protocol = proto;
     k_mutex_unlock(&usb_hid_ctx.mutex);
@@ -201,7 +382,7 @@ static void usb_hid_set_protocol(const struct device *dev, const uint8_t proto)
 
 /**
  * @brief Idle callback
- * 
+ *
  * Called by USB stack when idle rate changes.
  */
 static void usb_hid_set_idle(const struct device *dev,
@@ -222,19 +403,61 @@ static uint32_t usb_hid_get_idle(const struct device *dev, const uint8_t id)
 {
     ARG_UNUSED(dev);
     ARG_UNUSED(id);
-    
+
     uint32_t idle;
-    
+
     k_mutex_lock(&usb_hid_ctx.mutex, K_FOREVER);
     idle = usb_hid_ctx.idle_rate;
     k_mutex_unlock(&usb_hid_ctx.mutex);
-    
+
     return idle;
 }
 
 /**
+ * @brief Output report callback (interrupt OUT endpoint)
+ *
+ * Called by the USB stack when the host sends data via the interrupt OUT
+ * endpoint.  This is the path used by Linux and macOS hidapi (hid_write),
+ * as opposed to the SET_REPORT control transfer used by Windows.
+ *
+ * The data arriving on the interrupt OUT endpoint always includes the
+ * Report ID as the first byte when the device uses multiple report IDs,
+ * so strip it before forwarding to the raw handler — same logic as
+ * usb_hid_set_report().
+ */
+static void usb_hid_output_report(const struct device *dev,
+                                  const uint16_t len, const uint8_t *const buf)
+{
+    ARG_UNUSED(dev);
+
+    if (len == 0 || buf == NULL)
+    {
+        return;
+    }
+
+    /* Only dispatch vendor raw reports (Report ID 3). */
+    if (buf[0] != USB_HID_RAW_REPORT_ID)
+    {
+        return;
+    }
+
+    usb_hid_raw_handler_t handler;
+    k_mutex_lock(&usb_hid_ctx.mutex, K_FOREVER);
+    handler = usb_hid_ctx.raw_handler;
+    k_mutex_unlock(&usb_hid_ctx.mutex);
+
+    if (handler)
+    {
+        /* buf[0] is the Report ID — skip it, clamp to payload size. */
+        const uint8_t *data = buf + 1;
+        uint16_t dlen = len - 1;
+        handler(data, (uint8_t)MIN(dlen, (uint16_t)USB_HID_RAW_PAYLOAD_SIZE));
+    }
+}
+
+/**
  * @brief Input report done callback
- * 
+ *
  * Called when an input report has been successfully sent.
  */
 static void usb_hid_input_report_done(const struct device *dev,
@@ -242,7 +465,7 @@ static void usb_hid_input_report_done(const struct device *dev,
 {
     ARG_UNUSED(dev);
     ARG_UNUSED(report);
-    
+
     /* Signal that we can send another report */
     k_sem_give(&usb_hid_ctx.report_sem);
 }
@@ -252,6 +475,7 @@ static const struct hid_device_ops usb_hid_ops = {
     .iface_ready = usb_hid_iface_ready,
     .get_report = usb_hid_get_report,
     .set_report = usb_hid_set_report,
+    .output_report = usb_hid_output_report,
     .set_idle = usb_hid_set_idle,
     .get_idle = usb_hid_get_idle,
     .set_protocol = usb_hid_set_protocol,
@@ -262,25 +486,26 @@ static const struct hid_device_ops usb_hid_ops = {
 /* Transport Implementation                                                  */
 /*===========================================================================*/
 
-static char* type_to_str(hid_device_type_t type)
+static char *type_to_str(hid_device_type_t type)
 {
-    switch (type) {
-        case HID_DEVICE_KEYBOARD:
-            return "Keyboard";
-        case HID_DEVICE_GAMEPAD:
-            return "Gamepad";
-        case HID_DEVICE_MOUSE:
-            return "Mouse";
-        case HID_DEVICE_COMBO:
-            return "Combo";
-        default:
-            return "Unknown";
+    switch (type)
+    {
+    case HID_DEVICE_KEYBOARD:
+        return "Keyboard";
+    case HID_DEVICE_GAMEPAD:
+        return "Gamepad";
+    case HID_DEVICE_MOUSE:
+        return "Mouse";
+    case HID_DEVICE_COMBO:
+        return "Combo";
+    default:
+        return "Unknown";
     }
 }
 
 /**
  * @brief Initialize USB HID transport
- * 
+ *
  * @param device_types HID device types to support
  * @return 0 on success, negative error code on failure
  */
@@ -288,147 +513,161 @@ static int usb_hid_transport_init_fn(hid_device_type_t device_types)
 {
     int ret;
     struct usbd_context *usbd_ctx;
-    
-    if (usb_hid_ctx.initialized) {
+
+    if (usb_hid_ctx.initialized)
+    {
         LOG_WRN("USB HID transport already initialized");
         return 0;
     }
-    
+
     LOG_INF("Initializing USB HID transport (%s)", type_to_str(device_types));
-    
+
     /* Validate device type - only keyboard supported by Zephyr USBD stack*/
-    if (!(device_types & HID_DEVICE_KEYBOARD)) {
+    if (!(device_types & HID_DEVICE_KEYBOARD))
+    {
         LOG_ERR("Only keyboard device type is currently supported");
         return -ENOTSUP;
     }
-    
+
     /* Initialize synchronization primitives */
     ret = k_mutex_init(&usb_hid_ctx.mutex);
-    if (ret) {
+    if (ret)
+    {
         LOG_ERR("Failed to initialize mutex: %d", ret);
         return ret;
     }
-    
+
     ret = k_sem_init(&usb_hid_ctx.report_sem, 1, 1);
-    if (ret) {
+    if (ret)
+    {
         LOG_ERR("Failed to initialize semaphore: %d", ret);
         return ret;
     }
-    
+
     /* USB manager needs to initialized to get context */
     ret = usb_manager_is_initialized();
-    if (!ret) {
+    if (!ret)
+    {
         LOG_ERR("USB manager must be initialized before HID transport");
         return -EAGAIN;
     }
 
     usbd_ctx = usb_manager_get_context();
-    if (usbd_ctx == NULL) {
+    if (usbd_ctx == NULL)
+    {
         LOG_ERR("Failed to get USB device context");
         return -ENODEV;
     }
-    
+
     /* Get HID device from device tree */
     usb_hid_ctx.hid_dev = DEVICE_DT_GET(DT_NODELABEL(hid_dev_0));
-    if (!device_is_ready(usb_hid_ctx.hid_dev)) {
+    if (!device_is_ready(usb_hid_ctx.hid_dev))
+    {
         LOG_ERR("HID device not ready");
         return -ENODEV;
     }
-    
+
     /* Register HID device with report descriptor and callbacks */
     ret = hid_device_register(usb_hid_ctx.hid_dev,
                               hid_report_desc,
                               sizeof(hid_report_desc),
                               &usb_hid_ops);
-    if (ret) {
+    if (ret)
+    {
         LOG_ERR("Failed to register HID device: %d", ret);
         return ret;
     }
 
     /* Register ALL classes  */
     ret = usbd_register_all_classes(usbd_ctx, USBD_SPEED_FS, 1, NULL);
-    if (ret) {
+    if (ret)
+    {
         LOG_ERR("Failed to register USB classes: %d", ret);
         return ret;
     }
 
     /* Finalize USB stack (calls usbd_init()) */
     ret = usb_manager_finalize();
-    if (ret) {
+    if (ret)
+    {
         LOG_ERR("Failed to finalize USB manager: %d", ret);
         return ret;
     }
 
     usb_hid_ctx.initialized = true;
-    
+
     LOG_INF("USB HID transport initialized successfully");
-    
+
     return 0;
 }
 
 /**
  * @brief Enable USB HID transport
- * 
+ *
  * @return 0 on success, negative error code on failure
  */
 static int usb_hid_transport_enable(void)
 {
     int ret;
-    
-    if (!usb_hid_ctx.initialized) {
+
+    if (!usb_hid_ctx.initialized)
+    {
         LOG_ERR("USB HID transport not initialized");
         return -EINVAL;
     }
-    
-    if (usb_hid_ctx.enabled) {
+
+    if (usb_hid_ctx.enabled)
+    {
         LOG_WRN("USB HID transport already enabled");
         return 0;
     }
-    
+
     LOG_INF("Enabling USB HID transport");
-    
+
     /* Enable USB device via USB manager */
     ret = usb_manager_enable();
-    if (ret && ret != -EALREADY) {
+    if (ret && ret != -EALREADY)
+    {
         LOG_ERR("Failed to enable USB manager: %d", ret);
         return ret;
     }
-    
+
     k_mutex_lock(&usb_hid_ctx.mutex, K_FOREVER);
     usb_hid_ctx.enabled = true;
     k_mutex_unlock(&usb_hid_ctx.mutex);
-    
+
     LOG_INF("USB HID transport enabled successfully");
-    
+
     return 0;
 }
 
 /**
  * @brief Disable USB HID transport
- * 
+ *
  * @return 0 on success, negative error code on failure
  */
 static int usb_hid_transport_disable(void)
 {
-    if (!usb_hid_ctx.initialized) {
+    if (!usb_hid_ctx.initialized)
+    {
         return 0;
     }
-    
+
     LOG_INF("Disabling USB HID transport");
-    
+
     k_mutex_lock(&usb_hid_ctx.mutex, K_FOREVER);
     usb_hid_ctx.enabled = false;
     usb_hid_ctx.interface_ready = false;
     k_mutex_unlock(&usb_hid_ctx.mutex);
-    
+
     LOG_INF("USB HID transport disabled");
-    
+
     return 0;
 }
 
 /**
  * @brief Check if USB HID is connected
- * 
+ *
  * @return true if connected and ready to send reports, false otherwise
  */
 static bool usb_hid_transport_is_connected(void)
@@ -438,7 +677,7 @@ static bool usb_hid_transport_is_connected(void)
 
 /**
  * @brief Send keyboard report via USB HID
- * 
+ *
  * @param report Pointer to keyboard report structure
  * @return 0 on success, negative error code on failure
  */
@@ -446,64 +685,68 @@ static int usb_hid_transport_send_keyboard(const hid_keyboard_report_t *report)
 {
     int ret;
     static uint8_t __aligned(4) report_buf[USB_HID_KEYBOARD_REPORT_SIZE];
-    
-    if (!usb_hid_ctx.initialized || !report) {
+
+    if (!usb_hid_ctx.initialized || !report)
+    {
         return -EINVAL;
     }
-    
+
     k_mutex_lock(&usb_hid_ctx.mutex, K_FOREVER);
-    
+
     /* Check if we can send reports */
-    if (!usb_hid_ctx.enabled) {
+    if (!usb_hid_ctx.enabled)
+    {
         k_mutex_unlock(&usb_hid_ctx.mutex);
         return -EAGAIN;
     }
-    
-    if (!usb_hid_ctx.interface_ready) {
+
+    if (!usb_hid_ctx.interface_ready)
+    {
         k_mutex_unlock(&usb_hid_ctx.mutex);
         return -EAGAIN;
     }
-    
+
     /* Build HID keyboard report */
     report_buf[0] = 0x01;
-    report_buf[1] = report->modifiers; 
+    report_buf[1] = report->modifiers;
     report_buf[2] = 0;
-    memcpy(&report_buf[3], report->keys, HID_MAX_KEYS);  /* Key array (6 bytes) */
-    
+    memcpy(&report_buf[3], report->keys, HID_MAX_KEYS); /* Key array (6 bytes) */
+
     k_mutex_unlock(&usb_hid_ctx.mutex);
-    
+
     /* Wait for previous report to complete (non-blocking with timeout) */
     ret = k_sem_take(&usb_hid_ctx.report_sem, K_MSEC(100));
-    if (ret) {
+    if (ret)
+    {
         LOG_WRN("Timeout waiting for previous report to complete");
         return -EBUSY;
     }
-    
+
     /* Send report via USB HID */
-    ret = hid_device_submit_report(usb_hid_ctx.hid_dev, 
-                                    USB_HID_KEYBOARD_REPORT_SIZE,
-                                    report_buf);
-    
-    if (ret) {
+    ret = hid_device_submit_report(usb_hid_ctx.hid_dev,
+                                   USB_HID_KEYBOARD_REPORT_SIZE,
+                                   report_buf);
+
+    if (ret)
+    {
         k_sem_give(&usb_hid_ctx.report_sem);
         LOG_ERR("Failed to send keyboard report: %d", ret);
         return ret;
     }
-    
+
     LOG_INF("Sent keyboard report: mod=0x%02x keys=[%02x %02x %02x %02x %02x %02x]",
             report->modifiers,
             report->keys[0], report->keys[1], report->keys[2],
             report->keys[3], report->keys[4], report->keys[5]);
-    
+
     /* Semaphore will be released in input_report_done callback */
-    
+
     return 0;
 }
 
-
 /**
  * @brief Send mouse report via USB HID
- * 
+ *
  * @param report Pointer to mouse report structure
  * @return 0 on success, negative error code on failure
  */
@@ -511,68 +754,73 @@ static int usb_hid_transport_send_mouse(const hid_mouse_report_t *report)
 {
     int ret;
     static uint8_t __aligned(4) report_buf[USB_HID_MOUSE_REPORT_SIZE];
-    
-    if (!usb_hid_ctx.initialized || !report) {
+
+    if (!usb_hid_ctx.initialized || !report)
+    {
         return -EINVAL;
     }
-    
+
     k_mutex_lock(&usb_hid_ctx.mutex, K_FOREVER);
-    
+
     /* Check if we can send reports */
-    if (!usb_hid_ctx.enabled) {
+    if (!usb_hid_ctx.enabled)
+    {
         k_mutex_unlock(&usb_hid_ctx.mutex);
         return -EAGAIN;
     }
-    
-    if (!usb_hid_ctx.interface_ready) {
+
+    if (!usb_hid_ctx.interface_ready)
+    {
         k_mutex_unlock(&usb_hid_ctx.mutex);
         return -EAGAIN;
     }
-    
+
     /* Build HID mouse report */
     report_buf[0] = 0x02;
-    report_buf[1] = report->buttons;      /* Button byte */
-    report_buf[2] = report->dx;           /* X movement */
-    report_buf[3] = report->dy;           /* Y movement */
-    report_buf[4] = report->wheel;        /* Wheel movement */
-    
+    report_buf[1] = report->buttons; /* Button byte */
+    report_buf[2] = report->dx;      /* X movement */
+    report_buf[3] = report->dy;      /* Y movement */
+    report_buf[4] = report->wheel;   /* Wheel movement */
+
     k_mutex_unlock(&usb_hid_ctx.mutex);
-    
+
     /* Wait for previous report to complete (non-blocking with timeout) */
     ret = k_sem_take(&usb_hid_ctx.report_sem, K_MSEC(100));
-    if (ret) {
+    if (ret)
+    {
         LOG_WRN("Timeout waiting for previous report to complete");
         return -EBUSY;
     }
-    
+
     /* Send report via USB HID */
-    ret = hid_device_submit_report(usb_hid_ctx.hid_dev, 
+    ret = hid_device_submit_report(usb_hid_ctx.hid_dev,
                                    USB_HID_MOUSE_REPORT_SIZE,
                                    report_buf);
-    
-    if (ret) {
+
+    if (ret)
+    {
         k_sem_give(&usb_hid_ctx.report_sem);
         LOG_ERR("Failed to send mouse report: %d", ret);
         return ret;
     }
-    
+
     LOG_INF("Sent mouse report: buttons=0x%02x dx=%d dy=%d wheel=%d",
             report->buttons, report->dx, report->dy, report->wheel);
-    
+
     /* Semaphore will be released in input_report_done callback */
-    
+
     return 0;
 }
 
 /**
  * @brief Send gamepad report via USB HID
- * 
+ *
  * @note Currently not implemented - keyboard and mouse supported only
  */
 static int usb_hid_transport_send_gamepad(const hid_gamepad_report_t *report)
 {
     ARG_UNUSED(report);
-    
+
     LOG_WRN("Gamepad not supported in Zephyr USB HID stack");
     return -ENOTSUP;
 }
@@ -595,47 +843,49 @@ static const hid_transport_ops_t usb_hid_transport_ops = {
 
 /**
  * @brief Initialize and register USB HID transport
- * 
+ *
  * This function should be called during system initialization to register
  * the USB HID transport with the HID manager.
- * 
+ *
  * @return 0 on success, negative error code on failure
  */
 int usb_hid_transport_init(void)
 {
     int ret;
-    
+
     LOG_INF("Registering USB HID transport with HID manager");
-    
+
     /* Register transport with HID manager */
     ret = hid_manager_register_transport(&usb_hid_transport_ops);
-    if (ret) {
+    if (ret)
+    {
         LOG_ERR("Failed to register USB HID transport: %d", ret);
         return ret;
     }
-    
+
     LOG_INF("USB HID transport registered successfully");
-    
+
     return 0;
 }
 
 /**
  * @brief Get the USB HID device
- * 
+ *
  * @return Pointer to HID device, or NULL if not initialized
  */
 const struct device *usb_hid_get_device(void)
 {
-    if (!usb_hid_ctx.initialized) {
+    if (!usb_hid_ctx.initialized)
+    {
         return NULL;
     }
-    
+
     return usb_hid_ctx.hid_dev;
 }
 
 /**
  * @brief Check if USB HID is ready to send reports
- * 
+ *
  * @return true if ready, false otherwise
  */
 bool usb_hid_is_ready(void)
@@ -645,10 +895,64 @@ bool usb_hid_is_ready(void)
 
 /**
  * @brief Get current protocol
- * 
+ *
  * @return Current protocol (0=boot, 1=report)
  */
 uint8_t usb_hid_get_protocol(void)
 {
     return usb_hid_ctx.protocol;
+}
+
+/**
+ * @brief Register a handler for incoming raw OUT reports (Report ID 3).
+ *
+ * The callback is invoked from the USB interrupt context, so it must be
+ * ISR-safe (no blocking, no heavy work — use a work queue if needed).
+ *
+ * @param handler Callback, or NULL to unregister.
+ */
+void usb_hid_raw_set_handler(usb_hid_raw_handler_t handler)
+{
+    k_mutex_lock(&usb_hid_ctx.mutex, K_FOREVER);
+    usb_hid_ctx.raw_handler = handler;
+    k_mutex_unlock(&usb_hid_ctx.mutex);
+}
+
+/**
+ * @brief Send a raw IN report (Report ID 3) to the host.
+ *
+ * @param payload  63-byte payload buffer (must be exactly USB_HID_RAW_PAYLOAD_SIZE).
+ * @return 0 on success, negative on error.
+ */
+int usb_hid_raw_send(const uint8_t *payload)
+{
+    if (!payload)
+    {
+        return -EINVAL;
+    }
+    if (!usb_hid_transport_is_connected())
+    {
+        return -ENOTCONN;
+    }
+
+    static uint8_t __aligned(4) report_buf[USB_HID_RAW_REPORT_SIZE];
+
+    int ret = k_sem_take(&usb_hid_ctx.report_sem, K_MSEC(100));
+    if (ret)
+    {
+        return -EBUSY;
+    }
+
+    report_buf[0] = USB_HID_RAW_REPORT_ID;
+    memcpy(&report_buf[1], payload, USB_HID_RAW_PAYLOAD_SIZE);
+
+    ret = hid_device_submit_report(usb_hid_ctx.hid_dev,
+                                   USB_HID_RAW_REPORT_SIZE,
+                                   report_buf);
+    if (ret)
+    {
+        k_sem_give(&usb_hid_ctx.report_sem);
+        LOG_ERR("Failed to send raw report: %d", ret);
+    }
+    return ret;
 }

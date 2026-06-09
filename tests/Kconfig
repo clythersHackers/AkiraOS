@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Test-scope Kconfig for the AkiraOS ztest suite.
+#
+# rsource pulls in the parent AkiraOS/Kconfig (resolved relative to this
+# file), which itself does `source "Kconfig.zephyr"` so all Zephyr and
+# AkiraOS symbols are available.  Zephyr's kconfig.cmake auto-discovers
+# this file via APPLICATION_SOURCE_DIR/Kconfig.
+
+rsource "../Kconfig"

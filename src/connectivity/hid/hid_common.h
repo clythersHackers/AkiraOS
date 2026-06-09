@@ -4,6 +4,8 @@
  *
  * Provides unified HID types for keyboard and gamepad profiles
  * used by both Bluetooth HID and USB HID implementations.
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_HID_COMMON_H

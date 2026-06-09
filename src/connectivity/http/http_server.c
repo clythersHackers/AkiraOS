@@ -18,8 +18,12 @@ LOG_MODULE_REGISTER(http_server, CONFIG_AKIRA_LOG_LEVEL);
 
 #define MAX_ROUTES 16
 #define MAX_WS_CLIENTS 4
-#define SERVER_THREAD_STACK_SIZE 4096
+#define SERVER_THREAD_STACK_SIZE CONFIG_AKIRA_HTTP_SERVER_STACK_SIZE
 #define SERVER_THREAD_PRIORITY 7
+
+#define CORS_ALLOWED_METHODS "GET, POST, DELETE, OPTIONS"
+#define CORS_ALLOWED_HEADERS "Content-Type, Authorization"
+#define CORS_MAX_AGE "86400"
 
 /*===========================================================================*/
 /* Internal State                                                            */
@@ -158,11 +162,28 @@ typedef struct
     http_content_type_t content_type;
     char headers[512];
     size_t headers_len;
+    char allowed_origin[256];
+    bool is_preflight;
 } response_ctx_t;
+
+static response_ctx_t *current_resp_ctx = NULL;
 
 static int resp_set_header(const char *name, const char *value)
 {
-    /* TODO: Implement header setting */
+    if (!current_resp_ctx || !name || !value)
+        return -1;
+
+    /* Append header: "Name: Value\r\n" */
+    int avail = sizeof(current_resp_ctx->headers) - current_resp_ctx->headers_len;
+    if (avail <= 1)
+        return -1;
+
+    int written = snprintf(current_resp_ctx->headers + current_resp_ctx->headers_len,
+                           avail, "%s: %s\r\n", name, value);
+    if (written < 0 || written >= avail)
+        return -1;
+
+    current_resp_ctx->headers_len += written;
     return 0;
 }
 
@@ -170,19 +191,54 @@ static int resp_send(response_ctx_t *ctx, const char *data, size_t len)
 {
     if (!ctx->headers_sent)
     {
-        char header[256];
-        int hlen = snprintf(header, sizeof(header),
-                            "HTTP/1.1 %d %s\r\n"
-                            "Content-Type: %s\r\n"
-                            "Content-Length: %zu\r\n"
-                            "Connection: close\r\n"
-                            "\r\n",
-                            ctx->status_code, http_status_text(ctx->status_code),
-                            content_type_str(ctx->content_type), len);
+        char header[1024];
+        int pos = 0;
 
-        send(ctx->client_fd, header, hlen, 0);
+        pos += snprintf(header + pos, sizeof(header) - pos,
+                        "HTTP/1.1 %d %s\r\n"
+                        "Content-Type: %s\r\n"
+                        "Content-Length: %zu\r\n"
+                        "Connection: close\r\n",
+                        ctx->status_code, http_status_text(ctx->status_code),
+                        content_type_str(ctx->content_type), len);
+
+        /* Custom headers added by handlers */
+        if (ctx->headers_len > 0)
+        {
+            int copy_len = ctx->headers_len;
+            if (pos + copy_len < (int)sizeof(header))
+            {
+                memcpy(header + pos, ctx->headers, copy_len);
+                pos += copy_len;
+            }
+        }
+
+        /* Dynamic CORS: echo back Origin when allowed */
+        if (ctx->allowed_origin[0] != '\0')
+        {
+            pos += snprintf(header + pos, sizeof(header) - pos,
+                            "Access-Control-Allow-Origin: %s\r\n",
+                            ctx->allowed_origin);
+            pos += snprintf(header + pos, sizeof(header) - pos,
+                            "Vary: Origin\r\n");
+
+            if (ctx->is_preflight)
+            {
+                pos += snprintf(header + pos, sizeof(header) - pos,
+                                "Access-Control-Allow-Methods: " CORS_ALLOWED_METHODS "\r\n");
+                pos += snprintf(header + pos, sizeof(header) - pos,
+                                "Access-Control-Allow-Headers: " CORS_ALLOWED_HEADERS "\r\n");
+                pos += snprintf(header + pos, sizeof(header) - pos,
+                                "Access-Control-Max-Age: " CORS_MAX_AGE "\r\n");
+            }
+        }
+
+        /* End headers */
+        pos += snprintf(header + pos, sizeof(header) - pos, "\r\n");
+
+        send(ctx->client_fd, header, pos, 0);
         ctx->headers_sent = true;
-        http_srv.stats.bytes_sent += hlen;
+        http_srv.stats.bytes_sent += pos;
     }
 
     if (data && len > 0)
@@ -194,10 +250,111 @@ static int resp_send(response_ctx_t *ctx, const char *data, size_t len)
     return 0;
 }
 
-static int resp_send_json(response_ctx_t *ctx, const char *json)
+static int __attribute__((unused)) resp_send_json(response_ctx_t *ctx, const char *json)
 {
     ctx->content_type = HTTP_CONTENT_JSON;
     return resp_send(ctx, json, strlen(json));
+}
+
+/* Helper: simple header extraction (case-sensitive for typical clients) */
+static void extract_header_value(const char *raw, const char *header, char *out, size_t out_len)
+{
+    out[0] = '\0';
+    if (!raw || !header || !out)
+        return;
+
+    const char *p = strstr(raw, header);
+    if (!p)
+    {
+        /* try with CRLF prefix */
+        char with_crlf[64];
+        snprintf(with_crlf, sizeof(with_crlf), "\r\n%s", header);
+        p = strstr(raw, with_crlf);
+        if (p)
+            p += 2; /* skip CRLF */
+    }
+    if (!p)
+        return;
+
+    /* Move past header name */
+    p += strlen(header);
+
+    /* Skip optional spaces */
+    while (*p == ' ' || *p == '\t')
+        p++;
+
+    /* Value ends at CRLF or LF */
+    const char *end = strstr(p, "\r\n");
+    if (!end)
+        end = strchr(p, '\n');
+    size_t l = end ? (size_t)(end - p) : strlen(p);
+    if (l >= out_len)
+        l = out_len - 1;
+    memcpy(out, p, l);
+    out[l] = '\0';
+}
+
+static bool host_ends_with(const char *host, const char *suffix)
+{
+    if (!host || !suffix)
+        return false;
+    size_t hlen = strlen(host);
+    size_t slen = strlen(suffix);
+    if (hlen < slen)
+        return false;
+    return strcmp(host + hlen - slen, suffix) == 0;
+}
+
+static bool origin_allowed_by_policy(const char *origin)
+{
+    if (!origin || origin[0] == '\0')
+        return false;
+
+    /* Extract host portion from origin (skip scheme) */
+    const char *p = strstr(origin, "://");
+    const char *hoststart = p ? p + 3 : origin;
+    const char *hostend = strchr(hoststart, '/');
+    size_t hostport_len = hostend ? (size_t)(hostend - hoststart) : strlen(hoststart);
+    char hostport[128] = {0};
+    if (hostport_len >= sizeof(hostport))
+        hostport_len = sizeof(hostport) - 1;
+    memcpy(hostport, hoststart, hostport_len);
+    hostport[hostport_len] = '\0';
+
+    /* Split host:port */
+    char host[128] = {0};
+    char *colon = strchr(hostport, ':');
+    size_t host_len = colon ? (size_t)(colon - hostport) : strlen(hostport);
+    if (host_len >= sizeof(host))
+        host_len = sizeof(host) - 1;
+    memcpy(host, hostport, host_len);
+    host[host_len] = '\0';
+
+    /* Allow localhost and loopback */
+    if (strcmp(host, "localhost") == 0 || strcmp(host, "127.0.0.1") == 0 || strcmp(host, "::1") == 0)
+        return true;
+
+    /* Allow any subdomain of akiraos.dev */
+    if (strcmp(host, "akiraos.dev") == 0 || host_ends_with(host, ".akiraos.dev"))
+        return true;
+
+    return false;
+}
+
+/* Wrappers so handlers can call res->send/res->send_json without ctx param */
+static int res_send_wrapper(const char *data, size_t len)
+{
+    if (!current_resp_ctx)
+        return -1;
+    return resp_send(current_resp_ctx, data, len);
+}
+
+static int res_send_json_wrapper(const char *json)
+{
+    if (!current_resp_ctx)
+        return -1;
+    current_resp_ctx->content_type = HTTP_CONTENT_JSON;
+    return resp_send(current_resp_ctx, json, strlen(json));
 }
 
 /*===========================================================================*/
@@ -267,6 +424,8 @@ static int handle_request(int client_fd, char *buffer, size_t len)
         .body = body,
         .body_len = body_len,
         .content_length = content_length,
+        .raw = buffer,
+        .client_fd = client_fd,
     };
 
     /* Build response context */
@@ -280,7 +439,31 @@ static int handle_request(int client_fd, char *buffer, size_t len)
     http_response_t res = {
         .status_code = 200,
         .content_type = HTTP_CONTENT_HTML,
+        .body = NULL,
+        .body_len = 0,
     };
+
+    /* initialize response ctx extras */
+    resp_ctx.headers_len = 0;
+    resp_ctx.allowed_origin[0] = '\0';
+    resp_ctx.is_preflight = (method == HTTP_OPTIONS);
+
+    /* wire response helpers so handlers can set headers/send easily */
+    res.set_header = resp_set_header;
+    res.send = res_send_wrapper;
+    res.send_json = res_send_json_wrapper;
+
+    /* Compute allowed origin from request headers */
+    char origin_val[256] = {0};
+    extract_header_value(buffer, "Origin:", origin_val, sizeof(origin_val));
+    if (origin_val[0] != '\0' && origin_allowed_by_policy(origin_val))
+    {
+        strncpy(resp_ctx.allowed_origin, origin_val, sizeof(resp_ctx.allowed_origin) - 1);
+        resp_ctx.allowed_origin[sizeof(resp_ctx.allowed_origin) - 1] = '\0';
+    }
+
+    /* make current context available to helpers */
+    current_resp_ctx = &resp_ctx;
 
     /* Find matching route */
     http_route_t *route = find_route(method, path);
@@ -291,10 +474,23 @@ static int handle_request(int client_fd, char *buffer, size_t len)
         resp_ctx.status_code = res.status_code;
         resp_ctx.content_type = res.content_type;
 
-        if (ret != 0 && !resp_ctx.headers_sent)
+        if (!resp_ctx.headers_sent)
         {
-            resp_ctx.status_code = 500;
-            resp_send(&resp_ctx, "Internal Server Error", 21);
+            if (ret == 0 && res.body != NULL)
+            {
+                size_t blen = res.body_len ? res.body_len : strlen(res.body);
+                resp_send(&resp_ctx, res.body, blen);
+            }
+            else if (ret != 0)
+            {
+                resp_ctx.status_code = 500;
+                resp_send(&resp_ctx, "Internal Server Error", 21);
+            }
+            else
+            {
+                /* Handler sent no body and no error: send empty 200 */
+                resp_send(&resp_ctx, "", 0);
+            }
         }
     }
     else
@@ -324,6 +520,9 @@ static int handle_request(int client_fd, char *buffer, size_t len)
     }
 
     http_srv.stats.requests_handled++;
+
+    /* clear current response context */
+    current_resp_ctx = NULL;
 
     return 0;
 }
@@ -572,6 +771,12 @@ void akira_http_notify_network(bool connected, const char *ip_address)
     {
         strncpy(http_srv.stats.server_ip, ip_address, sizeof(http_srv.stats.server_ip) - 1);
         LOG_INF("Network connected: %s", ip_address);
+
+#ifdef CONFIG_AKIRA_MDNS
+        /* Advertise via mDNS/DNS-SD once we have an IP */
+        extern void akira_mdns_start(const char *device_name);
+        akira_mdns_start(NULL);
+#endif
     }
     else
     {
@@ -594,6 +799,17 @@ int akira_http_get_stats(http_server_stats_t *stats)
     k_mutex_unlock(&http_srv.mutex);
 
     return 0;
+}
+
+/* Upload response: set by upload_chunk_cb_t on final chunk; read by handle_request */
+static const char *upload_response_ptr = "{\"status\":\"ok\"}";
+
+void akira_http_set_upload_response(const char *json)
+{
+    if (json)
+    {
+        upload_response_ptr = json;
+    }
 }
 
 /*===========================================================================*/

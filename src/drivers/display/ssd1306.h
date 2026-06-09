@@ -1,6 +1,8 @@
 /**
  * @file ssd1306.h
  * @brief SSD1306 OLED Display Driver
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_SSD1306_H

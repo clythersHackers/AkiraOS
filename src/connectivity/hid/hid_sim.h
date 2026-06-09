@@ -1,6 +1,8 @@
 /**
  * @file hid_sim.h
  * @brief HID Simulation for native_sim Testing
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_HID_SIM_H

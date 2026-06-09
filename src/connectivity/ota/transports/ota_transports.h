@@ -1,6 +1,8 @@
 /**
  * @file ota_transports.h
  * @brief OTA Transport Initializers
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef AKIRA_OTA_TRANSPORTS_H

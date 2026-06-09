@@ -9,9 +9,12 @@
 #include "akira_runtime.h"
 #include <lib/mem_helper.h>
 #include <lib/simple_json.h>
+#include <lib/akpkg.h>
 #include "../storage/fs_manager.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include "../../akira.h"
+#include "../../akira_platform_stubs.h"
 #include <zephyr/fs/fs.h>
 #include <zephyr/sys/crc.h>
 #include <string.h>
@@ -322,17 +325,19 @@ int app_manager_install(const char *name, const void *binary, size_t size,
         /* Update existing app */
         LOG_INF("Updating existing app: %s", app_name);
 
-        /* Stop if running */
-        if (existing->state == APP_STATE_RUNNING && existing->container_id >= 0)
-        {
-            akira_runtime_stop(existing->container_id);
-        }
+        /* Zero container_id under the lock first so a second concurrent install
+         * thread will see -1 and skip the destroy even if akira_runtime_stop()
+         * momentarily drops g_registry_mutex internally. */
+        int old_cid = existing->container_id;
+        existing->container_id = -1;
 
-        /* Destroy old container */
-        if (existing->container_id >= 0)
+        if (old_cid >= 0)
         {
-            akira_runtime_destroy(existing->container_id);
-            existing->container_id = -1;
+            if (existing->state == APP_STATE_RUNNING)
+            {
+                akira_runtime_stop(old_cid);
+            }
+            akira_runtime_destroy(old_cid);
         }
     }
     else
@@ -404,6 +409,7 @@ int app_manager_install(const char *name, const void *binary, size_t size,
     k_mutex_unlock(&g_registry_mutex);
 
     LOG_INF("Installed app: %s (ID: %d, size: %zu)", app_name, existing->id, size);
+    akira_on_app_installed(app_name, existing->id, existing->version);
     return existing->id;
 }
 
@@ -561,6 +567,7 @@ int app_manager_uninstall(const char *name)
     k_mutex_unlock(&g_registry_mutex);
 
     LOG_INF("Uninstalled app: %s", name);
+    akira_on_app_uninstalled(name);
     return 0;
 }
 
@@ -642,17 +649,26 @@ int app_manager_start(const char *name)
         }
 
         /* Install into Akira runtime (saves binary + creates container). */
-        char manifest_json[512] = {0};
+        char *manifest_json = NULL;
         char json_path[APP_PATH_MAX_LEN];
         snprintf(json_path, sizeof(json_path), "%s/%03d_%s.json",
                  APPS_DIR, app->id, app->name);
         ssize_t json_len = -1;
         if (fs_manager_exists(json_path)) {
-            json_len = fs_manager_read_file(json_path, manifest_json,
-                                           sizeof(manifest_json) - 1);
-            if (json_len > 0) {
-                manifest_json[json_len] = '\0';
-                LOG_INF("Using stored manifest JSON for %s (%zd bytes)", name, json_len);
+            ssize_t json_file_size = fs_manager_get_size(json_path);
+            if (json_file_size > 0) {
+                manifest_json = akira_malloc_buffer((size_t)json_file_size + 1);
+                if (manifest_json) {
+                    json_len = fs_manager_read_file(json_path, manifest_json,
+                                                    (size_t)json_file_size);
+                    if (json_len > 0) {
+                        manifest_json[json_len] = '\0';
+                        LOG_INF("Using stored manifest JSON for %s (%zd bytes)", name, json_len);
+                    } else {
+                        akira_free_buffer(manifest_json);
+                        manifest_json = NULL;
+                    }
+                }
             }
         }
 
@@ -661,6 +677,7 @@ int app_manager_start(const char *name)
             json_len > 0 ? manifest_json : NULL,
             json_len > 0 ? (size_t)json_len : 0);
         akira_free_buffer(buffer);
+        akira_free_buffer(manifest_json);
 
         if (load_ret < 0)
         {
@@ -716,6 +733,8 @@ int app_manager_start(const char *name)
     char lc_name[APP_NAME_MAX_LEN];
     strncpy(lc_name, app->name, APP_NAME_MAX_LEN);
     k_mutex_unlock(&g_registry_mutex);
+
+    akira_on_app_started(lc_name, container_id);
 
 #ifdef CONFIG_AKIRA_WASM_IPC
     {
@@ -1166,13 +1185,27 @@ int app_manager_install_end(int session, const app_manifest_t *manifest)
         return -EAGAIN;
     }
 
-    /* Install the app */
-    int ret = app_manager_install(
-        g_sessions[session].name,
-        g_sessions[session].buffer,
-        g_sessions[session].total_size,
-        manifest,
-        g_sessions[session].source);
+    /* Auto-detect .akpkg (gzip) and dispatch accordingly */
+    int ret;
+    if (akpkg_is_gzip(g_sessions[session].buffer, g_sessions[session].received))
+    {
+        LOG_INF("install_end: detected .akpkg, decompressing session %d", session);
+        ret = app_manager_install_akpkg(
+            g_sessions[session].name, APP_NAME_MAX_LEN,
+            g_sessions[session].buffer,
+            g_sessions[session].total_size,
+            g_sessions[session].source);
+    }
+    else
+    {
+        /* Install the app */
+        ret = app_manager_install(
+            g_sessions[session].name,
+            g_sessions[session].buffer,
+            g_sessions[session].total_size,
+            manifest,
+            g_sessions[session].source);
+    }
 
     /* Clean up session */
     akira_free_buffer(g_sessions[session].buffer);
@@ -1335,6 +1368,20 @@ static int registry_load(void)
         return -EINVAL;
     }
 
+    /* Verify CRC: temporarily zero the crc field, compute, restore */
+    if (header->crc != 0)
+    {
+        uint32_t stored_crc = header->crc;
+        header->crc = 0;
+        uint32_t computed = crc32_ieee(buffer, read);
+        header->crc = stored_crc;
+        if (computed != stored_crc)
+        {
+            LOG_WRN("Registry CRC mismatch (stored=0x%08x computed=0x%08x)", stored_crc, computed);
+            return -EIO;
+        }
+    }
+
     /* Read entries */
     int count = header->app_count;
     if (count > CONFIG_AKIRA_APP_MAX_INSTALLED)
@@ -1370,13 +1417,13 @@ static int registry_save(void)
     uint8_t buffer[sizeof(registry_header_t) + CONFIG_AKIRA_APP_MAX_INSTALLED * sizeof(app_entry_t)];
     size_t offset = 0;
 
-    /* Write header */
+    /* Write header with crc=0 placeholder; will be patched after entries are written */
     registry_header_t header = {
         .magic = REGISTRY_MAGIC,
         .version = REGISTRY_VERSION,
         .app_count = g_app_count,
         .reserved = 0,
-        .crc = 0, /* TODO: Calculate CRC */
+        .crc = 0,
     };
 
     memcpy(buffer, &header, sizeof(header));
@@ -1391,6 +1438,10 @@ static int registry_save(void)
             offset += sizeof(app_entry_t);
         }
     }
+
+    /* Patch CRC over the entire serialized payload (header crc field = 0) */
+    uint32_t crc = crc32_ieee(buffer, offset);
+    ((registry_header_t *)buffer)->crc = crc;
 
     /* Save using fs_manager (handles RAM fallback) */
     ssize_t written = fs_manager_write_file(REGISTRY_PATH, buffer, offset);
@@ -1512,10 +1563,10 @@ static int delete_app_binary(const char *name)
         return -ENOENT;
     }
 
-    /* Delete both .wasm and .aot variants if they exist */
+    /* Delete .wasm, .aot, and .json variants if they exist */
     char path[APP_PATH_MAX_LEN];
-    static const char *exts[] = {".wasm", ".aot"};
-    for (int i = 0; i < 2; i++) {
+    static const char *exts[] = {".wasm", ".aot", ".json"};
+    for (int i = 0; i < 3; i++) {
         snprintf(path, sizeof(path), "%s/%03d_%s%s", APPS_DIR, app->id, name, exts[i]);
         int ret = fs_manager_delete_file(path);
         if (ret < 0 && ret != -ENOENT)
@@ -1634,6 +1685,11 @@ static void app_manager_on_runtime_exit(int slot, int exit_code)
 #endif /* CONFIG_AKIRA_SD_XIP */
 
     k_mutex_unlock(&g_registry_mutex);
+
+    /* Notify platform overlay when an app exits abnormally */
+    if (exit_code != 0 && lc_name[0] != '\0') {
+        akira_on_app_crashed(lc_name, exit_code);
+    }
 
 #ifdef CONFIG_AKIRA_WASM_IPC
     if (lc_state >= 0) {
@@ -1819,3 +1875,121 @@ int app_manager_run_from_sd(const char *name_or_path)
     return 0;
 }
 #endif /* CONFIG_AKIRA_SD_XIP */
+
+/* ===== .akpkg install ===== */
+
+int app_manager_install_akpkg(char *name, size_t name_size,
+                              const uint8_t *pkg, size_t pkg_len,
+                              app_source_t source)
+{
+    if (!g_initialized) {
+        return -ENODEV;
+    }
+    if (!pkg || pkg_len == 0) {
+        return -EINVAL;
+    }
+    if (!akpkg_is_gzip(pkg, pkg_len)) {
+        LOG_ERR("akpkg: buffer is not a gzip stream");
+        return -EINVAL;
+    }
+
+    /* --- Decompress --- */
+    /* ISIZE is at the last 4 bytes; for files < 4 GiB this is the exact size. */
+    size_t isize = (size_t)pkg[pkg_len - 4]
+                 | ((size_t)pkg[pkg_len - 3] << 8)
+                 | ((size_t)pkg[pkg_len - 2] << 16)
+                 | ((size_t)pkg[pkg_len - 1] << 24);
+
+    if (isize == 0 || isize > 4u * 1024u * 1024u) {
+        LOG_ERR("akpkg: implausible ISIZE %zu", isize);
+        return -EINVAL;
+    }
+
+    uint8_t *tar_buf = akira_malloc_buffer(isize);
+    if (!tar_buf) {
+        LOG_ERR("akpkg: cannot allocate %zu bytes for decompressed tar", isize);
+        return -ENOMEM;
+    }
+
+    ssize_t tar_len = akpkg_inflate(pkg, pkg_len, tar_buf, isize);
+    if (tar_len < 0) {
+        LOG_ERR("akpkg: inflate failed (%zd)", tar_len);
+        akira_free_buffer(tar_buf);
+        return (int)tar_len;
+    }
+
+    /* --- Extract tar entries --- */
+    const uint8_t *wasm_ptr;    size_t wasm_size;
+    const char    *mfst_ptr;    size_t mfst_size;
+
+    int ret = akpkg_tar_extract(tar_buf, (size_t)tar_len,
+                                &wasm_ptr, &wasm_size,
+                                &mfst_ptr, &mfst_size);
+    if (ret) {
+        LOG_ERR("akpkg: tar extraction failed (%d)", ret);
+        akira_free_buffer(tar_buf);
+        return ret;
+    }
+
+    LOG_INF("akpkg: wasm=%zu B  manifest=%zu B", wasm_size, mfst_size);
+
+    /* --- Determine app name (use caller buffer directly) --- */
+    if (!name || name_size == 0) {
+        akira_free_buffer(tar_buf);
+        return -EINVAL;
+    }
+    if (name[0] == '\0') {
+        strncpy(name, "uploaded_app", name_size - 1);
+        name[name_size - 1] = '\0';
+    }
+    /* Alias for readability inside this function */
+    char *app_name = name;
+
+    /* --- Parse manifest --- */
+    app_manifest_t manifest;
+    bool has_manifest = false;
+
+    if (mfst_size > 0 && mfst_size < 4096u) {
+        /* app_manifest_parse requires a null-terminated string. */
+        char *json_copy = akira_malloc_buffer(mfst_size + 1u);
+        if (json_copy) {
+            memcpy(json_copy, mfst_ptr, mfst_size);
+            json_copy[mfst_size] = '\0';
+            if (app_manifest_parse(json_copy, mfst_size, &manifest) == 0) {
+                has_manifest = true;
+                /* Manifest name always takes precedence over the caller-supplied name.
+                 * Write back into the caller's buffer so they see the final name. */
+                if (manifest.name[0]) {
+                    strncpy(name, manifest.name, name_size - 1);
+                    name[name_size - 1] = '\0';
+                }
+            }
+            akira_free_buffer(json_copy);
+        }
+    }
+
+    /* --- Install the WASM binary --- */
+    int app_id = app_manager_install(app_name, wasm_ptr, wasm_size,
+                                     has_manifest ? &manifest : NULL,
+                                     source);
+
+    /* --- Persist raw manifest JSON for app_manager_start() --- */
+    if (app_id > 0 && mfst_size > 0) {
+        char json_path[APP_PATH_MAX_LEN];
+        snprintf(json_path, sizeof(json_path),
+                 "%s/%03d_%s.json", APPS_DIR, (uint8_t)app_id, app_name);
+        ssize_t written = fs_manager_write_file(json_path, mfst_ptr, mfst_size);
+        if (written < 0) {
+            LOG_WRN("akpkg: failed to save manifest JSON to %s (%zd)",
+                    json_path, written);
+        }
+    }
+
+    akira_free_buffer(tar_buf);
+
+    if (app_id > 0) {
+        LOG_INF("akpkg: installed '%s' (id=%d, wasm=%zu B)",
+                app_name, app_id, wasm_size);
+    }
+    return app_id;
+}

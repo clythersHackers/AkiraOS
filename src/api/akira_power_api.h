@@ -10,6 +10,8 @@
  * Read-only functions (battery level, mode query) require AKIRA_CAP_POWER_READ.
  * Control functions (set mode, configure wake sources) require AKIRA_CAP_POWER_CTRL
  * and must be enabled at build time with CONFIG_AKIRA_WASM_POWER_CONTROL=y.
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef AKIRA_POWER_API_H

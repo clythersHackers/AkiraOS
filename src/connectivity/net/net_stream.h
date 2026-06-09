@@ -29,6 +29,8 @@
  * Indices are monotonically increasing; actual byte offset = idx % capacity.
  * A 32-bit aligned read/write of write_idx / read_idx is atomically visible
  * on 32-bit MCUs (ESP32-S3, Cortex-M) and in WASM's linear memory model.
+ * @stability experimental
+ * @since 1.4
  */
 
 #include <stdint.h>

@@ -1,0 +1,24 @@
+board:
+  # FIXME: Replace 'template' with your board's identifier (lowercase, hyphens
+  # OK, no spaces). This must match the directory name and all file prefixes.
+  # Example: name: my-sensor-node
+  name: template
+
+  # FIXME: Human-readable name + SoC module variant.
+  # Example: full_name: MySensorNode (nRF54L15-QFAA-R7)
+  full_name: "FIXME: Your Board Full Name (SoC module variant)"
+
+  # FIXME: Your vendor slug. Must appear in Zephyr's vendor-prefixes.txt:
+  #   zephyr/boards/vendor-prefixes.txt
+  # Or add an entry to boards/vendor-prefixes.txt in this repo.
+  # Example: vendor: mycompany
+  # FIXME: Replace with your vendor slug from Zephyr's vendor-prefixes.txt
+  vendor: penengineering
+
+  socs:
+    # FIXME: Replace 'esp32s3' with the SoC for your target board.
+    # Browse zephyr/soc/ for valid names, e.g.:
+    #   esp32s3        → zephyr/soc/xtensa/espressif/esp32s3/
+    #   nrf54l15       → zephyr/soc/arm/nordic/nrf54l/
+    #   stm32u585xx    → zephyr/soc/arm/st/u5/
+    - name: esp32s3

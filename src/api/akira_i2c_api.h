@@ -10,6 +10,8 @@
  * Stateless API — no handles. WASM passes bus_id + device_addr + reg_addr
  * per call. Buses are lazily resolved from the device tree on first use.
  * Supports standard 7-bit addressing and register-based burst I/O.
+ * @stability stable
+ * @since 1.4
  */
 
 #ifndef AKIRA_I2C_API_H

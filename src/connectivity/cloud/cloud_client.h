@@ -8,6 +8,8 @@
  * - Local web server
  *
  * All sources use the same message protocol and handler system.
+ * @stability experimental
+ * @since 1.5
  */
 
 #ifndef AKIRA_CLOUD_CLIENT_H

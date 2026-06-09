@@ -3,7 +3,8 @@
  * @brief AkiraOS Runtime - WASM Micro Runtime Integration
  *
  * Provides a simplified interface to the WASM Micro Runtime (WAMR).
-
+ * @stability stable
+ * @since 1.3
  */
 
 #ifndef AKIRA_RUNTIME_H

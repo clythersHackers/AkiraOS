@@ -1,0 +1,6 @@
+board:
+  name: akiraconsole_prod
+  full_name: AkiraConsole Production (ESP32-S3-WROOM-1-N16R8)
+  vendor: penengineering
+  socs:
+  - name: esp32s3

@@ -7,6 +7,8 @@
  * - Internal flash (LittleFS) 
  * - RAM disk (for temporary storage)
  * - Automatic fallback and path resolution
+ * @stability stable
+ * @since 1.3
  */
 
 #ifndef AKIRA_FS_MANAGER_H
@@ -53,6 +55,13 @@ typedef struct {
  * @return 0 on success, negative error code otherwise
  */
 int fs_manager_init(void);
+
+/**
+ * Re-probe SD card and update availability flag.
+ * Call this after a hot-plug insertion when the card was absent at boot.
+ * @return 0 on success, -ENODEV if card still not present
+ */
+int fs_manager_reinit_sd(void);
 
 /**
  * Get available filesystems and their status

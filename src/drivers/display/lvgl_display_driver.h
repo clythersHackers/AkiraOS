@@ -1,6 +1,8 @@
 /**
  * @file lvgl_display_driver.h
  * @brief LVGL display driver for ILI9341
+ * @stability experimental
+ * @since 1.4
  */
 
 #ifndef LVGL_DISPLAY_DRIVER_H
