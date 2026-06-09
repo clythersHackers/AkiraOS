@@ -29,7 +29,7 @@ static struct
     bool initialized;
 } g_audit = {0};
 
-static K_SPINLOCK_DEFINE(g_audit_lock);
+static struct k_spinlock g_audit_lock;
 
 /* ===== Rate Limit Helpers ===== */
 

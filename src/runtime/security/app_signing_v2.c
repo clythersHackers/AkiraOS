@@ -202,9 +202,10 @@ int app_verify_signature(const void *binary, size_t size,
                 "enable MBEDTLS_X509_CRT_PARSE_C and re-provision the root CA",
                 root_slot);
         sandbox_audit_log(AUDIT_EVENT_SIGNATURE_FAIL, "no_pubkey", 0);
-        return -ENOKEY;
+        return -EACCES;
     }
 
+#if defined(MBEDTLS_PK_PARSE_C)
     /* Parse the stored SubjectPublicKeyInfo and verify the signature */
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
@@ -275,10 +276,19 @@ int app_verify_signature(const void *binary, size_t size,
         LOG_ERR("Unknown signature algorithm: %d", signature->algorithm);
         return -EINVAL;
     }
-#else
+#else /* !MBEDTLS_PK_PARSE_C */
+    /* Public key round-trip (pk_write + pk_parse) requires MBEDTLS_PK_PARSE_C.
+     * This path is dead at runtime because root_pubkeys_len == 0 when X509
+     * parsing was unavailable and we return -EACCES above — but we need the
+     * guard to satisfy the compiler when PK_PARSE_C is not defined. */
+    LOG_ERR("MBEDTLS_PK_PARSE_C not available — cannot verify stored public key");
+    sandbox_audit_log(AUDIT_EVENT_SIGNATURE_FAIL, "no_pk_parse", 0);
+    return -EACCES;
+#endif /* MBEDTLS_PK_PARSE_C */
+#else /* !CRYPTO_AVAILABLE */
     LOG_WRN("Crypto not available - signature verification disabled");
     return -ENOTSUP;
-#endif
+#endif /* CRYPTO_AVAILABLE */
 }
 
 /* ===== Certificate Chain Verification ===== */

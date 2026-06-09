@@ -84,7 +84,7 @@ static struct bt_conn *s_conn;   /* current connection, NULL if not connected */
 /* Pending command — written by CMD_CHAR callback, consumed by cmd_work */
 static uint8_t s_pending_cmd[CHAR_BUF_SIZE];
 static uint16_t s_pending_cmd_len;
-static K_SPINLOCK_DEFINE(s_cmd_lock);
+static struct k_spinlock s_cmd_lock;
 static struct k_work s_cmd_work;
 
 /* Active bulk transfer state */
