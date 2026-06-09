@@ -402,6 +402,8 @@ int manifest_parse_json(const char *json, size_t json_len, akira_manifest_t *man
                         p = json_parse_int(p, end, &portval);
                         if (!p)
                             return -EINVAL;
+                        if (portval > 65535)
+                            return -EINVAL;
                         if (manifest->net_policy.port_count < MANIFEST_NET_MAX_PORTS)
                         {
                             manifest->net_policy.allowed_ports[manifest->net_policy.port_count++] = (uint16_t)portval;
