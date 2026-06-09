@@ -681,11 +681,7 @@ generate_sbom() {
         cat > "$sbom_file" << EOF
 {
     "name": "AkiraOS",
-<<<<<<< HEAD
-    "version": "1.5.x",
-=======
     "version": "${AKIRA_VERSION}",
->>>>>>> 36047f5 (feat(boards): add nucleo_l476rg board support)
     "board": "$BOARD",
     "zephyr_board": "${BOARD_MAP[$BOARD]}",
     "build_date": "$(date -Iseconds)",
