@@ -408,6 +408,11 @@ static int compact_entries(uint16_t counter)
         return -ENOMEM;
     }
 
+    /* Hold the settings mutex for the entire multi-step read/rewrite sequence
+     * so that a concurrent akira_settings_set() cannot interleave and corrupt
+     * the NVS partition. */
+    k_mutex_lock(&akira_settings_mutex, K_FOREVER);
+
     uint16_t valid = 0;
     for (uint16_t i = 0; i < counter; i++)
     {
@@ -433,6 +438,8 @@ static int compact_entries(uint16_t counter)
 
     /* Persist updated counter */
     nvs_write(&storage.nvs, SETTINGS_COUNTER_ID, &valid, sizeof(valid));
+
+    k_mutex_unlock(&akira_settings_mutex);
 
     LOG_INF("NVS compact: %u entries -> %u valid entries", counter, valid);
     return 0;
