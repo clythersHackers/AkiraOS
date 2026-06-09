@@ -325,17 +325,19 @@ int app_manager_install(const char *name, const void *binary, size_t size,
         /* Update existing app */
         LOG_INF("Updating existing app: %s", app_name);
 
-        /* Stop if running */
-        if (existing->state == APP_STATE_RUNNING && existing->container_id >= 0)
-        {
-            akira_runtime_stop(existing->container_id);
-        }
+        /* Zero container_id under the lock first so a second concurrent install
+         * thread will see -1 and skip the destroy even if akira_runtime_stop()
+         * momentarily drops g_registry_mutex internally. */
+        int old_cid = existing->container_id;
+        existing->container_id = -1;
 
-        /* Destroy old container */
-        if (existing->container_id >= 0)
+        if (old_cid >= 0)
         {
-            akira_runtime_destroy(existing->container_id);
-            existing->container_id = -1;
+            if (existing->state == APP_STATE_RUNNING)
+            {
+                akira_runtime_stop(old_cid);
+            }
+            akira_runtime_destroy(old_cid);
         }
     }
     else
