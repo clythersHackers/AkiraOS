@@ -84,6 +84,7 @@ static struct bt_conn *s_conn;   /* current connection, NULL if not connected */
 /* Pending command — written by CMD_CHAR callback, consumed by cmd_work */
 static uint8_t s_pending_cmd[CHAR_BUF_SIZE];
 static uint16_t s_pending_cmd_len;
+static K_SPINLOCK_DEFINE(s_cmd_lock);
 static struct k_work s_cmd_work;
 
 /* Active bulk transfer state */
@@ -651,12 +652,11 @@ static void cmd_work_handler(struct k_work *work)
     char buf[CHAR_BUF_SIZE];
     uint16_t len;
 
-    /* Disable BT IRQ briefly to snapshot the pending command */
-    unsigned int key = irq_lock();
+    k_spinlock_key_t key = k_spin_lock(&s_cmd_lock);
     len = s_pending_cmd_len;
     memcpy(buf, s_pending_cmd, len);
     s_pending_cmd_len = 0;
-    irq_unlock(key);
+    k_spin_unlock(&s_cmd_lock, key);
 
     if (len == 0) {
         return;
@@ -735,10 +735,10 @@ static ssize_t cmd_write(struct bt_conn *conn,
         return BT_GATT_ERR(BT_ATT_ERR_INVALID_ATTRIBUTE_LEN);
     }
 
-    unsigned int irq_key = irq_lock();
+    k_spinlock_key_t irq_key = k_spin_lock(&s_cmd_lock);
     memcpy(s_pending_cmd, buf, len);
     s_pending_cmd_len = len;
-    irq_unlock(irq_key);
+    k_spin_unlock(&s_cmd_lock, irq_key);
 
     k_work_submit(&s_cmd_work);
     return (ssize_t)len;
