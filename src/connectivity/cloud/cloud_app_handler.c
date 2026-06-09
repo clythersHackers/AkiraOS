@@ -254,8 +254,9 @@ static int handle_app_chunk(const cloud_message_t *msg, msg_source_t source)
         return -ENOENT;
     }
 
-    /* Validate chunk */
-    if (chunk->offset + data_len > ctx->buffer_size)
+    /* Validate chunk — avoid overflow in offset + data_len addition */
+    if (data_len > ctx->buffer_size ||
+        (size_t)chunk->offset > ctx->buffer_size - data_len)
     {
         k_mutex_unlock(&handler.mutex);
         LOG_ERR("Chunk exceeds buffer: offset=%u, len=%zu, size=%zu",
