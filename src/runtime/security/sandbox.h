@@ -62,10 +62,10 @@ extern "C"
     /** Rate limit bucket (token bucket algorithm) */
     typedef struct
     {
-        atomic_t tokens;         /**< Current tokens */
+        atomic_t tokens;         /**< Current tokens (consumed via CAS loop) */
         uint16_t max_tokens;     /**< Maximum tokens (burst capacity) */
         uint16_t refill_per_sec; /**< Tokens refilled per second */
-        uint32_t last_refill_ms; /**< Last refill timestamp (32-bit, natively atomic on Xtensa) */
+        atomic_t last_refill_ms; /**< Last refill timestamp — atomic_t for CAS-based single-writer refill */
     } sandbox_rate_bucket_t;
 
 /** Rate limit configuration */
