@@ -1052,9 +1052,9 @@ int akpkg_tar_extract(const uint8_t *tar, size_t tar_len,
 
         pos += TAR_BLOCK_SZ; /* advance past the 512-byte header */
 
-        if (pos + fsize > tar_len)
+        if (fsize > tar_len || pos > tar_len - fsize)
         {
-            /* Truncated archive — stop gracefully. */
+            /* Truncated or malformed archive — stop gracefully. */
             break;
         }
 
