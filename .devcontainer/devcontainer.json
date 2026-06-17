@@ -1,0 +1,54 @@
+{
+  "name": "AkiraOS ESP32-S3",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceMount": "source=${localWorkspaceFolder}/..,target=/workspaces/akira-workspace,type=bind,consistency=cached",
+  "workspaceFolder": "/workspaces/akira-workspace/AkiraOS",
+  "remoteUser": "root",
+  "overrideCommand": true,
+  "updateRemoteUserUID": false,
+  "containerEnv": {
+    "ZEPHYR_TOOLCHAIN_VARIANT": "zephyr",
+    "ZEPHYR_SDK_INSTALL_DIR": "/opt/toolchains/zephyr-sdk",
+    "PATH": "/root/.local/bin:/opt/esp-idf/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  },
+  "runArgs": [
+    "--privileged"
+  ],
+  "postCreateCommand": ".devcontainer/setup-west.sh",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "cmake.configureOnOpen": false,
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "C_Cpp.default.cStandard": "c11",
+        "C_Cpp.default.compileCommands": "/workspaces/akira-workspace/build-native-sim/compile_commands.json",
+        "C_Cpp.default.includePath": [
+          "/workspaces/akira-workspace/AkiraOS/include",
+          "/workspaces/akira-workspace/AkiraOS/src",
+          "/workspaces/akira-workspace/zephyr/include"
+        ],
+        "files.associations": {
+          "*.conf": "kconfig",
+          "*.dts": "dts",
+          "*.dtsi": "dts",
+          "*.overlay": "dts"
+        }
+      },
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        "ms-vscode.vscode-serial-monitor",
+        "ms-python.python",
+        "trond-snekvik.kconfig-lang",
+        "nordic-semiconductor.nrf-devicetree"
+      ]
+    }
+  },
+  "features": {},
+  "mounts": [
+    "source=akiraos-zephyr-cache,target=/root/.cache,type=volume"
+  ]
+}
