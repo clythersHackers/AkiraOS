@@ -141,7 +141,25 @@ config AKIRA_WIFI_MANAGER
       Centralized WiFi lifecycle manager. Provides connect/disconnect,
       credential updates via the settings API, polling stats (RSSI,
       channel, time connected, tx/rx bytes), and an event callback.
-      Does not auto-connect on boot — call wifi_manager_connect() explicitly.
+      By default, does not auto-connect on boot — call wifi_manager_connect()
+      explicitly, or enable AKIRA_WIFI_MANAGER_AUTO_CONNECT.
+
+config AKIRA_WIFI_MANAGER_AUTO_CONNECT
+    bool "Auto-connect WiFi on boot"
+    default n
+    depends on AKIRA_WIFI_MANAGER
+    help
+      Attempt to connect once at boot using WiFi credentials stored in
+      Akira settings/NVS. This does not embed SSID or PSK in build config.
+
+config AKIRA_WIFI_MANAGER_AUTO_CONNECT_DELAY_MS
+    int "WiFi auto-connect delay in milliseconds"
+    default 1500
+    range 0 30000
+    depends on AKIRA_WIFI_MANAGER_AUTO_CONNECT
+    help
+      Delay before the boot auto-connect attempt. This gives settings storage
+      and the network interface time to finish initialization.
 
 config AKIRA_WIFI_MANAGER_MAX_CBS
     int "Maximum number of WiFi manager event callbacks"

@@ -33,6 +33,9 @@ static struct {
     int64_t             connect_time_ms;   /* k_uptime_get() at IP assignment */
     struct net_mgmt_event_callback wifi_cb;
     struct net_mgmt_event_callback ipv4_cb;
+#ifdef CONFIG_AKIRA_WIFI_MANAGER_AUTO_CONNECT
+    struct k_work_delayable auto_connect_work;
+#endif
     struct k_mutex      lock;
 } mgr;
 
@@ -46,6 +49,22 @@ static void fire_event(wifi_mgr_event_t evt)
         }
     }
 }
+
+#ifdef CONFIG_AKIRA_WIFI_MANAGER_AUTO_CONNECT
+static void auto_connect_work_handler(struct k_work *work)
+{
+    ARG_UNUSED(work);
+
+    int ret = wifi_manager_connect();
+    if (ret == -ENOENT) {
+        LOG_INF("WiFi auto-connect skipped: no credentials saved");
+    } else if (ret == -EALREADY) {
+        LOG_DBG("WiFi auto-connect skipped: already connecting or connected");
+    } else if (ret) {
+        LOG_WRN("WiFi auto-connect failed: %d", ret);
+    }
+}
+#endif
 
 /* ── net_mgmt callbacks ──────────────────────────────────────────────────── */
 
@@ -74,6 +93,15 @@ static void wifi_event_handler(struct net_mgmt_event_callback *cb,
     }
 
     case NET_EVENT_WIFI_DISCONNECT_RESULT:
+        if (mgr.state == WIFI_MGR_STATE_CONNECTING) {
+            LOG_WRN("WiFi disconnected while connecting");
+            mgr.state = WIFI_MGR_STATE_IDLE;
+            mgr.connect_time_ms = 0;
+            k_mutex_unlock(&mgr.lock);
+            fire_event(WIFI_MGR_EVT_CONNECT_FAILED);
+            return;
+        }
+
         if (mgr.state == WIFI_MGR_STATE_CONNECTED ||
             mgr.state == WIFI_MGR_STATE_DISCONNECTING) {
             LOG_INF("WiFi disconnected");
@@ -368,6 +396,12 @@ static int wifi_manager_init(void)
     net_mgmt_init_event_callback(&mgr.ipv4_cb, ipv4_event_handler,
                                  NET_EVENT_IPV4_ADDR_ADD);
     net_mgmt_add_event_callback(&mgr.ipv4_cb);
+
+#ifdef CONFIG_AKIRA_WIFI_MANAGER_AUTO_CONNECT
+    k_work_init_delayable(&mgr.auto_connect_work, auto_connect_work_handler);
+    k_work_schedule(&mgr.auto_connect_work,
+                    K_MSEC(CONFIG_AKIRA_WIFI_MANAGER_AUTO_CONNECT_DELAY_MS));
+#endif
 
     LOG_INF("WiFi manager initialized");
     return 0;

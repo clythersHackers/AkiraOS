@@ -478,7 +478,7 @@ flash_esp32() {
         fi
         
         print_step "Flashing MCUboot -> $bootloader_offset"
-        esptool --chip "$chip" --port "$PORT" --baud "$BAUD" write_flash "$bootloader_offset" "$bootloader_bin"
+        esptool --chip "$chip" --port "$PORT" --baud "$BAUD" write-flash "$bootloader_offset" "$bootloader_bin"
         print_success "MCUboot flashed!"
     fi
     
@@ -497,7 +497,7 @@ flash_esp32() {
         fi
         
         print_step "Flashing AkiraOS -> 0x20000"
-        esptool --chip "$chip" --port "$PORT" --baud "$BAUD" write_flash 0x20000 "$app_bin"
+        esptool --chip "$chip" --port "$PORT" --baud "$BAUD" write-flash 0x20000 "$app_bin"
         print_success "AkiraOS flashed!"
     fi
 }

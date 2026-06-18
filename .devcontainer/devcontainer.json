@@ -43,12 +43,14 @@
         "ms-vscode.vscode-serial-monitor",
         "ms-python.python",
         "trond-snekvik.kconfig-lang",
-        "nordic-semiconductor.nrf-devicetree"
+        "nordic-semiconductor.nrf-devicetree",
+        "openai.chatgpt"
       ]
     }
   },
   "features": {},
   "mounts": [
-    "source=akiraos-zephyr-cache,target=/root/.cache,type=volume"
+    "source=akiraos-zephyr-cache,target=/root/.cache,type=volume",
+    "source=akiraos-vscode-server-data,target=/root/.vscode-server/data,type=volume"
   ]
 }

@@ -1534,6 +1534,9 @@ static int cmd_wifi_status(const struct shell *sh, size_t argc, char **argv)
     if (status.state >= WIFI_STATE_ASSOCIATED)
     {
         shell_print(sh, "SSID: %.*s", status.ssid_len, status.ssid);
+        shell_print(sh, "BSSID: %02x:%02x:%02x:%02x:%02x:%02x",
+                    status.bssid[0], status.bssid[1], status.bssid[2],
+                    status.bssid[3], status.bssid[4], status.bssid[5]);
         shell_print(sh, "Channel: %d", status.channel);
         shell_print(sh, "RSSI: %d dBm", status.rssi);
         shell_print(sh, "Security: %s",
