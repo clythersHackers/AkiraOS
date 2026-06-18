@@ -650,6 +650,52 @@ config AKIRA_MESH_TRANSPORT_ESPNOW
 
 endif # AKIRA_MESH
 
+config AKIRA_CCSDS
+    bool "Enable CCSDS protocol codecs"
+    default n
+    help
+      Enable transport-neutral CCSDS protocol support. The CCSDS core exposes
+      independent entry points for Space Packets, TC/TM transfer frames, CLTU
+      acquisition, BCH, and Reed-Solomon so CAN, UDP, BLE, UART, or RF adapters
+      can attach at the layer they actually carry.
+
+if AKIRA_CCSDS
+
+config AKIRA_CCSDS_ROUTER_MAX_APIDS
+    int "Maximum registered CCSDS APID handlers"
+    default 8
+    range 1 64
+    help
+      Size of the fixed APID dispatch table used by the CCSDS packet router.
+
+config AKIRA_CCSDS_MAX_CLTU_LEN
+    int "Maximum CCSDS CLTU length"
+    default 1024
+    range 64 65535
+    help
+      Maximum CLTU byte buffer held by the stateful CLTU receiver.
+
+config AKIRA_CCSDS_MAX_FRAME_LEN
+    int "Maximum CCSDS transfer frame length"
+    default 1024
+    range 32 65535
+    help
+      Maximum transfer-frame workspace used by optional CCSDS profile glue.
+
+config AKIRA_CCSDS_BCH
+    bool "Enable CCSDS BCH primitive"
+    default y
+    help
+      Enable the BCH primitive used by CLTU receive processing.
+
+config AKIRA_CCSDS_RS
+    bool "Enable CCSDS Reed-Solomon primitive"
+    default y
+    help
+      Enable the Reed-Solomon primitive used by TM frame coding.
+
+endif # AKIRA_CCSDS
+
 config BT_RECONNECT_DELAY_MS
     int "Bluetooth reconnect delay (ms)"
     default 500

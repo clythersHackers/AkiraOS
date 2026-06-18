@@ -14,6 +14,7 @@
 #   -e              Erase flash before flashing
 #   -s              Generate SBOM (Software Bill of Materials)
 #   -c              Clean build artifacts
+#   -ccsds          Enable experimental CCSDS protocol codecs
 #   --full-clean    Reset to pristine state (remove all build dirs)
 #   -h, --help      Show this help message
 #
@@ -46,6 +47,7 @@ GENERATE_SBOM=false
 CLEAN_BUILD=false
 FULL_CLEAN=false
 ENABLE_PLATFORM=false
+ENABLE_CCSDS=false
 PORT=""
 BAUD="921600"
 
@@ -145,6 +147,7 @@ ${BOLD}OPTIONS:${NC}
     -c              Clean build artifacts for selected board
     --full-clean    Reset to pristine state (remove ALL build dirs)
     --platform      Enable AkiraPlatform enterprise features
+    -ccsds          Enable experimental CCSDS protocol codecs
     -p <port>       Serial port for flashing (default: auto-detect)
     --baud <rate>   Baud rate for flashing (default: 921600)
     -h, --help      Show this help message
@@ -165,6 +168,9 @@ ${BOLD}EXAMPLES:${NC}
 
     ./build.sh -b akiraconsole
         Build AkiraOS for Akira Console (ESP32-S3)
+
+    ./build.sh -b akiraconsole -ccsds
+        Build AkiraOS with experimental CCSDS protocol codecs enabled
 
     ./build.sh -b akiraconsole -bl y
         Build MCUboot + AkiraOS for Akira Console
@@ -229,6 +235,9 @@ check_tools() {
 # =============================================================================
 get_build_dir() {
     local board_short="${BOARD//_/-}"
+    if [[ "$ENABLE_CCSDS" == true ]]; then
+        board_short="${board_short}-ccsds"
+    fi
     echo "$WORKSPACE_ROOT/build-$board_short"
 }
 
@@ -355,6 +364,15 @@ build_application() {
     
     # Build with optional AkiraPlatform modules
     local extra_cmake="-DMODULE_EXT_ROOT=$WORKSPACE_ROOT/AkiraOS"
+    if [[ "$ENABLE_CCSDS" == true ]]; then
+        local ccsds_conf="$SCRIPT_DIR/configs/ccsds.conf"
+        if [[ ! -f "$ccsds_conf" ]]; then
+            print_error "CCSDS config fragment not found: $ccsds_conf"
+            exit 1
+        fi
+        extra_cmake+=" -DEXTRA_CONF_FILE=$ccsds_conf"
+        print_info "CCSDS enabled: $ccsds_conf"
+    fi
     if [[ "$ENABLE_PLATFORM" == true ]]; then
         # Look for akira-platform in workspace (post-west-update) or parent dir
         local platform_path=""
@@ -745,6 +763,10 @@ parse_args() {
                 ENABLE_PLATFORM=true
                 shift
                 ;;
+            -ccsds|--ccsds)
+                ENABLE_CCSDS=true
+                shift
+                ;;
             -p)
                 PORT="$2"
                 shift 2
@@ -786,6 +808,7 @@ main() {
     echo "  Erase:       $ERASE_FLASH"
     echo "  SBOM:        $GENERATE_SBOM"
     echo "  Platform:    $ENABLE_PLATFORM"
+    echo "  CCSDS:       $ENABLE_CCSDS"
     echo "  Clean:       $CLEAN_BUILD"
     echo ""
     
@@ -851,9 +874,13 @@ main() {
     
     # Show next steps for non-native builds
     if [[ "$BOARD" != "native_sim" && -z "$FLASH_TARGET" ]]; then
+        local feature_args=""
+        if [[ "$ENABLE_CCSDS" == true ]]; then
+            feature_args+=" -ccsds"
+        fi
         echo ""
         echo -e "${BOLD}Next steps:${NC}"
-        echo "  Flash:   ./build.sh -b $BOARD -r all"
+        echo "  Flash:   ./build.sh -b $BOARD$feature_args -r all"
         echo "  Monitor: west espmonitor (ESP32) or screen /dev/ttyUSB0 115200"
     fi
 }

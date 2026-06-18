@@ -678,6 +678,21 @@ if(CONFIG_AKIRA_RADIO_MANAGER)
     endif()
 endif()
 
+# CCSDS protocol stack. This is intentionally transport-neutral: adapters for
+# CAN, UDP, BLE, UART, or RF should attach at the CCSDS layer they carry.
+if(CONFIG_AKIRA_CCSDS)
+    target_sources(app PRIVATE
+        src/connectivity/ccsds/ccsds_bch.c
+        src/connectivity/ccsds/ccsds_cltu.c
+        src/connectivity/ccsds/ccsds_profile.c
+        src/connectivity/ccsds/ccsds_router.c
+        src/connectivity/ccsds/ccsds_rs.c
+        src/connectivity/ccsds/ccsds_space_packet.c
+        src/connectivity/ccsds/ccsds_tc_frame.c
+        src/connectivity/ccsds/ccsds_tm_frame.c
+    )
+endif()
+
 # Matter protocol
 if(CONFIG_AKIRA_MATTER)
     target_sources(app PRIVATE
@@ -766,6 +781,7 @@ target_include_directories(app PRIVATE
     src/connectivity/cloud/
     src/connectivity/hid/
     src/connectivity/http/
+    src/connectivity/ccsds/
     src/connectivity/usb/
     src/drivers/
     src/ipc/
