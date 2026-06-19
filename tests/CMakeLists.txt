@@ -33,6 +33,7 @@ target_sources(app PRIVATE
     ${AKIRA_SRC}/runtime/security/app_signing_v2.c
     ${AKIRA_SRC}/runtime/security/sandbox.c
     ${AKIRA_SRC}/connectivity/ota/ota_manager.c
+    ${AKIRA_SRC}/connectivity/ccsds/ccsds_bch.c
 
     # Stubs
     stubs/stub_mcuboot.c
@@ -42,6 +43,7 @@ target_sources(app PRIVATE
     src/test_security.c
     src/test_app_lifecycle.c
     src/test_ota_state.c
+    src/test_ccsds_bch.c
 )
 
 # ota_manager.c guards its flash_area and mcuboot includes behind:
