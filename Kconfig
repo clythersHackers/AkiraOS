@@ -692,6 +692,25 @@ config AKIRA_CCSDS_MAX_FRAME_LEN
     help
       Maximum transfer-frame workspace used by optional CCSDS profile glue.
 
+choice AKIRA_CCSDS_CLTU_TAIL
+    prompt "CLTU tail sequence"
+    default AKIRA_CCSDS_CLTU_TAIL_CCSDS
+    depends on AKIRA_CCSDS_FRAME_SUPPORT
+    help
+      Select the standard 64-bit CLTU tail sequence used by the receiver.
+
+config AKIRA_CCSDS_CLTU_TAIL_CCSDS
+    bool "CCSDS tail sequence"
+    help
+      Use the CCSDS tail sequence 0x5555555555555555.
+
+config AKIRA_CCSDS_CLTU_TAIL_ECSS
+    bool "ECSS tail sequence"
+    help
+      Use the ECSS tail sequence 0xC5C5C5C5C5C5C579.
+
+endchoice
+
 config AKIRA_CCSDS_BCH
     bool "Enable CCSDS BCH primitive"
     default y
