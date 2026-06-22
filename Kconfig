@@ -692,6 +692,26 @@ config AKIRA_CCSDS_MAX_FRAME_LEN
     help
       Maximum transfer-frame workspace used by optional CCSDS profile glue.
 
+config AKIRA_CCSDS_SPACECRAFT_ID
+    int "CCSDS spacecraft ID"
+    default 626
+    range 0 1023
+    depends on AKIRA_CCSDS_FRAME_SUPPORT
+    help
+      Spacecraft identifier placed into CCSDS transfer frames. The default is
+      intentionally non-zero so generated frames are recognizable during early
+      integration and test captures.
+
+config AKIRA_CCSDS_TM_QUEUE_DEPTH
+    int "CCSDS TM queue depth per VC"
+    default AKIRA_CCSDS_MAX_FRAME_LEN
+    range 7 65535
+    depends on AKIRA_CCSDS_FRAME_SUPPORT
+    help
+      Bounded byte-pipe storage reserved for each TM virtual channel. This
+      defaults to one TM transfer frame so packet admission has a small,
+      frame-profile-sized queue unless a board or profile overrides it.
+
 choice AKIRA_CCSDS_CLTU_TAIL
     prompt "CLTU tail sequence"
     default AKIRA_CCSDS_CLTU_TAIL_CCSDS
