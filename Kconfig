@@ -725,6 +725,16 @@ config AKIRA_CCSDS_RS
     help
       Enable the Reed-Solomon primitive used by TM frame coding.
 
+config AKIRA_CCSDS_RS_INTERLEAVE_DEPTH
+    int "CCSDS Reed-Solomon interleave depth"
+    default 5
+    range 1 8
+    depends on AKIRA_CCSDS_RS
+    help
+      Reed-Solomon interleave depth I used by TM frame coding. CCSDS TM
+      commonly uses I=5, producing 1115 data symbols and 160 parity symbols
+      for the RS(255,223) code.
+
 endif # AKIRA_CCSDS
 
 config BT_RECONNECT_DELAY_MS
