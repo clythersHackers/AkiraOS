@@ -66,21 +66,23 @@ Existing Kconfig:
 
 ```text
 CONFIG_AKIRA_CCSDS_RS
+CONFIG_AKIRA_CCSDS_TM_FECF
+CONFIG_AKIRA_CCSDS_TM_MAX_SPACE_PACKET_LEN
+CONFIG_AKIRA_CCSDS_TC_MAX_SPACE_PACKET_LEN
 ```
 
 Proposed Kconfig additions:
 
 ```text
-CONFIG_AKIRA_CCSDS_TM_FECF
 CONFIG_AKIRA_CCSDS_SPACE_PACKET_CRC
 ```
 
 Suggested defaults:
 
 - `CONFIG_AKIRA_CCSDS_RS=y` by default, as it is today.
-- `CONFIG_AKIRA_CCSDS_TM_FECF=n` when `CONFIG_AKIRA_CCSDS_RS=y`.
-- `CONFIG_AKIRA_CCSDS_TM_FECF=y` when `CONFIG_AKIRA_CCSDS_RS=n`, unless a
-  profile explicitly selects no frame-level error detection.
+- `CONFIG_AKIRA_CCSDS_TM_FECF=n` by default.
+- `CONFIG_AKIRA_CCSDS_TM_MAX_SPACE_PACKET_LEN=4096` by default.
+- `CONFIG_AKIRA_CCSDS_TC_MAX_SPACE_PACKET_LEN=4096` by default.
 - `CONFIG_AKIRA_CCSDS_SPACE_PACKET_CRC` should be profile-selected rather than
   always on. It may be omitted for TM packets when RS or TM FECF is enabled,
   but this is a mission/profile decision rather than a core rule.
@@ -88,18 +90,18 @@ Suggested defaults:
 The CRC primitive should always be generic. Kconfig should control where the CRC
 is applied, not whether the shared `ccsds_crc16` helper exists.
 
-## Proposed Public API
+## Public Generator API
 
-Add the smallest public generator control API to `ccsds_tm_frame.h`:
+The generator control API in `ccsds_tm_frame.h` is:
 
 ```c
 int ccsds_tm_frame_start(k_timeout_t active_delay, k_timeout_t idle_delay);
 int ccsds_tm_frame_stop(void);
 ```
 
-The normal generator cadence should be internal to `ccsds_tm_frame.c`, likely as
-a Zephyr delayable work item. Applications should enqueue packets and configure
-routes; they should not have to drive the frame generator cycle-by-cycle.
+The normal generator cadence is internal to `ccsds_tm_frame.c` as a Zephyr
+delayable work item. Applications enqueue packets and configure routes; they do
+not have to drive the frame generator cycle-by-cycle.
 
 The internal generator cycle should:
 
@@ -283,9 +285,10 @@ table is available, use it to keep the implementation small and deterministic.
 `ccsds_space_packet_encode()` currently requires a non-empty payload, so idle
 fill should not be forced through that API.
 
-For the first implementation, fill unused frame data bytes directly in the TM
-builder. A later pass can replace that with a stricter CCSDS idle packet helper
-if needed.
+For packet-bearing frames, fill unused frame data bytes while formatting the
+emitted frame, not while admitting packets. The current implementation writes an
+APID 2047 idle Space Packet when enough room remains for a valid packet header
+and payload byte; if fewer bytes remain, it zero-fills the tail.
 
 If no VC contains waiting packet data during a generator cycle, the generator
 should emit one coded idle output frame rather than returning without output.
@@ -302,12 +305,12 @@ The generator needs to read from that pipe without corrupting packet boundaries.
 The current VC state already includes:
 
 ```c
-uint16_t packet_rem;
+size_t packet_rem;
 bool packet_is_idle;
 ```
 
-Use these fields to track whether the generator is in the middle of a packet
-that did not fit in the previous frame.
+`packet_rem` tracks whether the generator is in the middle of a packet that did
+not fit in the previous frame.
 
 Suggested behavior:
 
@@ -325,6 +328,10 @@ Suggested behavior:
   `packet_rem`.
 - On the next generated frame for that VC, continue copying packet bytes before
   trying to read a new packet.
+- When a continuation consumes the whole frame data area and no packet starts in
+  that frame, set the first header pointer to `0x7ff`.
+- When a continuation is followed by another queued packet start in the same
+  frame, set the first header pointer to that packet start offset.
 
 The current `k_pipe` byte stream is workable for this, but it means the
 generator must be careful when peeking or reading headers. If Zephyr pipe peek
@@ -424,16 +431,16 @@ Implement the generator in small, testable slices:
 11. [x] Dispatch the coded idle output through the existing route masks and route
     callbacks.
 12. [x] Add a capture route or test-local callback for idle frame tests.
-13. [ ] Build one candidate packet-bearing output frame for the lowest-numbered
-    VC with waiting packet bytes.
-14. [ ] Apply the configured coding to packet-bearing output:
+13. [x] Build packet-bearing output frames for the lowest-numbered VC with
+    waiting packet bytes or unfinished continuation.
+14. [x] Apply the configured coding to packet-bearing output:
    - TM FECF enabled: append CCSDS CRC-16 FECF inside the TM transfer frame.
    - RS enabled: prepend ASM and append RS parity around the TM transfer frame.
-15. [ ] Add native tests for the CRC primitive and generator.
+15. [x] Add native tests for the CRC primitive and generator.
     - [x] CRC primitive tests.
     - [x] Generator start/stop and cadence tests.
     - [x] Idle frame generation, configured coding, and route dispatch tests.
-    - [ ] Packet-bearing generated frame tests.
+    - [x] Packet-bearing generated frame tests.
 
 Do not add real UDP/UART/RF device code in this first slice.
 
@@ -448,8 +455,8 @@ when it emits idle output or reaches a configured burst limit.
 
 ### Current Status
 
-The current implementation can emit a coded idle TM output through the existing
-route callback table, but it is not a packet-bearing TM transmitter yet.
+The current implementation can emit coded idle TM output and packet-bearing TM
+output through the existing route callback table.
 
 Implemented and tested:
 
@@ -467,6 +474,8 @@ Implemented and tested:
   reserved zero-filled 4-byte OCF.
 - `CONFIG_AKIRA_CCSDS_TM_FECF` exists and appends a CCSDS CRC-16 FECF before
   RS parity when enabled.
+- `CONFIG_AKIRA_CCSDS_TM_MAX_SPACE_PACKET_LEN` and
+  `CONFIG_AKIRA_CCSDS_TC_MAX_SPACE_PACKET_LEN` default to 4096 bytes.
 - With `CONFIG_AKIRA_CCSDS_RS=y`, idle output is routed as a CADU:
   `ASM || TM transfer frame || RS parity`.
 - Native tests cover idle route dispatch, VC 7 selection, OCF zero-fill,
@@ -474,19 +483,27 @@ Implemented and tested:
 
 Not implemented yet:
 
-- No queued packet bytes are consumed by the generator.
-- No packet-bearing TM transfer frames are emitted.
-- No packet continuation state is consumed or advanced by generated frames.
 - No boot/init path calls `ccsds_tm_frame_init()`.
 - No boot/init path calls `ccsds_tm_frame_start()`.
 - Booting the ESP32-S3 will not start the generator or transmit CCSDS TM.
 
-The next minimal implementation should produce one packet-bearing output frame
-for the lowest-numbered VC with waiting packet bytes. It should use the same TM
-primary-header builder, OCF reservation, optional FECF, RS CADU coding, and
-route callback table already proven by the idle path. Keep packet continuation
-across multiple frames and boot auto-start as follow-on steps unless the packet
-frame slice naturally needs the continuation bookkeeping.
+The packet-bearing implementation produces one output frame per active generator
+cycle for the lowest-numbered VC with waiting packet bytes or an unfinished
+packet continuation. It uses the same TM primary-header builder, OCF
+reservation, optional FECF, RS CADU coding, and route callback table already
+proven by the idle path. The frame formatter carries packet continuation across
+frame boundaries, packs additional queued packet starts when space remains, and
+only inserts APID 2047 idle fill while formatting the emitted frame.
+
+APID 0 spacecraft time telemetry is also available as an explicit producer:
+
+- `ccsds_time_packet_build()` builds an APID 0 Space Packet with a 6-byte
+  big-endian CUC-style payload: `uint32 seconds`, then `uint16 fine time`
+  in units of 1/65536 second.
+- `ccsds_time_packet_build_now()` derives the timestamp from Zephyr kernel
+  ticks.
+- `ccsds_time_packet_start()` starts a 10-second delayable producer that queues
+  time packets onto the selected VC. It is not auto-started at boot.
 
 For the current default profile, `CONFIG_AKIRA_CCSDS_RS=y`, generated output
 routes should receive a CADU:
@@ -551,8 +568,9 @@ After the first generator slice is tested:
 
 1. Add a UDP destination adapter.
 2. Add a UART destination adapter.
-3. Add an RF/downlink destination adapter.
-4. Decide whether generation should remain pull-based or gain an optional
+3. Add a serial/downlink destination adapter for radio front ends that present a
+   byte stream.
+4. Decide whether to add bounded burst generation on top of the existing
    workqueue-driven service.
 5. Clarify Kconfig naming for RS data length versus total coded frame length.
 6. Add stricter idle packet support if required by the selected mission profile.
@@ -560,8 +578,8 @@ After the first generator slice is tested:
 
 ## Open Questions
 
-- Should idle fill be raw fill bytes for early integration, or should it be a
-  formally encoded idle Space Packet from the start?
+- Should idle-only VC 7 frames eventually contain an encoded idle Space Packet,
+  or remain zero-filled with `first_header_pointer = 0x7fe`?
 - Should route callback failures be aggregated and returned by the generator, or
   should generation succeed once the frame is built even if one destination
   fails?

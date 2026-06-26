@@ -13,6 +13,7 @@
 #include "ccsds/ccsds_rs.h"
 #include "ccsds/ccsds_space_packet.h"
 #include "ccsds/ccsds_tc_frame.h"
+#include "ccsds/ccsds_time_packet.h"
 #include "ccsds/ccsds_tm_frame.h"
 #include "ccsds/ccsds_types.h"
 

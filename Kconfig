@@ -702,15 +702,33 @@ config AKIRA_CCSDS_SPACECRAFT_ID
       intentionally non-zero so generated frames are recognizable during early
       integration and test captures.
 
+config AKIRA_CCSDS_TM_MAX_SPACE_PACKET_LEN
+    int "Maximum CCSDS TM Space Packet length"
+    default 4096
+    range 7 65535
+    depends on AKIRA_CCSDS_FRAME_SUPPORT
+    help
+      Maximum complete encoded TM Space Packet accepted into the TM generator.
+      Packets may span multiple TM transfer frames during emission.
+
+config AKIRA_CCSDS_TC_MAX_SPACE_PACKET_LEN
+    int "Maximum CCSDS TC Space Packet length"
+    default 4096
+    range 7 65535
+    depends on AKIRA_CCSDS_FRAME_SUPPORT
+    help
+      Maximum complete encoded TC Space Packet accepted by TC packet decode
+      paths once TC transfer-frame extraction is implemented.
+
 config AKIRA_CCSDS_TM_QUEUE_DEPTH
     int "CCSDS TM queue depth per VC"
-    default AKIRA_CCSDS_MAX_FRAME_LEN
+    default AKIRA_CCSDS_TM_MAX_SPACE_PACKET_LEN
     range 7 65535
     depends on AKIRA_CCSDS_FRAME_SUPPORT
     help
       Bounded byte-pipe storage reserved for each TM virtual channel. This
-      defaults to one TM transfer frame so packet admission has a small,
-      frame-profile-sized queue unless a board or profile overrides it.
+      defaults to the maximum TM Space Packet length so one maximum-sized
+      packet can be admitted unless a board or profile overrides it.
 
 choice AKIRA_CCSDS_CLTU_TAIL
     prompt "CLTU tail sequence"
