@@ -474,18 +474,35 @@ Implemented and tested:
   reserved zero-filled 4-byte OCF.
 - `CONFIG_AKIRA_CCSDS_TM_FECF` exists and appends a CCSDS CRC-16 FECF before
   RS parity when enabled.
-- `CONFIG_AKIRA_CCSDS_TM_MAX_SPACE_PACKET_LEN` and
-  `CONFIG_AKIRA_CCSDS_TC_MAX_SPACE_PACKET_LEN` default to 4096 bytes.
+- `CONFIG_AKIRA_CCSDS_TM_MAX_SPACE_PACKET_LEN` defaults to 2048 bytes to keep
+  target DRAM use bounded while still allowing packet continuation on the
+  default RS frame profile.
+- `CONFIG_AKIRA_CCSDS_TC_MAX_SPACE_PACKET_LEN` defaults to 4096 bytes.
 - With `CONFIG_AKIRA_CCSDS_RS=y`, idle output is routed as a CADU:
   `ASM || TM transfer frame || RS parity`.
 - Native tests cover idle route dispatch, VC 7 selection, OCF zero-fill,
   counter increments, RS CADU wrapping, and FECF placement/checking.
 
-Not implemented yet:
+Manual activation status:
 
+- `CONFIG_AKIRA_CCSDS_SHELL` gates the development shell commands and defaults
+  to `y` when Zephyr shell support is enabled.
+- `ccsds tm init` initializes TM frame state, registers the development log
+  route, and routes VC 0 and VC 7 to that route.
+- `ccsds tm start` starts the TM generator and starts APID 0 time packets on
+  VC 0.
+- `ccsds tm stop` stops APID 0 time packets and then stops the TM generator.
+- `ccsds tm status` reports manual activation state and the latest concise
+  route metadata.
+- The development log route reports VCID, output length, MCFC, VCFC, FHP, and
+  whether the output begins with the CADU ASM. It does not dump full frames by
+  default.
 - No boot/init path calls `ccsds_tm_frame_init()`.
 - No boot/init path calls `ccsds_tm_frame_start()`.
 - Booting the ESP32-S3 will not start the generator or transmit CCSDS TM.
+- Native tests build and run the CCSDS shell helper coverage.
+- `./build.sh -b akiraconsole -ccsds` links successfully with the bounded
+  2048-byte default TM packet/queue profile.
 
 The packet-bearing implementation produces one output frame per active generator
 cycle for the lowest-numbered VC with waiting packet bytes or an unfinished
@@ -512,11 +529,10 @@ routes should receive a CADU:
 ASM || TM transfer frame || RS parity
 ```
 
-Before this can be considered runnable on ESP32-S3 as a real TM source, add a
-separate integration slice that decides where CCSDS TM should be initialized,
-which route(s) should be registered, which VC route masks should be set, and
-whether the generator should auto-start at boot or be started explicitly by an
-application or shell command.
+This is now runnable on ESP32-S3 as a manually activated development TM source:
+the board can boot normally, then a developer can run `ccsds tm init` and
+`ccsds tm start` from the shell to observe VC 7 idle output and APID 0 time
+packets on VC 0 through the development log route.
 
 ## Suggested Tests
 
@@ -562,14 +578,63 @@ Initial tests:
 - Oversize packet admission returns `-EMSGSIZE`.
 - A packet larger than one frame data area continues across generated frames.
 
+## Completed Phase: Manual Target Activation
+
+This phase makes the TM generator observable on a target board without starting
+it automatically at boot and without committing CCSDS to a concrete transport
+such as UDP, UART, or a radio frontend.
+
+The Kconfig-gated development shell surface is:
+
+```text
+CONFIG_AKIRA_CCSDS_SHELL
+```
+
+The shell provides explicit commands only:
+
+```text
+ccsds tm init
+ccsds tm start
+ccsds tm stop
+ccsds tm status
+```
+
+`ccsds tm start` starts the TM generator and the APID 0 time packet producer on
+VC 0. `ccsds tm stop` stops both. Separate time-packet start/stop shell commands
+are intentionally omitted for this first target activation slice.
+
+The implementation keeps activation manual:
+
+- Do not call `ccsds_tm_frame_init()` from boot/init code.
+- Do not call `ccsds_tm_frame_start()` from boot/init code.
+- Do not start APID 0 time packets at boot.
+- Do not add UDP/UART/RF adapters in this phase.
+
+For first visibility, the shell registers a development log route rather than a
+transport adapter. The route registers through the existing TM route callback
+table and logs concise frame metadata by default:
+
+- VCID.
+- Routed output length.
+- Master channel frame count and VC frame count.
+- First header pointer.
+- Whether output is a CADU with ASM or an uncoded TM transfer frame.
+
+It does not dump full frames by default. If a hexdump is useful later, gate it
+behind a separate debug option and limit it to the first few bytes.
+
+This phase lets a developer boot the board normally, run shell commands, and
+observe idle VC 7 frames and APID 0 time packets on VC 0 through logs.
+
 ## Later Work
 
-After the first generator slice is tested:
+After manual target activation is working:
 
-1. Add a UDP destination adapter.
-2. Add a UART destination adapter.
-3. Add a serial/downlink destination adapter for radio front ends that present a
+1. Add a serial/downlink destination adapter for radio front ends that present a
    byte stream.
+2. Add a UART destination adapter if it is distinct from the generic serial
+   downlink shape.
+3. Add a UDP destination adapter for native or ground-test workflows.
 4. Decide whether to add bounded burst generation on top of the existing
    workqueue-driven service.
 5. Clarify Kconfig naming for RS data length versus total coded frame length.

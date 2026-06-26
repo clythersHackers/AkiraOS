@@ -704,12 +704,13 @@ config AKIRA_CCSDS_SPACECRAFT_ID
 
 config AKIRA_CCSDS_TM_MAX_SPACE_PACKET_LEN
     int "Maximum CCSDS TM Space Packet length"
-    default 4096
+    default 2048
     range 7 65535
     depends on AKIRA_CCSDS_FRAME_SUPPORT
     help
       Maximum complete encoded TM Space Packet accepted into the TM generator.
-      Packets may span multiple TM transfer frames during emission.
+      Packets may span multiple TM transfer frames during emission. Boards or
+      profiles with more RAM can raise this for larger packet bursts.
 
 config AKIRA_CCSDS_TC_MAX_SPACE_PACKET_LEN
     int "Maximum CCSDS TC Space Packet length"
@@ -780,6 +781,14 @@ config AKIRA_CCSDS_TM_FECF
     help
       Append a CCSDS CRC-16 Frame Error Control Field to generated TM
       transfer frames before optional Reed-Solomon parity is computed.
+
+config AKIRA_CCSDS_SHELL
+    bool "Enable CCSDS shell commands"
+    default y if SHELL
+    depends on AKIRA_CCSDS_FRAME_SUPPORT && SHELL
+    help
+      Enable manual CCSDS TM activation commands. This does not auto-start
+      CCSDS at boot; users must initialize and start TM explicitly from shell.
 
 endif # AKIRA_CCSDS
 
