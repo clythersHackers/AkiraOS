@@ -41,6 +41,7 @@ target_sources(app PRIVATE
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_space_packet.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_time_packet.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_tm_frame.c
+    ${AKIRA_SRC}/connectivity/ccsds/ccsds_tm_udp_route.c
 
     # Stubs
     stubs/stub_mcuboot.c

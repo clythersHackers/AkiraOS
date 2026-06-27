@@ -1,6 +1,8 @@
 #include "ccsds_shell.h"
 
+#include <ctype.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <zephyr/kernel.h>
@@ -10,6 +12,7 @@
 
 #include "ccsds_time_packet.h"
 #include "ccsds_tm_frame.h"
+#include "ccsds_tm_udp_route.h"
 
 LOG_MODULE_REGISTER(ccsds_shell, CONFIG_AKIRA_LOG_LEVEL);
 
@@ -23,6 +26,8 @@ LOG_MODULE_REGISTER(ccsds_shell, CONFIG_AKIRA_LOG_LEVEL);
 #define CCSDS_SHELL_ASM1 0xcfu
 #define CCSDS_SHELL_ASM2 0xfcu
 #define CCSDS_SHELL_ASM3 0x1du
+#define CCSDS_SHELL_ROUTE_NAME_MAX_LEN 8u
+#define CCSDS_SHELL_TM_VC_COUNT 8u
 
 static struct k_mutex status_lock;
 static bool status_lock_initialized;
@@ -105,6 +110,205 @@ static int log_route(uint8_t vcid, const uint8_t *frame, size_t frame_len,
     return 0;
 }
 
+static bool shell_tm_is_initialized(void)
+{
+    bool initialized;
+
+    status_lock_init_once();
+    k_mutex_lock(&status_lock, K_FOREVER);
+    initialized = tm_status.initialized;
+    k_mutex_unlock(&status_lock);
+
+    return initialized;
+}
+
+static bool shell_tm_route_mask_available(ccsds_tm_route_mask_t route_mask)
+{
+    if ((route_mask & ~(CCSDS_TM_ROUTE_LOG | CCSDS_TM_ROUTE_UDP)) != 0u) {
+        return false;
+    }
+
+    if ((route_mask & CCSDS_TM_ROUTE_UDP) != 0u &&
+        !ccsds_tm_udp_route_available()) {
+        return false;
+    }
+
+    return true;
+}
+
+bool ccsds_shell_tm_route_available(ccsds_tm_route_mask_t route_bit)
+{
+    if (route_bit == CCSDS_TM_ROUTE_NONE ||
+        (route_bit & (route_bit - 1u)) != 0u) {
+        return false;
+    }
+
+    return shell_tm_route_mask_available(route_bit);
+}
+
+static int route_name_to_mask(const char *name, size_t name_len,
+                              ccsds_tm_route_mask_t *route_mask)
+{
+    if (name_len == strlen("log") && strncmp(name, "log", name_len) == 0) {
+        *route_mask = CCSDS_TM_ROUTE_LOG;
+        return 0;
+    }
+
+    if (name_len == strlen("udp") && strncmp(name, "udp", name_len) == 0) {
+        *route_mask = CCSDS_TM_ROUTE_UDP;
+        return 0;
+    }
+
+    return -EINVAL;
+}
+
+int ccsds_shell_tm_parse_route_mask(const char *routes,
+                                    ccsds_tm_route_mask_t *route_mask)
+{
+    ccsds_tm_route_mask_t parsed_mask = CCSDS_TM_ROUTE_NONE;
+    const char *token_start = NULL;
+    size_t token_len = 0u;
+
+    if (routes == NULL || route_mask == NULL) {
+        return -EINVAL;
+    }
+
+    for (const char *p = routes;; p++) {
+        bool separator = *p == '\0' || *p == ',' || *p == '|' || *p == '+';
+
+        if (!separator && isspace((unsigned char)*p) == 0) {
+            if (token_start == NULL) {
+                token_start = p;
+            }
+            token_len++;
+            continue;
+        }
+
+        if (token_start != NULL) {
+            ccsds_tm_route_mask_t bit;
+            int ret = route_name_to_mask(token_start, token_len, &bit);
+
+            if (ret != 0) {
+                return ret;
+            }
+
+            parsed_mask |= bit;
+            token_start = NULL;
+            token_len = 0u;
+        }
+
+        if (*p == '\0') {
+            break;
+        }
+    }
+
+    if (parsed_mask == CCSDS_TM_ROUTE_NONE) {
+        return -EINVAL;
+    }
+
+    *route_mask = parsed_mask;
+
+    return 0;
+}
+
+int ccsds_shell_tm_route_set(uint8_t vcid, ccsds_tm_route_mask_t route_mask)
+{
+    if (!shell_tm_is_initialized()) {
+        return -EACCES;
+    }
+
+    if (!shell_tm_route_mask_available(route_mask)) {
+        return -ENOTSUP;
+    }
+
+    return ccsds_tm_frame_set_vc_route(vcid, route_mask);
+}
+
+int ccsds_shell_tm_route_add(uint8_t vcid, ccsds_tm_route_mask_t route_mask)
+{
+    ccsds_tm_route_mask_t current;
+    int ret;
+
+    if (!shell_tm_is_initialized()) {
+        return -EACCES;
+    }
+
+    if (!shell_tm_route_mask_available(route_mask)) {
+        return -ENOTSUP;
+    }
+
+    ret = ccsds_tm_frame_get_vc_route(vcid, &current);
+    if (ret != 0) {
+        return ret;
+    }
+
+    return ccsds_tm_frame_set_vc_route(vcid, current | route_mask);
+}
+
+int ccsds_shell_tm_route_del(uint8_t vcid, ccsds_tm_route_mask_t route_mask)
+{
+    ccsds_tm_route_mask_t current;
+    int ret;
+
+    if (!shell_tm_is_initialized()) {
+        return -EACCES;
+    }
+
+    if (!shell_tm_route_mask_available(route_mask)) {
+        return -ENOTSUP;
+    }
+
+    ret = ccsds_tm_frame_get_vc_route(vcid, &current);
+    if (ret != 0) {
+        return ret;
+    }
+
+    return ccsds_tm_frame_set_vc_route(vcid, current & ~route_mask);
+}
+
+int ccsds_shell_tm_route_clear(uint8_t vcid)
+{
+    if (!shell_tm_is_initialized()) {
+        return -EACCES;
+    }
+
+    return ccsds_tm_frame_set_vc_route(vcid, CCSDS_TM_ROUTE_NONE);
+}
+
+static void route_mask_to_names(ccsds_tm_route_mask_t route_mask, char *buf,
+                                size_t buf_len)
+{
+    bool first = true;
+
+    if (buf_len == 0u) {
+        return;
+    }
+
+    buf[0] = '\0';
+
+    if (route_mask == CCSDS_TM_ROUTE_NONE) {
+        (void)snprintk(buf, buf_len, "none");
+        return;
+    }
+
+    if ((route_mask & CCSDS_TM_ROUTE_LOG) != 0u) {
+        (void)snprintk(buf, buf_len, "log");
+        first = false;
+    }
+
+    if ((route_mask & CCSDS_TM_ROUTE_UDP) != 0u) {
+        (void)snprintk(buf + strlen(buf), buf_len - strlen(buf),
+                       "%sudp", first ? "" : ",");
+        first = false;
+    }
+
+    route_mask &= ~(CCSDS_TM_ROUTE_LOG | CCSDS_TM_ROUTE_UDP);
+    if (route_mask != CCSDS_TM_ROUTE_NONE) {
+        (void)snprintk(buf + strlen(buf), buf_len - strlen(buf),
+                       "%s0x%08x", first ? "" : ",", route_mask);
+    }
+}
+
 int ccsds_shell_tm_init(void)
 {
     int ret;
@@ -123,15 +327,8 @@ int ccsds_shell_tm_init(void)
         return ret;
     }
 
-    ret = ccsds_tm_frame_set_vc_route(CCSDS_SHELL_TIME_VCID,
-                                      CCSDS_TM_ROUTE_LOG);
-    if (ret != 0) {
-        return ret;
-    }
-
-    ret = ccsds_tm_frame_set_vc_route(CCSDS_SHELL_IDLE_VCID,
-                                      CCSDS_TM_ROUTE_LOG);
-    if (ret != 0) {
+    ret = ccsds_tm_udp_route_register();
+    if (ret != 0 && ret != -ENOTSUP) {
         return ret;
     }
 
@@ -262,6 +459,8 @@ static int cmd_ccsds_tm_stop(const struct shell *sh, size_t argc, char **argv)
 static int cmd_ccsds_tm_status(const struct shell *sh, size_t argc, char **argv)
 {
     struct ccsds_shell_tm_status status;
+    ccsds_tm_route_mask_t route_mask;
+    char route_names[CCSDS_SHELL_ROUTE_NAME_MAX_LEN * 2u];
 
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
@@ -277,11 +476,233 @@ static int cmd_ccsds_tm_status(const struct shell *sh, size_t argc, char **argv)
                 status.last_vcfc, status.last_fhp,
                 status.last_cadu ? 1u : 0u);
 
+    if (status.initialized) {
+        for (uint8_t vcid = 0u; vcid < CCSDS_SHELL_TM_VC_COUNT; vcid++) {
+            if (ccsds_tm_frame_get_vc_route(vcid, &route_mask) != 0) {
+                continue;
+            }
+
+            route_mask_to_names(route_mask, route_names, sizeof(route_names));
+            shell_print(sh, "route vc=%u mask=0x%08x routes=%s", vcid,
+                        route_mask, route_names);
+        }
+    }
+
+    return 0;
+}
+
+static int parse_vcid(const char *arg, uint8_t *vcid)
+{
+    char *endptr;
+    unsigned long value;
+
+    if (arg == NULL || vcid == NULL || arg[0] == '\0') {
+        return -EINVAL;
+    }
+
+    errno = 0;
+    value = strtoul(arg, &endptr, 0);
+    if (errno != 0 || *endptr != '\0' || value >= CCSDS_SHELL_TM_VC_COUNT) {
+        return -EINVAL;
+    }
+
+    *vcid = (uint8_t)value;
+
+    return 0;
+}
+
+static int parse_route_args(size_t argc, char **argv, size_t first_route_arg,
+                            ccsds_tm_route_mask_t *route_mask)
+{
+    ccsds_tm_route_mask_t parsed_mask = CCSDS_TM_ROUTE_NONE;
+
+    if (argc <= first_route_arg) {
+        return -EINVAL;
+    }
+
+    for (size_t i = first_route_arg; i < argc; i++) {
+        ccsds_tm_route_mask_t token_mask;
+        int ret = ccsds_shell_tm_parse_route_mask(argv[i], &token_mask);
+
+        if (ret != 0) {
+            return ret;
+        }
+
+        parsed_mask |= token_mask;
+    }
+
+    *route_mask = parsed_mask;
+
+    return 0;
+}
+
+static int cmd_ccsds_tm_route_list(const struct shell *sh, size_t argc,
+                                   char **argv)
+{
+    ccsds_tm_route_mask_t route_mask;
+    char route_names[CCSDS_SHELL_ROUTE_NAME_MAX_LEN * 2u];
+
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    if (!shell_tm_is_initialized()) {
+        shell_error(sh, "ccsds tm route list requires ccsds tm init");
+        return -EACCES;
+    }
+
+    for (uint8_t vcid = 0u; vcid < CCSDS_SHELL_TM_VC_COUNT; vcid++) {
+        int ret = ccsds_tm_frame_get_vc_route(vcid, &route_mask);
+
+        if (ret != 0) {
+            shell_error(sh, "ccsds tm route list failed for vc %u: %d",
+                        vcid, ret);
+            return ret;
+        }
+
+        route_mask_to_names(route_mask, route_names, sizeof(route_names));
+        shell_print(sh, "vc %u: 0x%08x %s", vcid, route_mask, route_names);
+    }
+
+    return 0;
+}
+
+static int cmd_ccsds_tm_route_info(const struct shell *sh, size_t argc,
+                                   char **argv)
+{
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    shell_print(sh, "dest log: available=1 route=log");
+    if (ccsds_tm_udp_route_available()) {
+#ifdef CONFIG_NETWORKING
+        shell_print(sh, "dest udp: available=1 route=udp peer=%s:%u",
+                    CONFIG_AKIRA_CCSDS_TM_UDP_DEST_IP,
+                    CONFIG_AKIRA_CCSDS_TM_UDP_DEST_PORT);
+#endif
+    } else {
+        shell_print(sh,
+                    "dest udp: available=0 route=udp reason=networking-disabled");
+    }
+
+    return 0;
+}
+
+static int route_command_common(const struct shell *sh, size_t argc, char **argv,
+                                int (*op)(uint8_t, ccsds_tm_route_mask_t),
+                                const char *op_name)
+{
+    ccsds_tm_route_mask_t current_mask;
+    ccsds_tm_route_mask_t route_mask;
+    char route_names[CCSDS_SHELL_ROUTE_NAME_MAX_LEN * 2u];
+    uint8_t vcid;
+    int ret;
+
+    ret = parse_vcid(argv[1], &vcid);
+    if (ret != 0) {
+        shell_error(sh, "invalid VCID: %s", argv[1]);
+        return ret;
+    }
+
+    ret = parse_route_args(argc, argv, 2u, &route_mask);
+    if (ret != 0) {
+        shell_error(sh, "invalid route name; supported routes: log udp");
+        return ret;
+    }
+
+    ret = op(vcid, route_mask);
+    if (ret != 0) {
+        if (ret == -ENOTSUP) {
+            shell_error(sh, "route unavailable in this build");
+        } else {
+            shell_error(sh, "ccsds tm route %s failed: %d", op_name, ret);
+        }
+        return ret;
+    }
+
+    ret = ccsds_tm_frame_get_vc_route(vcid, &current_mask);
+    if (ret != 0) {
+        shell_error(sh, "ccsds tm route %s readback failed: %d", op_name, ret);
+        return ret;
+    }
+
+    route_mask_to_names(current_mask, route_names, sizeof(route_names));
+    shell_print(sh, "ccsds tm route %s vc %u mask 0x%08x routes=%s",
+                op_name, vcid, current_mask, route_names);
+
+    return 0;
+}
+
+static int cmd_ccsds_tm_route_set(const struct shell *sh, size_t argc,
+                                  char **argv)
+{
+    return route_command_common(sh, argc, argv, ccsds_shell_tm_route_set,
+                                "set");
+}
+
+static int cmd_ccsds_tm_route_add(const struct shell *sh, size_t argc,
+                                  char **argv)
+{
+    return route_command_common(sh, argc, argv, ccsds_shell_tm_route_add,
+                                "add");
+}
+
+static int cmd_ccsds_tm_route_del(const struct shell *sh, size_t argc,
+                                  char **argv)
+{
+    return route_command_common(sh, argc, argv, ccsds_shell_tm_route_del,
+                                "del");
+}
+
+static int cmd_ccsds_tm_route_clear(const struct shell *sh, size_t argc,
+                                    char **argv)
+{
+    ccsds_tm_route_mask_t current_mask;
+    char route_names[CCSDS_SHELL_ROUTE_NAME_MAX_LEN * 2u];
+    uint8_t vcid;
+    int ret;
+
+    ARG_UNUSED(argc);
+
+    ret = parse_vcid(argv[1], &vcid);
+    if (ret != 0) {
+        shell_error(sh, "invalid VCID: %s", argv[1]);
+        return ret;
+    }
+
+    ret = ccsds_shell_tm_route_clear(vcid);
+    if (ret != 0) {
+        shell_error(sh, "ccsds tm route clear failed: %d", ret);
+        return ret;
+    }
+
+    ret = ccsds_tm_frame_get_vc_route(vcid, &current_mask);
+    if (ret != 0) {
+        shell_error(sh, "ccsds tm route clear readback failed: %d", ret);
+        return ret;
+    }
+
+    route_mask_to_names(current_mask, route_names, sizeof(route_names));
+    shell_print(sh, "ccsds tm route clear vc %u mask 0x%08x routes=%s",
+                vcid, current_mask, route_names);
+
     return 0;
 }
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
+    sub_ccsds_tm_route,
+    SHELL_CMD(info, NULL, "Show available CCSDS TM destinations",
+              cmd_ccsds_tm_route_info),
+    SHELL_CMD(list, NULL, "List CCSDS TM route masks", cmd_ccsds_tm_route_list),
+    SHELL_CMD_ARG(set, NULL, "Set VC routes", cmd_ccsds_tm_route_set, 3, 8),
+    SHELL_CMD_ARG(add, NULL, "Add VC routes", cmd_ccsds_tm_route_add, 3, 8),
+    SHELL_CMD_ARG(del, NULL, "Delete VC routes", cmd_ccsds_tm_route_del, 3, 8),
+    SHELL_CMD_ARG(clear, NULL, "Clear VC routes", cmd_ccsds_tm_route_clear, 2,
+                  0),
+    SHELL_SUBCMD_SET_END);
+
+SHELL_STATIC_SUBCMD_SET_CREATE(
     sub_ccsds_tm, SHELL_CMD(init, NULL, "Initialize CCSDS TM", cmd_ccsds_tm_init),
+    SHELL_CMD(route, &sub_ccsds_tm_route, "Configure CCSDS TM routes", NULL),
     SHELL_CMD(start, NULL, "Start CCSDS TM", cmd_ccsds_tm_start),
     SHELL_CMD(stop, NULL, "Stop CCSDS TM", cmd_ccsds_tm_stop),
     SHELL_CMD(status, NULL, "Show CCSDS TM status", cmd_ccsds_tm_status),

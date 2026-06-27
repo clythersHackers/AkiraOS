@@ -790,6 +790,24 @@ config AKIRA_CCSDS_SHELL
       Enable manual CCSDS TM activation commands. This does not auto-start
       CCSDS at boot; users must initialize and start TM explicitly from shell.
 
+config AKIRA_CCSDS_TM_UDP_DEST_IP
+    string "CCSDS TM development UDP destination IPv4 address"
+    default "192.168.1.255"
+    depends on AKIRA_CCSDS_FRAME_SUPPORT && NETWORKING
+    help
+      Destination IPv4 address used by the development-only CCSDS TM UDP
+      route. The route sends already-coded TM output frames when selected
+      through a VC route mask. The default is the directed broadcast address
+      for a typical 192.168.1.0/24 LAN.
+
+config AKIRA_CCSDS_TM_UDP_DEST_PORT
+    int "CCSDS TM development UDP destination port"
+    default 5005
+    range 1 65535
+    depends on AKIRA_CCSDS_FRAME_SUPPORT && NETWORKING
+    help
+      Destination UDP port used by the development-only CCSDS TM UDP route.
+
 endif # AKIRA_CCSDS
 
 config BT_RECONNECT_DELAY_MS

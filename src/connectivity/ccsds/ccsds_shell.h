@@ -10,6 +10,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "ccsds_tm_frame.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -31,6 +33,13 @@ int ccsds_shell_tm_init(void);
 int ccsds_shell_tm_start(void);
 int ccsds_shell_tm_stop(void);
 void ccsds_shell_tm_get_status(struct ccsds_shell_tm_status *status);
+bool ccsds_shell_tm_route_available(ccsds_tm_route_mask_t route_bit);
+int ccsds_shell_tm_parse_route_mask(const char *routes,
+                                    ccsds_tm_route_mask_t *route_mask);
+int ccsds_shell_tm_route_set(uint8_t vcid, ccsds_tm_route_mask_t route_mask);
+int ccsds_shell_tm_route_add(uint8_t vcid, ccsds_tm_route_mask_t route_mask);
+int ccsds_shell_tm_route_del(uint8_t vcid, ccsds_tm_route_mask_t route_mask);
+int ccsds_shell_tm_route_clear(uint8_t vcid);
 
 #ifdef __cplusplus
 }

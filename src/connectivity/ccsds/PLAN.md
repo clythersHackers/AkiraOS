@@ -487,13 +487,15 @@ Manual activation status:
 
 - `CONFIG_AKIRA_CCSDS_SHELL` gates the development shell commands and defaults
   to `y` when Zephyr shell support is enabled.
-- `ccsds tm init` initializes TM frame state, registers the development log
-  route, and routes VC 0 and VC 7 to that route.
+- `ccsds tm init` initializes TM frame state and registers available
+  destinations. It leaves all VC route masks set to `none` until a route is
+  explicitly selected.
 - `ccsds tm start` starts the TM generator and starts APID 0 time packets on
   VC 0.
 - `ccsds tm stop` stops APID 0 time packets and then stops the TM generator.
 - `ccsds tm status` reports manual activation state and the latest concise
-  route metadata.
+  route metadata, plus current per-VC route masks after initialization.
+- `ccsds tm route info` reports destinations available in the current build.
 - The development log route reports VCID, output length, MCFC, VCFC, FHP, and
   whether the output begins with the CADU ASM. It does not dump full frames by
   default.
@@ -530,9 +532,10 @@ ASM || TM transfer frame || RS parity
 ```
 
 This is now runnable on ESP32-S3 as a manually activated development TM source:
-the board can boot normally, then a developer can run `ccsds tm init` and
+the board can boot normally, then a developer can run `ccsds tm init`, select
+routes with `ccsds tm route set` or `ccsds tm route add`, and run
 `ccsds tm start` from the shell to observe VC 7 idle output and APID 0 time
-packets on VC 0 through the development log route.
+packets on VC 0 through the selected destinations.
 
 ## Suggested Tests
 
@@ -590,7 +593,7 @@ The Kconfig-gated development shell surface is:
 CONFIG_AKIRA_CCSDS_SHELL
 ```
 
-The shell provides explicit commands only:
+The shell provides explicit manual activation commands:
 
 ```text
 ccsds tm init
@@ -598,6 +601,9 @@ ccsds tm start
 ccsds tm stop
 ccsds tm status
 ```
+
+Route control commands are documented in the completed route-control phase
+below.
 
 `ccsds tm start` starts the TM generator and the APID 0 time packet producer on
 VC 0. `ccsds tm stop` stops both. Separate time-packet start/stop shell commands
@@ -610,9 +616,9 @@ The implementation keeps activation manual:
 - Do not start APID 0 time packets at boot.
 - Do not add UDP/UART/RF adapters in this phase.
 
-For first visibility, the shell registers a development log route rather than a
-transport adapter. The route registers through the existing TM route callback
-table and logs concise frame metadata by default:
+For first visibility, the shell can register a development log route. The route
+registers through the existing TM route callback table and logs concise frame
+metadata when explicitly selected:
 
 - VCID.
 - Routed output length.
@@ -623,23 +629,134 @@ table and logs concise frame metadata by default:
 It does not dump full frames by default. If a hexdump is useful later, gate it
 behind a separate debug option and limit it to the first few bytes.
 
-This phase lets a developer boot the board normally, run shell commands, and
-observe idle VC 7 frames and APID 0 time packets on VC 0 through logs.
+This phase lets a developer boot the board normally, run shell commands, select
+a route, and observe idle VC 7 frames and APID 0 time packets on VC 0 through
+the chosen destination.
+
+## Completed Phase: Configurable Log/UDP TM Routes
+
+The first route-control slice is implemented for the development log route and
+a minimal UDP development route. The current route table already uses a bitmask,
+so shell control exposes both replacement and additive operations:
+
+```text
+ccsds tm route info
+ccsds tm route list
+ccsds tm route set <vcid> <routes>
+ccsds tm route add <vcid> <routes>
+ccsds tm route del <vcid> <routes>
+ccsds tm route clear <vcid>
+```
+
+Supported route names in this slice:
+
+```text
+log
+udp
+```
+
+Implemented behavior:
+
+- `set` replaces the VC route mask.
+- `add` ORs one or more route bits into the VC route mask.
+- `del` clears one or more route bits from the VC route mask.
+- `clear` sets the VC route mask to `CCSDS_TM_ROUTE_NONE`.
+- `list` shows each VC route mask using stable names such as `log` and `udp`.
+- Commands should reject unsupported route bits and invalid VCIDs before
+  changing state.
+- `ccsds tm status` also reports the current per-VC route masks after
+  initialization.
+- `ccsds tm route info` reports destinations available in the current build.
+- `ccsds tm init` initializes TM frame state, registers the shell development
+  log route, registers the UDP development route module when
+  `CONFIG_NETWORKING=y`, and leaves all VC route masks set to `none`.
+- When `CONFIG_NETWORKING=n`, log route control still works and selecting UDP
+  returns a clear unsupported-route error.
+
+This keeps the shell similar in spirit to CSP route manipulation while matching
+the existing CCSDS TM callback bitmask model.
 
 ## Later Work
 
-After manual target activation is working:
+The route-control and UDP development slice is complete. Remaining TM-focused
+work should add other example destinations and recorded/replay support without
+tying the CCSDS core to any one transport.
 
-1. Add a serial/downlink destination adapter for radio front ends that present a
-   byte stream.
-2. Add a UART destination adapter if it is distinct from the generic serial
-   downlink shape.
-3. Add a UDP destination adapter for native or ground-test workflows.
-4. Decide whether to add bounded burst generation on top of the existing
+### Remaining Example Destination Routes
+
+Keep adding example route handlers outside the core TM generator:
+
+- Development log route: already implemented for concise metadata.
+- UDP route: implemented as a development-only route module when
+  `CONFIG_NETWORKING=y`. It sends already-coded TM output bytes to the
+  Kconfig-configured destination IPv4 address and UDP port.
+- Serial device route: still to do. It should write coded TM output to a
+  configured byte-stream device such as a UART, USB CDC ACM endpoint, or radio
+  frontend that presents a serial interface.
+
+Keep the adapter shape generic:
+
+```c
+typedef int (*ccsds_tm_send_fn_t)(const uint8_t *frame, size_t frame_len,
+                                  void *user_data);
+
+struct ccsds_tm_send_route {
+    ccsds_tm_send_fn_t send;
+    void *user_data;
+};
+```
+
+Adapters should register through `ccsds_tm_frame_register_route()` and receive
+already-coded output frames. They should not call the generator directly.
+
+### Recorded TM / Archive Route
+
+Some missions downlink live telemetry and recorded telemetry on different VCs
+during a pass. A useful first profile would be:
+
+- VC 0: live housekeeping / APID 0 time packets.
+- VC 1: recorded telemetry replay.
+- VC 7: idle output.
+
+Add an archive route that can persist either:
+
+- coded TM output frames/CADUs as emitted by the route callback, or
+- decoded/admitted Space Packets before TM framing.
+
+The first implementation should choose one storage format explicitly. Coded
+frames are simplest for route capture and bit-exact replay, while packet storage
+is better if replay should regenerate fresh MCFC/VCFC/FHP and coding. For a
+spacecraft-style recorded TM path, packet storage is usually the cleaner
+long-term model because replay can inject packets into VC 1 and let the normal
+TM generator produce current transfer frames.
+
+Potential shell commands:
+
+```text
+ccsds tm record start <vcid> <path>
+ccsds tm record stop <vcid>
+ccsds tm record status
+ccsds tm replay <vcid> <path>
+ccsds tm replay stop <vcid>
+```
+
+Storage targets may include SD files or a bounded NVRAM/flash-backed file. The
+route should handle full storage gracefully and report drops/counters in status.
+
+Replay should enqueue stored packets into the selected VC using the existing
+`ccsds_tm_frame_add()` path rather than bypassing routing or frame generation.
+This lets recorded TM on VC 1 share the same coding, counters, and destination
+route masks as live TM.
+
+### Other TM Follow-Ups
+
+1. Decide whether to add bounded burst generation on top of the existing
    workqueue-driven service.
-5. Clarify Kconfig naming for RS data length versus total coded frame length.
-6. Add stricter idle packet support if required by the selected mission profile.
-7. Continue TC frame decode support after the TM path is stable.
+2. Clarify Kconfig naming for RS data length versus total coded frame length.
+3. Add stricter idle packet support if required by the selected mission profile.
+4. Consider per-VC queue sizing or active-VC masks so target builds do not
+   reserve maximum packet depth for every VC.
+5. Continue TC frame decode support after the TM path is stable.
 
 ## Open Questions
 
@@ -651,3 +768,6 @@ After manual target activation is working:
 - Which VC should carry idle output by default if a profile does not configure
   one?
 - Which VC-to-route defaults should the Akira console profile eventually use?
+- Should recorded telemetry be persisted as Space Packets, coded TM frames, or
+  both behind separate route/storage modes?
+- Should route shell commands accept numeric masks, route names, or both?
