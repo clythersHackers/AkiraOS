@@ -10,6 +10,11 @@
 #include <zephyr/shell/shell.h>
 #include <zephyr/sys/util.h>
 
+#include "ccsds_profile.h"
+#include "ccsds_router.h"
+#ifdef CONFIG_NETWORKING
+#include "ccsds_tc_udp_input.h"
+#endif
 #include "ccsds_time_packet.h"
 #include "ccsds_tm_frame.h"
 #include "ccsds_tm_udp_route.h"
@@ -32,6 +37,11 @@ LOG_MODULE_REGISTER(ccsds_shell, CONFIG_AKIRA_LOG_LEVEL);
 static struct k_mutex status_lock;
 static bool status_lock_initialized;
 static struct ccsds_shell_tm_status tm_status;
+#ifdef CONFIG_NETWORKING
+static struct ccsds_router tc_router;
+static struct ccsds_profile_tc_rx tc_rx_profile;
+static bool tc_rx_profile_initialized;
+#endif
 
 static void status_lock_init_once(void)
 {
@@ -688,6 +698,126 @@ static int cmd_ccsds_tm_route_clear(const struct shell *sh, size_t argc,
     return 0;
 }
 
+static int cmd_ccsds_tc_start_udp(const struct shell *sh, size_t argc,
+                                  char **argv)
+{
+#ifdef CONFIG_NETWORKING
+    int ret;
+
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    if (!tc_rx_profile_initialized) {
+        ret = ccsds_router_init(&tc_router);
+        if (ret != 0) {
+            shell_error(sh, "ccsds tc router init failed: %d", ret);
+            return ret;
+        }
+
+        ret = ccsds_profile_tc_rx_init(&tc_rx_profile, &tc_router);
+        if (ret != 0) {
+            shell_error(sh, "ccsds tc profile init failed: %d", ret);
+            return ret;
+        }
+
+        tc_rx_profile_initialized = true;
+    }
+
+    ret = ccsds_tc_udp_input_start(&tc_rx_profile);
+    if (ret != 0) {
+        shell_error(sh, "ccsds tc udp start failed: %d", ret);
+        return ret;
+    }
+
+    shell_print(sh, "ccsds tc udp listening on port %u",
+                CONFIG_AKIRA_CCSDS_TC_UDP_LOCAL_PORT);
+
+    return 0;
+#else
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    shell_error(sh, "ccsds tc udp input unavailable: networking disabled");
+    return -ENOTSUP;
+#endif
+}
+
+static int cmd_ccsds_tc_stop_udp(const struct shell *sh, size_t argc,
+                                 char **argv)
+{
+#ifdef CONFIG_NETWORKING
+    int ret;
+
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    ret = ccsds_tc_udp_input_stop();
+    if (ret != 0) {
+        shell_error(sh, "ccsds tc udp stop failed: %d", ret);
+        return ret;
+    }
+
+    shell_print(sh, "ccsds tc udp stopped");
+    return 0;
+#else
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    shell_error(sh, "ccsds tc udp input unavailable: networking disabled");
+    return -ENOTSUP;
+#endif
+}
+
+static int cmd_ccsds_tc_status_udp(const struct shell *sh, size_t argc,
+                                   char **argv)
+{
+#ifdef CONFIG_NETWORKING
+    struct ccsds_tc_udp_input_stats udp_stats;
+#endif
+
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+#ifdef CONFIG_NETWORKING
+    ccsds_tc_udp_input_get_stats(&udp_stats);
+
+    shell_print(sh, "ccsds tc udp available=%u running=%u",
+                ccsds_tc_udp_input_available() ? 1u : 0u,
+                udp_stats.running ? 1u : 0u);
+    shell_print(sh, "local_port=%u", CONFIG_AKIRA_CCSDS_TC_UDP_LOCAL_PORT);
+    shell_print(sh, "udp_rx=%u udp_last_error=%d",
+                udp_stats.datagrams_received, udp_stats.last_error);
+#else
+    shell_print(sh, "ccsds tc udp available=0 running=0");
+#endif
+
+    return 0;
+}
+
+static int cmd_ccsds_tc_status(const struct shell *sh, size_t argc,
+                               char **argv)
+{
+    struct ccsds_profile_tc_rx_stats rx_stats;
+
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    ccsds_profile_tc_rx_get_stats(&rx_stats);
+
+    shell_print(sh,
+                "cltu_rx=%u oversize=%u cltu_fail=%u frame_reject=%u control=%u",
+                rx_stats.cltus_received, rx_stats.cltus_oversize,
+                rx_stats.cltu_decode_failures, rx_stats.tc_frame_rejects,
+                rx_stats.control_frames_seen);
+    shell_print(sh, "dispatch_ok=%u dispatch_fail=%u last_error=%d",
+                rx_stats.packets_dispatched, rx_stats.dispatch_failures,
+                rx_stats.last_error);
+    shell_print(sh, "last_cltu_len=%zu last_tc_frame_len=%zu",
+                rx_stats.last_cltu_len, rx_stats.last_tc_frame_len);
+
+    return 0;
+}
+
 SHELL_STATIC_SUBCMD_SET_CREATE(
     sub_ccsds_tm_route,
     SHELL_CMD(info, NULL, "Show available CCSDS TM destinations",
@@ -709,7 +839,32 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
     SHELL_SUBCMD_SET_END);
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
+    sub_ccsds_tc_start,
+    SHELL_CMD(udp, NULL, "Start CCSDS TC UDP input", cmd_ccsds_tc_start_udp),
+    SHELL_SUBCMD_SET_END);
+
+SHELL_STATIC_SUBCMD_SET_CREATE(
+    sub_ccsds_tc_stop,
+    SHELL_CMD(udp, NULL, "Stop CCSDS TC UDP input", cmd_ccsds_tc_stop_udp),
+    SHELL_SUBCMD_SET_END);
+
+SHELL_STATIC_SUBCMD_SET_CREATE(
+    sub_ccsds_tc_status,
+    SHELL_CMD(udp, NULL, "Show CCSDS TC UDP input status",
+              cmd_ccsds_tc_status_udp),
+    SHELL_SUBCMD_SET_END);
+
+SHELL_STATIC_SUBCMD_SET_CREATE(
+    sub_ccsds_tc,
+    SHELL_CMD(start, &sub_ccsds_tc_start, "Start CCSDS TC input", NULL),
+    SHELL_CMD(stop, &sub_ccsds_tc_stop, "Stop CCSDS TC input", NULL),
+    SHELL_CMD(status, &sub_ccsds_tc_status, "Show CCSDS TC input status",
+              cmd_ccsds_tc_status),
+    SHELL_SUBCMD_SET_END);
+
+SHELL_STATIC_SUBCMD_SET_CREATE(
     sub_ccsds, SHELL_CMD(tm, &sub_ccsds_tm, "CCSDS TM commands", NULL),
+    SHELL_CMD(tc, &sub_ccsds_tc, "CCSDS TC commands", NULL),
     SHELL_SUBCMD_SET_END);
 
 SHELL_CMD_REGISTER(ccsds, &sub_ccsds, "CCSDS commands", NULL);

@@ -808,6 +808,31 @@ config AKIRA_CCSDS_TM_UDP_DEST_PORT
     help
       Destination UDP port used by the development-only CCSDS TM UDP route.
 
+config AKIRA_CCSDS_TC_UDP_LOCAL_PORT
+    int "CCSDS TC development UDP local port"
+    default AKIRA_CCSDS_TM_UDP_DEST_PORT
+    range 1 65535
+    depends on AKIRA_CCSDS_FRAME_SUPPORT && NETWORKING
+    help
+      Local UDP port used by the development-only CCSDS TC input adapter.
+      Each received datagram is treated as one complete CLTU.
+
+config AKIRA_CCSDS_TC_UDP_THREAD_STACK_SIZE
+    int "CCSDS TC UDP input thread stack size"
+    default 2048
+    range 1024 8192
+    depends on AKIRA_CCSDS_FRAME_SUPPORT && NETWORKING
+    help
+      Stack reserved for the CCSDS TC UDP listener thread.
+
+config AKIRA_CCSDS_TC_UDP_THREAD_PRIORITY
+    int "CCSDS TC UDP input thread priority"
+    default 14
+    range -10 30
+    depends on AKIRA_CCSDS_FRAME_SUPPORT && NETWORKING
+    help
+      Zephyr thread priority used by the CCSDS TC UDP listener.
+
 endif # AKIRA_CCSDS
 
 config BT_RECONNECT_DELAY_MS

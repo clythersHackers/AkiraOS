@@ -699,6 +699,12 @@ if(CONFIG_AKIRA_CCSDS)
             src/connectivity/ccsds/ccsds_tm_udp_route.c
         )
 
+        if(CONFIG_NETWORKING)
+            target_sources(app PRIVATE
+                src/connectivity/ccsds/ccsds_tc_udp_input.c
+            )
+        endif()
+
         if(CONFIG_AKIRA_CCSDS_SHELL)
             target_sources(app PRIVATE
                 src/connectivity/ccsds/ccsds_shell.c

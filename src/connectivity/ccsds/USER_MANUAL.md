@@ -1,9 +1,9 @@
 # CCSDS Shell User Manual
 
-This document covers the CCSDS TM shell commands currently available in
-AkiraOS. The commands are development-oriented and manually controlled: booting
-the board does not start CCSDS telemetry, and `ccsds tm init` does not select
-any output route by default.
+This document covers the CCSDS shell commands currently available in AkiraOS.
+The commands are development-oriented and manually controlled: booting the board
+does not start CCSDS telemetry or telecommand input, and `ccsds tm init` does
+not select any output route by default.
 
 ## What The TM Commands Do
 
@@ -190,6 +190,77 @@ Example:
 
 ```text
 ccsds tm route clear 7
+```
+
+## TC Commands
+
+The CCSDS TC shell commands control a development UDP input for complete CLTU
+datagrams. The UDP input is available only when `CONFIG_NETWORKING=y`.
+
+Each received UDP datagram is treated as one complete CLTU and is passed into
+the shared TC receive path. The UDP adapter does not own TC decode state, APID
+routing policy, COP-1/FARM state, or packet reassembly. Decode and dispatch
+counters are shared across complete-CLTU input sources so future UART or RF
+inputs can report through the same status path.
+
+Current limitation: `ccsds_tc_frame_decode()` is still a stub, so the UDP input
+can receive datagrams and attempt CLTU decode, but full TC packet dispatch is
+not complete yet.
+
+### `ccsds tc start udp`
+
+Starts the UDP listener for complete TC CLTU datagrams.
+
+When networking is enabled, the listener binds to:
+
+```text
+CONFIG_AKIRA_CCSDS_TC_UDP_LOCAL_PORT
+```
+
+The default TC UDP local port follows the TM UDP destination port:
+
+```text
+CONFIG_AKIRA_CCSDS_TM_UDP_DEST_PORT
+```
+
+With the current defaults, both TM UDP output and TC UDP input use port `5005`.
+
+When networking is disabled, this command reports that TC UDP input is
+unavailable.
+
+### `ccsds tc stop udp`
+
+Stops the UDP TC input listener.
+
+When networking is disabled, this command reports that TC UDP input is
+unavailable.
+
+### `ccsds tc status`
+
+Shows shared TC receive counters for complete-CLTU inputs.
+
+```text
+cltu_rx=<count> oversize=<count> cltu_fail=<count> frame_reject=<count> control=<count>
+dispatch_ok=<count> dispatch_fail=<count> last_error=<errno>
+last_cltu_len=<bytes> last_tc_frame_len=<bytes>
+```
+
+### `ccsds tc status udp`
+
+Shows UDP listener state and UDP transport counters.
+
+With networking enabled, status includes:
+
+```text
+ccsds tc udp available=1 running=<0|1>
+local_port=5005
+udp_rx=<datagrams> udp_last_error=<errno>
+```
+
+With networking disabled, status reports:
+
+```text
+ccsds tc udp available=0 running=0
 ```
 
 ## Route Names
