@@ -203,9 +203,10 @@ routing policy, COP-1/FARM state, or packet reassembly. Decode and dispatch
 counters are shared across complete-CLTU input sources so future UART or RF
 inputs can report through the same status path.
 
-Current limitation: `ccsds_tc_frame_decode()` is still a stub, so the UDP input
-can receive datagrams and attempt CLTU decode, but full TC packet dispatch is
-not complete yet.
+Decoded TC transfer frames must use version 0, reserved bits set to zero, a
+matching configured spacecraft ID, and a frame length field matching the
+received frame size. Control frames are identified and rejected as unsupported
+commands by the current receive path.
 
 ### `ccsds tc start udp`
 

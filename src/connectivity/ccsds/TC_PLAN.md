@@ -268,9 +268,9 @@ platform behavior selected by AkiraOS, not CCSDS protocol mechanics.
 2. [x] Add this `TC_PLAN.md`.
 3. [ ] Add focused tests using supplied complete CLTU vectors.
 4. [x] Add CLTU tail-sequence detection, validation, stripping, and tests.
-5. [ ] Implement TC frame decode enough to reject malformed input and wrong
+5. [x] Implement TC frame decode enough to reject malformed input and wrong
    spacecraft IDs.
-6. [ ] Detect control frames and return a clear unsupported-control result until
+6. [x] Detect control frames and return a clear unsupported-control result until
    exact handling is implemented from references.
 7. [ ] Add minimal COP-1/FARM acceptance and CLCW-producing state in the TC
    frame path.

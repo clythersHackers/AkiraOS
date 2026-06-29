@@ -59,6 +59,7 @@ target_sources(app PRIVATE
     src/test_ccsds_crc16.c
     src/test_ccsds_rs.c
     src/test_ccsds_shell.c
+    src/test_ccsds_tc_frame.c
     src/test_ccsds_time_packet.c
     src/test_ccsds_tm_frame.c
 )
