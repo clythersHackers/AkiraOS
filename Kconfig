@@ -722,6 +722,17 @@ config AKIRA_CCSDS_TC_MAX_SPACE_PACKET_LEN
       Maximum complete encoded TC Space Packet accepted by TC packet decode
       paths once TC transfer-frame extraction is implemented.
 
+config AKIRA_CCSDS_COP1_WINDOW_SIZE
+    int "CCSDS COP-1 acceptance window size"
+    default 128
+    range 4 128
+    depends on AKIRA_CCSDS_FRAME_SUPPORT
+    help
+      COP-1 FARM acceptance window size W used by the TC receive profile when
+      comparing an incoming frame sequence number against the expected report
+      value. The default 128 matches the half-range of the 8-bit TC frame
+      sequence number space.
+
 config AKIRA_CCSDS_TM_QUEUE_DEPTH
     int "CCSDS TM queue depth per VC"
     default AKIRA_CCSDS_TM_MAX_SPACE_PACKET_LEN
