@@ -8,6 +8,7 @@
 
 bool ccsds_tm_frame_test_is_running(void);
 bool ccsds_tm_frame_test_run_cycle(k_timeout_t *next_delay, uint8_t *vcid);
+int ccsds_tm_frame_test_get_clcw(uint32_t *clcw);
 
 #define TEST_CCSDS_SHELL_IDLE_VCID 7u
 #define TEST_CCSDS_SHELL_IDLE_FHP 0x7feu
@@ -61,11 +62,16 @@ ZTEST(ccsds_shell, test_init_registers_log_destination_without_default_routes)
     zassert_equal(status.last_mcfc, 1u);
     zassert_equal(status.last_vcfc, 1u);
     zassert_equal(status.last_fhp, TEST_CCSDS_SHELL_IDLE_FHP);
-#ifdef CONFIG_AKIRA_CCSDS_RS
     zassert_true(status.last_cadu);
-#else
-    zassert_false(status.last_cadu);
-#endif
+}
+
+ZTEST(ccsds_shell, test_init_registers_tc_clcw_provider_without_udp)
+{
+    uint32_t clcw = 0xffffffffu;
+
+    zassert_ok(ccsds_shell_tm_init());
+    zassert_ok(ccsds_tm_frame_test_get_clcw(&clcw));
+    zassert_equal(clcw, 0x01000000u);
 }
 
 ZTEST(ccsds_shell, test_start_and_stop_control_tm_generator)

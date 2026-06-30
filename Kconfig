@@ -758,7 +758,8 @@ config AKIRA_CCSDS_RS_INTERLEAVE_DEPTH
 
 config AKIRA_CCSDS_TM_FECF
     bool "Enable CCSDS TM Frame Error Control Field"
-    default n
+    default y if !AKIRA_CCSDS_RS
+    default n if AKIRA_CCSDS_RS
     depends on AKIRA_CCSDS_FRAME_SUPPORT
     help
       Append a CCSDS CRC-16 Frame Error Control Field to generated TM

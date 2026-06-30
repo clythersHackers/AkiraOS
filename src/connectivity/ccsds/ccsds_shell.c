@@ -37,11 +37,9 @@ LOG_MODULE_REGISTER(ccsds_shell, CONFIG_AKIRA_LOG_LEVEL);
 static struct k_mutex status_lock;
 static bool status_lock_initialized;
 static struct ccsds_shell_tm_status tm_status;
-#ifdef CONFIG_NETWORKING
 static struct ccsds_router tc_router;
 static struct ccsds_profile_tc_rx tc_rx_profile;
 static bool tc_rx_profile_initialized;
-#endif
 
 static void status_lock_init_once(void)
 {
@@ -130,6 +128,39 @@ static bool shell_tm_is_initialized(void)
     k_mutex_unlock(&status_lock);
 
     return initialized;
+}
+
+static int ensure_tc_profile_initialized(void)
+{
+    int ret;
+
+    if (tc_rx_profile_initialized) {
+        return 0;
+    }
+
+    ret = ccsds_router_init(&tc_router);
+    if (ret != 0) {
+        return ret;
+    }
+
+    ret = ccsds_profile_tc_rx_init(&tc_rx_profile, &tc_router);
+    if (ret != 0) {
+        return ret;
+    }
+
+    tc_rx_profile_initialized = true;
+
+    return 0;
+}
+
+static int register_tc_clcw_provider_if_ready(void)
+{
+    if (!tc_rx_profile_initialized || !shell_tm_is_initialized()) {
+        return 0;
+    }
+
+    return ccsds_tm_frame_set_clcw_provider(ccsds_profile_tc_clcw_provider,
+                                            &tc_rx_profile);
 }
 
 static bool shell_tm_route_mask_available(ccsds_tm_route_mask_t route_mask)
@@ -342,11 +373,21 @@ int ccsds_shell_tm_init(void)
         return ret;
     }
 
+    ret = ensure_tc_profile_initialized();
+    if (ret != 0) {
+        return ret;
+    }
+
     k_mutex_lock(&status_lock, K_FOREVER);
     memset(&tm_status, 0, sizeof(tm_status));
     tm_status.initialized = true;
     tm_status.time_vcid = CCSDS_SHELL_TIME_VCID;
     k_mutex_unlock(&status_lock);
+
+    ret = register_tc_clcw_provider_if_ready();
+    if (ret != 0) {
+        return ret;
+    }
 
     return 0;
 }
@@ -707,20 +748,16 @@ static int cmd_ccsds_tc_start_udp(const struct shell *sh, size_t argc,
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
 
-    if (!tc_rx_profile_initialized) {
-        ret = ccsds_router_init(&tc_router);
-        if (ret != 0) {
-            shell_error(sh, "ccsds tc router init failed: %d", ret);
-            return ret;
-        }
+    ret = ensure_tc_profile_initialized();
+    if (ret != 0) {
+        shell_error(sh, "ccsds tc profile init failed: %d", ret);
+        return ret;
+    }
 
-        ret = ccsds_profile_tc_rx_init(&tc_rx_profile, &tc_router);
-        if (ret != 0) {
-            shell_error(sh, "ccsds tc profile init failed: %d", ret);
-            return ret;
-        }
-
-        tc_rx_profile_initialized = true;
+    ret = register_tc_clcw_provider_if_ready();
+    if (ret != 0) {
+        shell_error(sh, "ccsds tc clcw provider init failed: %d", ret);
+        return ret;
     }
 
     ret = ccsds_tc_udp_input_start(&tc_rx_profile);
