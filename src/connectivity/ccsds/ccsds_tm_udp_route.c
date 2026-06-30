@@ -8,6 +8,7 @@
 #include <zephyr/net/socket.h>
 #endif
 
+#include <zephyr/sys/__assert.h>
 #include <zephyr/sys/util.h>
 
 #include "ccsds_tm_frame.h"
@@ -28,9 +29,7 @@ static int udp_route(uint8_t vcid, const uint8_t *frame, size_t frame_len,
     ARG_UNUSED(vcid);
     ARG_UNUSED(user_data);
 
-    if (frame == NULL) {
-        return -EINVAL;
-    }
+    __ASSERT(frame != NULL, "TM UDP route frame is NULL");
 
     ret = zsock_inet_pton(AF_INET, CONFIG_AKIRA_CCSDS_TM_UDP_DEST_IP,
                           &dest.sin_addr);

@@ -34,8 +34,7 @@ bool ccsds_tc_udp_input_available(void);
  *
  * @param profile TC receive profile used after UDP datagram acquisition.
  *
- * @return 0 on success, -EINVAL for invalid input, -EALREADY when already
- *         running, or a socket errno.
+ * @return 0 on success, -EALREADY when already running, or a socket errno.
  */
 int ccsds_tc_udp_input_start(struct ccsds_profile_tc_rx *profile);
 
@@ -49,7 +48,7 @@ int ccsds_tc_udp_input_stop(void);
 /**
  * @brief Copy current UDP TC input transport counters.
  *
- * @param stats Output snapshot. Ignored when NULL.
+ * @param stats Output snapshot.
  */
 void ccsds_tc_udp_input_get_stats(struct ccsds_tc_udp_input_stats *stats);
 

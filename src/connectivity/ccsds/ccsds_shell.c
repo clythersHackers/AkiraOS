@@ -7,6 +7,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/__assert.h>
 #include <zephyr/shell/shell.h>
 #include <zephyr/sys/util.h>
 
@@ -95,9 +96,7 @@ static int log_route(uint8_t vcid, const uint8_t *frame, size_t frame_len,
 
     ARG_UNUSED(user_data);
 
-    if (frame == NULL) {
-        return -EINVAL;
-    }
+    __ASSERT(frame != NULL, "TM log route frame is NULL");
 
     parse_output_metadata(frame, frame_len, &cadu, &mcfc, &vcfc, &fhp);
 
@@ -210,9 +209,8 @@ int ccsds_shell_tm_parse_route_mask(const char *routes,
     const char *token_start = NULL;
     size_t token_len = 0u;
 
-    if (routes == NULL || route_mask == NULL) {
-        return -EINVAL;
-    }
+    __ASSERT(routes != NULL, "TM route list is NULL");
+    __ASSERT(route_mask != NULL, "TM route mask output is NULL");
 
     for (const char *p = routes;; p++) {
         bool separator = *p == '\0' || *p == ',' || *p == '|' || *p == '+';
@@ -446,9 +444,7 @@ int ccsds_shell_tm_stop(void)
 
 void ccsds_shell_tm_get_status(struct ccsds_shell_tm_status *status)
 {
-    if (status == NULL) {
-        return;
-    }
+    __ASSERT(status != NULL, "CCSDS shell TM status output is NULL");
 
     status_lock_init_once();
     k_mutex_lock(&status_lock, K_FOREVER);

@@ -170,7 +170,6 @@ ZTEST(ccsds_shell, test_route_helper_reports_current_masks)
     zassert_equal(route_mask, CCSDS_TM_ROUTE_LOG);
 
     zassert_equal(ccsds_tm_frame_get_vc_route(8u, &route_mask), -EINVAL);
-    zassert_equal(ccsds_tm_frame_get_vc_route(0u, NULL), -EINVAL);
 }
 
 ZTEST(ccsds_shell, test_udp_route_is_unavailable_without_networking)

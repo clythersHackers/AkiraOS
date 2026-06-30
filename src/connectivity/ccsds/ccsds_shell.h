@@ -54,7 +54,7 @@ int ccsds_shell_tm_stop(void);
 /**
  * @brief Copy the current shell-managed TM status.
  *
- * @param status Output status snapshot. Ignored when NULL.
+ * @param status Output status snapshot.
  */
 void ccsds_shell_tm_get_status(struct ccsds_shell_tm_status *status);
 
@@ -73,7 +73,7 @@ bool ccsds_shell_tm_route_available(ccsds_tm_route_mask_t route_bit);
  * @param routes Route list such as "log", "udp", or "log,udp".
  * @param route_mask Output route mask.
  *
- * @return 0 on success, or -EINVAL for an unknown route name or invalid input.
+ * @return 0 on success, or -EINVAL for an unknown route name.
  */
 int ccsds_shell_tm_parse_route_mask(const char *routes,
                                     ccsds_tm_route_mask_t *route_mask);

@@ -35,7 +35,9 @@ limitations under active development, and future work.
 
 # Error handling rule
 
+API calls within the embedded software should assert in case of program errors or API misuse
 
+Shell commands should fail gracefully with interactive error reporting back to the CLI 
 
 # Task focus
 

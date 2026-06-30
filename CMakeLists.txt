@@ -692,12 +692,17 @@ if(CONFIG_AKIRA_CCSDS)
             src/connectivity/ccsds/ccsds_bch.c
             src/connectivity/ccsds/ccsds_cltu.c
             src/connectivity/ccsds/ccsds_profile.c
-            src/connectivity/ccsds/ccsds_rs.c
             src/connectivity/ccsds/ccsds_tc_frame.c
             src/connectivity/ccsds/ccsds_time_packet.c
             src/connectivity/ccsds/ccsds_tm_frame.c
             src/connectivity/ccsds/ccsds_tm_udp_route.c
         )
+
+        if(CONFIG_AKIRA_CCSDS_RS)
+            target_sources(app PRIVATE
+                src/connectivity/ccsds/ccsds_rs.c
+            )
+        endif()
 
         if(CONFIG_NETWORKING)
             target_sources(app PRIVATE

@@ -7,6 +7,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/net/socket.h>
+#include <zephyr/sys/__assert.h>
 #include <zephyr/sys/util.h>
 
 #include "ccsds_profile.h"
@@ -101,9 +102,7 @@ int ccsds_tc_udp_input_start(struct ccsds_profile_tc_rx *profile)
     int fd;
     int ret;
 
-    if (profile == NULL) {
-        return -EINVAL;
-    }
+    __ASSERT(profile != NULL, "TC UDP input profile is NULL");
 
     k_mutex_lock(&udp_lock, K_FOREVER);
     if (udp_stats.running || udp_thread_started) {
@@ -162,9 +161,7 @@ int ccsds_tc_udp_input_stop(void)
 
 void ccsds_tc_udp_input_get_stats(struct ccsds_tc_udp_input_stats *stats)
 {
-    if (stats == NULL) {
-        return;
-    }
+    __ASSERT(stats != NULL, "TC UDP input stats output is NULL");
 
     k_mutex_lock(&udp_lock, K_FOREVER);
     *stats = udp_stats;
