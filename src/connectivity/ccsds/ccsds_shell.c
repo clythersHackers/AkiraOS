@@ -19,7 +19,7 @@
 #ifdef CONFIG_NETWORKING
 #include "ccsds_tc_udp_input.h"
 #endif
-#include "ccsds_time_packet.h"
+#include "ccsds_time_service.h"
 #include "ccsds_tm_frame.h"
 #include "ccsds_tm_udp_route.h"
 
@@ -152,6 +152,7 @@ static void ensure_tc_profile_initialized(void)
     }
 
     ccsds_router_init(&tc_router);
+    ccsds_time_service_init(&tc_router);
     ccsds_profile_tc_rx_init(&tc_rx_profile, &tc_router);
 
     tc_rx_profile_initialized = true;
@@ -359,7 +360,7 @@ int ccsds_shell_tm_init(void)
 
     status_lock_init_once();
 
-    ccsds_time_packet_stop();
+    ccsds_time_service_stop();
 
     ccsds_tm_frame_init();
 
@@ -402,7 +403,7 @@ int ccsds_shell_tm_start(void)
     ccsds_tm_frame_start(CCSDS_SHELL_TM_ACTIVE_DELAY,
                          CCSDS_SHELL_TM_IDLE_DELAY);
 
-    ret = ccsds_time_packet_start(CCSDS_SHELL_TIME_VCID);
+    ret = ccsds_time_service_start(CCSDS_SHELL_TIME_VCID);
     if (ret != 0) {
         ccsds_tm_frame_stop();
         return ret;
@@ -418,7 +419,7 @@ int ccsds_shell_tm_start(void)
 
 void ccsds_shell_tm_stop(void)
 {
-    ccsds_time_packet_stop();
+    ccsds_time_service_stop();
     ccsds_tm_frame_stop();
 
     status_lock_init_once();

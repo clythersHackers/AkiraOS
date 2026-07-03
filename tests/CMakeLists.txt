@@ -44,7 +44,7 @@ target_sources(app PRIVATE
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_space_packet.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_tc_frame.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_tc_segment.c
-    ${AKIRA_SRC}/connectivity/ccsds/ccsds_time_packet.c
+    ${AKIRA_SRC}/connectivity/ccsds/ccsds_time_service.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_tm_frame.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_tm_udp_route.c
 
@@ -65,7 +65,7 @@ target_sources(app PRIVATE
     src/test_ccsds_shell.c
     src/test_ccsds_tc_frame.c
     src/test_ccsds_tc_segment.c
-    src/test_ccsds_time_packet.c
+    src/test_ccsds_time_service.c
     src/test_ccsds_tm_frame.c
 )
 

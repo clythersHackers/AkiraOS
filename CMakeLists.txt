@@ -694,7 +694,7 @@ if(CONFIG_AKIRA_CCSDS)
             src/connectivity/ccsds/ccsds_profile.c
             src/connectivity/ccsds/ccsds_tc_frame.c
             src/connectivity/ccsds/ccsds_tc_segment.c
-            src/connectivity/ccsds/ccsds_time_packet.c
+            src/connectivity/ccsds/ccsds_time_service.c
             src/connectivity/ccsds/ccsds_tm_frame.c
             src/connectivity/ccsds/ccsds_tm_udp_route.c
         )
