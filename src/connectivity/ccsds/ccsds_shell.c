@@ -10,6 +10,7 @@
 #include <zephyr/sys/__assert.h>
 #include <zephyr/shell/shell.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/sys/byteorder.h>
 
 #include "ccsds_profile.h"
 #ifdef CONFIG_AKIRA_CCSDS_TM_RND
@@ -55,11 +56,6 @@ static void status_lock_init_once(void)
     status_lock_initialized = true;
 }
 
-static uint16_t read_be16(const uint8_t *buf)
-{
-    return ((uint16_t)buf[0] << 8) | buf[1];
-}
-
 static bool output_has_asm(const uint8_t *frame, size_t frame_len)
 {
     return frame_len >= CCSDS_SHELL_ASM_LEN &&
@@ -99,7 +95,7 @@ static void parse_output_metadata(const uint8_t *frame, size_t frame_len,
 
     *mcfc = tm_header[2];
     *vcfc = tm_header[3];
-    *fhp = read_be16(&tm_header[4]) & 0x07ffu;
+    *fhp = sys_get_be16(&tm_header[4]) & 0x07ffu;
 }
 
 static int log_route(uint8_t vcid, const uint8_t *frame, size_t frame_len,

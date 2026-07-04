@@ -5,6 +5,7 @@
 
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/sys/byteorder.h>
 
 #include "ccsds_space_packet.h"
 #include "ccsds_tm_frame.h"
@@ -25,31 +26,6 @@ static uint8_t time_service_buf[CCSDS_SPACE_PACKET_PRIMARY_HDR_LEN +
 
 /* Simple service-level offset from kernel uptime */
 static int64_t time_offset_ticks;
-
-static void write_be32(uint8_t *buf, uint32_t value)
-{
-    buf[0] = (uint8_t)(value >> 24);
-    buf[1] = (uint8_t)(value >> 16);
-    buf[2] = (uint8_t)(value >> 8);
-    buf[3] = (uint8_t)value;
-}
-
-static void write_be16(uint8_t *buf, uint16_t value)
-{
-    buf[0] = (uint8_t)(value >> 8);
-    buf[1] = (uint8_t)value;
-}
-
-static uint32_t read_be32(const uint8_t *buf)
-{
-    return ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16) |
-           ((uint32_t)buf[2] << 8) | (uint32_t)buf[3];
-}
-
-static uint16_t read_be16(const uint8_t *buf)
-{
-    return ((uint16_t)buf[0] << 8) | (uint16_t)buf[1];
-}
 
 static int build_tm_packet(uint8_t func_id, uint8_t *buf, size_t cap,
                            size_t *len)
@@ -73,8 +49,8 @@ static int build_tm_packet(uint8_t func_id, uint8_t *buf, size_t cap,
                             CONFIG_SYS_CLOCK_TICKS_PER_SEC);
 
     payload[0] = func_id;
-    write_be32(&payload[1], s);
-    write_be16(&payload[5], f);
+    sys_put_be32(s, &payload[1]);
+    sys_put_be16(f, &payload[5]);
     packet.payload_len = 7u;
 
     int ret = ccsds_space_packet_encode(&packet, buf, cap, len);
@@ -128,8 +104,8 @@ static int handle_tc_packet(const struct ccsds_space_packet *packet,
         if (packet->payload_len < 7u) {
             return -EINVAL;
         }
-        uint32_t s = read_be32(&packet->payload[1]);
-        uint16_t f = read_be16(&packet->payload[5]);
+        uint32_t s = sys_get_be32(&packet->payload[1]);
+        uint16_t f = sys_get_be16(&packet->payload[5]);
         int64_t target_ticks = (int64_t)s * CONFIG_SYS_CLOCK_TICKS_PER_SEC +
                                ((int64_t)f * CONFIG_SYS_CLOCK_TICKS_PER_SEC) /
                                    CCSDS_TIME_SERVICE_FINE_UNITS;
@@ -142,8 +118,8 @@ static int handle_tc_packet(const struct ccsds_space_packet *packet,
         if (packet->payload_len < 7u) {
             return -EINVAL;
         }
-        int32_t s_adj = (int32_t)read_be32(&packet->payload[1]);
-        int16_t f_adj = (int16_t)read_be16(&packet->payload[5]);
+        int32_t s_adj = (int32_t)sys_get_be32(&packet->payload[1]);
+        int16_t f_adj = (int16_t)sys_get_be16(&packet->payload[5]);
         int64_t adj_ticks = (int64_t)s_adj * CONFIG_SYS_CLOCK_TICKS_PER_SEC +
                             ((int64_t)f_adj * CONFIG_SYS_CLOCK_TICKS_PER_SEC) /
                                 CCSDS_TIME_SERVICE_FINE_UNITS;
