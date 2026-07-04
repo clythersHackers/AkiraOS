@@ -38,6 +38,7 @@ target_sources(app PRIVATE
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_crc16.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_cfdp_checksum.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_cfdp_pdu.c
+    ${AKIRA_SRC}/connectivity/ccsds/ccsds_cfdp_ranges.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_profile.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_router.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_rnd.c
@@ -63,6 +64,7 @@ target_sources(app PRIVATE
     src/test_ccsds_crc16.c
     src/test_ccsds_cfdp_checksum.c
     src/test_ccsds_cfdp_pdu.c
+    src/test_ccsds_cfdp_ranges.c
     src/test_ccsds_cfdp_types.c
     src/test_ccsds_profile.c
     src/test_ccsds_rnd.c

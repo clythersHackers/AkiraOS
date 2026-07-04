@@ -691,6 +691,7 @@ if(CONFIG_AKIRA_CCSDS)
         set(AKIRA_CCSDS_CFDP_SOURCES
             src/connectivity/ccsds/ccsds_cfdp_checksum.c
             src/connectivity/ccsds/ccsds_cfdp_pdu.c
+            src/connectivity/ccsds/ccsds_cfdp_ranges.c
         )
 
         if(AKIRA_CCSDS_CFDP_SOURCES)
