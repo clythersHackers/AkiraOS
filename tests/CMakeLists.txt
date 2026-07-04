@@ -63,6 +63,7 @@ target_sources(app PRIVATE
     src/test_ccsds_cltu.c
     src/test_ccsds_crc16.c
     src/test_ccsds_cfdp_checksum.c
+    src/test_ccsds_cfdp_filestore.c
     src/test_ccsds_cfdp_pdu.c
     src/test_ccsds_cfdp_ranges.c
     src/test_ccsds_cfdp_types.c
