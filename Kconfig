@@ -679,6 +679,7 @@ config AKIRA_CCSDS_FRAME_SUPPORT
 config AKIRA_CCSDS_CFDP
     bool "Enable CCSDS CFDP support"
     default n
+    select CRC
     help
       Enable the CCSDS File Delivery Protocol compile skeleton. The initial
       subset exposes constants, configuration limits, protocol enums, and
