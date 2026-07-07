@@ -6,6 +6,9 @@
 #ifndef AKIRA_CONNECTIVITY_CCSDS_H
 #define AKIRA_CONNECTIVITY_CCSDS_H
 
+#ifdef CONFIG_AKIRA_CCSDS_CFDP
+#include "ccsds/akira_cfdp_staging.h"
+#endif
 #include "ccsds/ccsds_bch.h"
 #include "ccsds/ccsds_cltu.h"
 #include "ccsds/ccsds_profile.h"
