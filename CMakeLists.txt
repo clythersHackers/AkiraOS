@@ -694,6 +694,7 @@ if(CONFIG_AKIRA_CCSDS)
             src/connectivity/ccsds/ccsds_cfdp_entity.c
             src/connectivity/ccsds/ccsds_cfdp_pdu.c
             src/connectivity/ccsds/ccsds_cfdp_ranges.c
+            src/connectivity/ccsds/ccsds_cfdp_space_packet.c
         )
 
         if(AKIRA_CCSDS_CFDP_SOURCES)
