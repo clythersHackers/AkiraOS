@@ -738,6 +738,15 @@ config AKIRA_CCSDS_CFDP_MAX_NAK_RANGES
       Maximum missing-data ranges reserved for the later limited NAK recovery
       subset.
 
+config AKIRA_CCSDS_CFDP_MAX_NAK_ROUNDS
+    int "Maximum CFDP NAK rounds"
+    default 4
+    range 1 255
+    depends on AKIRA_CCSDS_CFDP
+    help
+      Maximum sender-side NAK rounds accepted before failing a limited Class 2
+      transaction.
+
 config AKIRA_CCSDS_MAX_CLTU_LEN
     int "Maximum CCSDS CLTU length"
     default 1024
