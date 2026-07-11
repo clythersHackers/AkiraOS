@@ -109,11 +109,17 @@ Build with CCSDS enabled:
 ./build.sh -b akiraconsole --ccsds
 ```
 
-The `--ccsds` flag applies `configs/ccsds.conf`, which currently enables:
+The `--ccsds` flag applies `configs/ccsds.conf`, which enables CCSDS/CFDP and
+uses a UDP-focused test profile that keeps IPv4/UDP available while disabling
+HTTP/TCP-oriented services to reduce ESP32-S3 internal DRAM pressure. Core
+symbols include:
 
 ```text
 CONFIG_AKIRA_CCSDS=y
 CONFIG_AKIRA_CCSDS_CFDP=y
+CONFIG_NET_UDP=y
+CONFIG_AKIRA_HTTP_SERVER=n
+CONFIG_NET_TCP=n
 ```
 
 ## CCSDS Shell Quick Reference
