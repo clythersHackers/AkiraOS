@@ -9,6 +9,10 @@
 #include "akira_cfdp_staging.h"
 #include "ccsds_cfdp_config.h"
 
+#if defined(CONFIG_NETWORKING) && !defined(CONFIG_AKIRA_CCSDS_FRAME_SUPPORT)
+#include "ccsds_udp.h"
+#endif
+
 #ifdef CONFIG_FILE_SYSTEM
 #include <zephyr/fs/fs.h>
 #endif
@@ -284,6 +288,9 @@ void akira_cfdp_service_config_defaults(akira_cfdp_service_config_t *config)
     config->local_apid = CONFIG_AKIRA_CCSDS_CFDP_SERVICE_APID;
     config->remote_apid = CONFIG_AKIRA_CCSDS_CFDP_SERVICE_APID;
     config->packet_type = AKIRA_CFDP_SERVICE_PACKET_TYPE;
+#if defined(CONFIG_NETWORKING) && !defined(CONFIG_AKIRA_CCSDS_FRAME_SUPPORT)
+    config->send_packet = ccsds_udp_send;
+#endif
 }
 
 enum ccsds_cfdp_status
@@ -320,7 +327,7 @@ akira_cfdp_service_init(const akira_cfdp_service_config_t *config)
     }
     cfg.remote_apid =
         config->remote_apid != 0u ? config->remote_apid : cfg.local_apid;
-    if (cfg.send_packet == NULL) {
+    if (config->send_packet != NULL) {
         cfg.send_packet = config->send_packet;
     }
     if (cfg.send_packet == NULL) {

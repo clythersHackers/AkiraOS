@@ -215,16 +215,19 @@ Starts the UDP listener for complete TC CLTU datagrams.
 When networking is enabled, the listener binds to:
 
 ```text
-CONFIG_AKIRA_CCSDS_TC_UDP_LOCAL_PORT
+CONFIG_AKIRA_CCSDS_UDP_LOCAL_IP
+CONFIG_AKIRA_CCSDS_UDP_LOCAL_PORT
 ```
 
-The default TC UDP local port follows the TM UDP destination port:
+Bounded output units use the configured peer endpoint:
 
 ```text
-CONFIG_AKIRA_CCSDS_TM_UDP_DEST_PORT
+CONFIG_AKIRA_CCSDS_UDP_PEER_IP
+CONFIG_AKIRA_CCSDS_UDP_PEER_PORT
 ```
 
-With the current defaults, both TM UDP output and TC UDP input use port `5005`.
+With frame support enabled, each input datagram remains one complete TC CLTU.
+With frame support disabled, each input datagram is one encoded Space Packet.
 
 When networking is disabled, this command reports that TC UDP input is
 unavailable.
@@ -254,8 +257,8 @@ With networking enabled, status includes:
 
 ```text
 ccsds tc udp available=1 running=<0|1>
-local_port=5005
-udp_rx=<datagrams> udp_last_error=<errno>
+local_port=5005 peer=<address>:5005
+udp_rx=<datagrams> udp_tx=<datagrams> udp_last_error=<errno>
 ```
 
 With networking disabled, status reports:

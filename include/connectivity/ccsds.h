@@ -24,7 +24,7 @@
 #ifdef CONFIG_AKIRA_CCSDS_FRAME_SUPPORT
 #include "ccsds/ccsds_tc_frame.h"
 #ifdef CONFIG_NETWORKING
-#include "ccsds/ccsds_tc_udp_input.h"
+#include "ccsds/ccsds_udp.h"
 #endif
 #include "ccsds/ccsds_time_packet.h"
 #include "ccsds/ccsds_tm_frame.h"

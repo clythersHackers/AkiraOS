@@ -18,7 +18,7 @@
 #endif
 #include "ccsds_router.h"
 #ifdef CONFIG_NETWORKING
-#include "ccsds_tc_udp_input.h"
+#include "ccsds_udp.h"
 #endif
 #include "ccsds_time_service.h"
 #include "ccsds_tm_frame.h"
@@ -44,6 +44,7 @@ static bool status_lock_initialized;
 static struct ccsds_shell_tm_status tm_status;
 static struct ccsds_router tc_router;
 static struct ccsds_profile_tc_rx tc_rx_profile;
+static struct ccsds_profile_input tc_input_profile;
 static bool tc_rx_profile_initialized;
 
 static void status_lock_init_once(void)
@@ -150,6 +151,7 @@ static void ensure_tc_profile_initialized(void)
     ccsds_router_init(&tc_router);
     ccsds_time_service_init(&tc_router);
     ccsds_profile_tc_rx_init(&tc_rx_profile, &tc_router);
+    ccsds_profile_input_init(&tc_input_profile, &tc_router, &tc_rx_profile);
 
     tc_rx_profile_initialized = true;
 }
@@ -723,14 +725,14 @@ static int cmd_ccsds_tc_start_udp(const struct shell *sh, size_t argc,
     ensure_tc_profile_initialized();
     register_tc_clcw_provider_if_ready();
 
-    ret = ccsds_tc_udp_input_start(&tc_rx_profile);
+    ret = ccsds_udp_start(&tc_input_profile);
     if (ret != 0) {
         shell_error(sh, "ccsds tc udp start failed: %d", ret);
         return ret;
     }
 
     shell_print(sh, "ccsds tc udp listening on port %u",
-                CONFIG_AKIRA_CCSDS_TC_UDP_LOCAL_PORT);
+                CONFIG_AKIRA_CCSDS_UDP_LOCAL_PORT);
 
     return 0;
 #else
@@ -749,7 +751,7 @@ static int cmd_ccsds_tc_stop_udp(const struct shell *sh, size_t argc,
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
 
-    ccsds_tc_udp_input_stop();
+    ccsds_udp_stop();
 
     shell_print(sh, "ccsds tc udp stopped");
     return 0;
@@ -766,21 +768,25 @@ static int cmd_ccsds_tc_status_udp(const struct shell *sh, size_t argc,
                                    char **argv)
 {
 #ifdef CONFIG_NETWORKING
-    struct ccsds_tc_udp_input_stats udp_stats;
+    struct ccsds_udp_stats udp_stats;
 #endif
 
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
 
 #ifdef CONFIG_NETWORKING
-    ccsds_tc_udp_input_get_stats(&udp_stats);
+    ccsds_udp_get_stats(&udp_stats);
 
     shell_print(sh, "ccsds tc udp available=%u running=%u",
-                ccsds_tc_udp_input_available() ? 1u : 0u,
+                ccsds_udp_available() ? 1u : 0u,
                 udp_stats.running ? 1u : 0u);
-    shell_print(sh, "local_port=%u", CONFIG_AKIRA_CCSDS_TC_UDP_LOCAL_PORT);
-    shell_print(sh, "udp_rx=%u udp_last_error=%d",
-                udp_stats.datagrams_received, udp_stats.last_error);
+    shell_print(sh, "local_port=%u peer=%s:%u",
+                CONFIG_AKIRA_CCSDS_UDP_LOCAL_PORT,
+                CONFIG_AKIRA_CCSDS_UDP_PEER_IP,
+                CONFIG_AKIRA_CCSDS_UDP_PEER_PORT);
+    shell_print(sh, "udp_rx=%u udp_tx=%u udp_last_error=%d",
+                udp_stats.datagrams_received, udp_stats.datagrams_sent,
+                udp_stats.last_error);
 #else
     shell_print(sh, "ccsds tc udp available=0 running=0");
 #endif

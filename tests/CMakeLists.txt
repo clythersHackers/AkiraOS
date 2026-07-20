@@ -54,6 +54,7 @@ target_sources(app PRIVATE
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_time_service.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_tm_frame.c
     ${AKIRA_SRC}/connectivity/ccsds/ccsds_tm_udp_route.c
+    ${AKIRA_SRC}/connectivity/ccsds/ccsds_udp.c
 
     # Stubs
     stubs/stub_mcuboot.c
@@ -85,12 +86,6 @@ target_sources(app PRIVATE
     src/test_ccsds_time_service.c
     src/test_ccsds_tm_frame.c
 )
-
-if(CONFIG_NETWORKING)
-    target_sources(app PRIVATE
-        ${AKIRA_SRC}/connectivity/ccsds/ccsds_tc_udp_input.c
-    )
-endif()
 
 # ota_manager.c guards its flash_area and mcuboot includes behind:
 #   #if defined(CONFIG_FLASH_MAP) && defined(CONFIG_BOOTLOADER_MCUBOOT)

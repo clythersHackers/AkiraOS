@@ -951,30 +951,65 @@ config AKIRA_CCSDS_TM_UDP_DEST_PORT
     help
       Destination UDP port used by the development-only CCSDS TM UDP route.
 
-config AKIRA_CCSDS_TC_UDP_LOCAL_PORT
-    int "CCSDS TC development UDP local port"
-    default AKIRA_CCSDS_TM_UDP_DEST_PORT
-    range 1 65535
-    depends on AKIRA_CCSDS_FRAME_SUPPORT && NETWORKING
+config AKIRA_CCSDS_UDP_LOCAL_IP
+    string "CCSDS bounded-unit UDP local IPv4 address"
+    default "0.0.0.0"
+    depends on NETWORKING
     help
-      Local UDP port used by the development-only CCSDS TC input adapter.
-      Each received datagram is treated as one complete CLTU.
+      Local IPv4 address used by the CCSDS UDP bounded-unit input. Use a
+      specific address when running two instances on the same host.
 
-config AKIRA_CCSDS_TC_UDP_THREAD_STACK_SIZE
-    int "CCSDS TC UDP input thread stack size"
+config AKIRA_CCSDS_UDP_LOCAL_PORT
+    int "CCSDS bounded-unit UDP local port"
+    default 5005
+    range 1 65535
+    depends on NETWORKING
+    help
+      Local UDP port used by the CCSDS bounded-unit input. Each received
+      datagram is interpreted by the configured central CCSDS input profile.
+
+config AKIRA_CCSDS_UDP_PEER_IP
+    string "CCSDS bounded-unit UDP peer IPv4 address"
+    default "192.168.1.255"
+    depends on NETWORKING
+    help
+      Peer IPv4 address used for bounded CCSDS output units, including encoded
+      Space Packets emitted by the CFDP adapter in packet-only builds.
+
+config AKIRA_CCSDS_UDP_PEER_PORT
+    int "CCSDS bounded-unit UDP peer port"
+    default 5005
+    range 1 65535
+    depends on NETWORKING
+    help
+      Peer UDP port used for bounded CCSDS output units. Configure reciprocal
+      local and peer endpoints when building two communicating instances.
+
+config AKIRA_CCSDS_UDP_MAX_UNIT_LEN
+    int "Maximum CCSDS UDP bounded-unit length"
+    default AKIRA_CCSDS_MAX_CLTU_LEN if AKIRA_CCSDS_FRAME_SUPPORT
+    default 1024
+    range 7 65535
+    depends on NETWORKING
+    help
+      Maximum UDP datagram accepted or sent as one CCSDS unit. This bounds the
+      receive buffer for either a complete CLTU or an encoded Space Packet.
+
+config AKIRA_CCSDS_UDP_THREAD_STACK_SIZE
+    int "CCSDS UDP input thread stack size"
     default 2048
     range 1024 8192
-    depends on AKIRA_CCSDS_FRAME_SUPPORT && NETWORKING
+    depends on NETWORKING
     help
-      Stack reserved for the CCSDS TC UDP listener thread.
+      Stack reserved for the CCSDS UDP listener thread.
 
-config AKIRA_CCSDS_TC_UDP_THREAD_PRIORITY
-    int "CCSDS TC UDP input thread priority"
+config AKIRA_CCSDS_UDP_THREAD_PRIORITY
+    int "CCSDS UDP input thread priority"
     default 14
     range -10 30
-    depends on AKIRA_CCSDS_FRAME_SUPPORT && NETWORKING
+    depends on NETWORKING
     help
-      Zephyr thread priority used by the CCSDS TC UDP listener.
+      Zephyr thread priority used by the CCSDS UDP listener.
 
 endif # AKIRA_CCSDS
 
