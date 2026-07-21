@@ -584,6 +584,7 @@ ZTEST(akira_cfdp_service, test_outbound_pdu_wraps_through_space_packet_adapter)
 ZTEST(akira_cfdp_service,
       test_loopback_receive_reaches_staging_fixture_and_complete_event)
 {
+    struct akira_cfdp_service_status report;
     struct ccsds_router service_router;
     struct ccsds_router peer_router;
     ccsds_cfdp_space_packet_adapter_t peer_adapter;
@@ -646,10 +647,22 @@ ZTEST(akira_cfdp_service,
     zassert_equal(events.event[events.count - 1u].type,
                   CCSDS_CFDP_EVENT_COMPLETE);
     zassert_equal(events.event[events.count - 1u].status, CCSDS_CFDP_STATUS_OK);
+
+    akira_cfdp_service_get_status(&report);
+    zassert_true(report.valid);
+    zassert_equal(report.event_type, CCSDS_CFDP_EVENT_COMPLETE);
+    zassert_equal(report.status, CCSDS_CFDP_STATUS_OK);
+    zassert_equal(report.transaction_id.source_entity_id, 0x34u);
+    zassert_equal(strcmp(report.source_path, "src.bin"), 0);
+    zassert_equal(strcmp(report.destination_path, "dst.bin"), 0);
+    zassert_equal(report.file_size, sizeof(file));
+    zassert_equal(report.checksum, modular_checksum(file, sizeof(file)));
+    zassert_true(report.checksum_ok);
 }
 
 ZTEST(akira_cfdp_service, test_failed_terminal_event_reaches_service_callback)
 {
+    struct akira_cfdp_service_status report;
     struct ccsds_router router;
     struct packet_capture capture = {0};
     struct event_capture events = {0};
@@ -691,6 +704,20 @@ ZTEST(akira_cfdp_service, test_failed_terminal_event_reaches_service_callback)
                   CCSDS_CFDP_EVENT_FAILED);
     zassert_equal(events.event[events.count - 1u].status,
                   CCSDS_CFDP_STATUS_CHECKSUM_FAILURE);
+
+    akira_cfdp_service_get_status(&report);
+    zassert_true(report.valid);
+    zassert_equal(report.event_type, CCSDS_CFDP_EVENT_FAILED);
+    zassert_equal(report.status, CCSDS_CFDP_STATUS_CHECKSUM_FAILURE);
+    zassert_equal(report.transaction_id.source_entity_id, 0x34u);
+    zassert_equal(report.transaction_id.transaction_sequence_number, 0x56u);
+    zassert_equal(strcmp(report.source_path, "src.bin"), 0);
+    zassert_equal(strcmp(report.destination_path, "dst.bin"), 0);
+    zassert_equal(report.file_size, sizeof(file));
+    zassert_equal(report.checksum, 0x12345678u);
+    zassert_false(report.checksum_ok);
+    zassert_equal(strcmp(akira_cfdp_service_status_name(report.status),
+                         "CHECKSUM_FAILURE"), 0);
 }
 
 ZTEST_SUITE(akira_cfdp_service, NULL, NULL, NULL, NULL, NULL);

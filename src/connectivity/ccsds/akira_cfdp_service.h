@@ -7,6 +7,7 @@
 #define AKIRA_CCSDS_CFDP_SERVICE_H
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "ccsds_cfdp_entity.h"
@@ -37,6 +38,18 @@ struct akira_cfdp_service_config {
 
 typedef struct akira_cfdp_service_config akira_cfdp_service_config_t;
 
+struct akira_cfdp_service_status {
+    bool valid;
+    ccsds_cfdp_event_type_t event_type;
+    enum ccsds_cfdp_status status;
+    ccsds_cfdp_transaction_id_t transaction_id;
+    char source_path[CCSDS_CFDP_MAX_FILENAME_LEN + 1u];
+    char destination_path[CCSDS_CFDP_MAX_FILENAME_LEN + 1u];
+    uint32_t file_size;
+    uint32_t checksum;
+    bool checksum_ok;
+};
+
 void akira_cfdp_service_config_defaults(akira_cfdp_service_config_t *config);
 
 enum ccsds_cfdp_status
@@ -48,6 +61,19 @@ enum ccsds_cfdp_status
 akira_cfdp_service_send_file(const ccsds_cfdp_filestore_ops_t *filestore,
                              const ccsds_cfdp_put_request_t *request,
                              ccsds_cfdp_transaction_id_t *transaction_id);
+
+/** Send one arbitrary filesystem file using the generic CFDP filestore API. */
+enum ccsds_cfdp_status
+akira_cfdp_service_send_path(const char *source_path,
+                             const char *destination_path,
+                             ccsds_cfdp_transaction_id_t *transaction_id);
+
+/** Copy the last persistent COMPLETE or FAILED service report. */
+void akira_cfdp_service_get_status(struct akira_cfdp_service_status *status);
+
+/** Return a stable operator-facing name for a CFDP status code. */
+const char *
+akira_cfdp_service_status_name(enum ccsds_cfdp_status status);
 
 void akira_cfdp_service_poll(uint64_t now_ms);
 

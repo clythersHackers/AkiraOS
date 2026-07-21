@@ -186,4 +186,24 @@ ZTEST(ccsds_shell, test_udp_route_is_unavailable_without_networking)
 #endif
 }
 
+#ifdef CONFIG_AKIRA_CCSDS_CFDP
+ZTEST(ccsds_shell, test_cfdp_runtime_config_sets_entity_ids_and_apid)
+{
+    akira_cfdp_service_config_t config;
+    bool started;
+
+    zassert_ok(ccsds_shell_cfdp_configure(0x1234u, 0x5678u, 0x340u));
+    ccsds_shell_cfdp_get_config(&config, &started);
+
+    zassert_false(started);
+    zassert_equal(config.local_entity_id, 0x1234u);
+    zassert_equal(config.remote_entity_id, 0x5678u);
+    zassert_equal(config.entity_id_len, 2u);
+    zassert_equal(config.local_apid, 0x340u);
+    zassert_equal(config.remote_apid, 0x340u);
+    zassert_equal(ccsds_shell_cfdp_configure(1u, 2u, 0u), -EINVAL);
+    zassert_equal(ccsds_shell_cfdp_configure(1u, 2u, 0x800u), -EINVAL);
+}
+#endif
+
 ZTEST_SUITE(ccsds_shell, NULL, NULL, shell_setup, shell_setup, NULL);

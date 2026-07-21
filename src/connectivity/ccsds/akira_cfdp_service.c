@@ -5,6 +5,8 @@
 
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
 
 #include "akira_cfdp_staging.h"
 #include "ccsds_cfdp_config.h"
@@ -16,6 +18,8 @@
 #ifdef CONFIG_FILE_SYSTEM
 #include <zephyr/fs/fs.h>
 #endif
+
+LOG_MODULE_REGISTER(akira_cfdp_service, CONFIG_AKIRA_LOG_LEVEL);
 
 #ifndef CONFIG_AKIRA_CCSDS_CFDP_SERVICE_LOCAL_ENTITY_ID
 #define CONFIG_AKIRA_CCSDS_CFDP_SERVICE_LOCAL_ENTITY_ID 1
@@ -52,11 +56,15 @@ struct akira_cfdp_service {
     void *event_user;
 #ifdef CONFIG_FILE_SYSTEM
     struct fs_file_t receive_file;
+    struct fs_file_t source_file;
 #endif
     bool receive_file_open;
+    bool source_file_open;
 };
 
 static struct akira_cfdp_service service;
+static K_MUTEX_DEFINE(service_status_lock);
+static struct akira_cfdp_service_status service_status;
 
 #ifdef CONFIG_FILE_SYSTEM
 #define AKIRA_CFDP_STAGE_ROOT "/lfs/cfdp"
@@ -263,9 +271,188 @@ static ccsds_cfdp_filestore_ops_t default_receive_filestore = {
     .discard_tmp = staging_discard_tmp,
 };
 
+#ifdef CONFIG_FILE_SYSTEM
+static int source_open_read(void *user, const char *path, void **handle,
+                            uint32_t *size)
+{
+    struct akira_cfdp_service *svc = user;
+    struct fs_dirent entry;
+    int rc;
+
+    if (svc == NULL || path == NULL || handle == NULL || size == NULL ||
+        svc->source_file_open) {
+        return -EINVAL;
+    }
+
+    rc = fs_stat(path, &entry);
+    if (rc != 0) {
+        return rc;
+    }
+    if (entry.type != FS_DIR_ENTRY_FILE || entry.size > UINT32_MAX) {
+        return -EFBIG;
+    }
+
+    fs_file_t_init(&svc->source_file);
+    rc = fs_open(&svc->source_file, path, FS_O_READ);
+    if (rc != 0) {
+        return rc;
+    }
+
+    svc->source_file_open = true;
+    *handle = &svc->source_file;
+    *size = (uint32_t)entry.size;
+    return 0;
+}
+
+static int source_read(void *user, void *handle, uint32_t offset, uint8_t *buf,
+                       size_t len, size_t *nread)
+{
+    struct akira_cfdp_service *svc = user;
+    ssize_t rc;
+
+    if (svc == NULL || handle == NULL || buf == NULL || nread == NULL ||
+        !svc->source_file_open) {
+        return -EINVAL;
+    }
+    if (fs_seek(handle, (off_t)offset, FS_SEEK_SET) != 0) {
+        return -EIO;
+    }
+
+    rc = fs_read(handle, buf, len);
+    if (rc < 0) {
+        return (int)rc;
+    }
+    *nread = (size_t)rc;
+    return 0;
+}
+
+static int source_close(void *user, void *handle)
+{
+    struct akira_cfdp_service *svc = user;
+    int rc;
+
+    if (svc == NULL || handle == NULL || !svc->source_file_open) {
+        return -EINVAL;
+    }
+
+    rc = fs_close(handle);
+    svc->source_file_open = false;
+    return rc;
+}
+#endif /* CONFIG_FILE_SYSTEM */
+
+static ccsds_cfdp_filestore_ops_t source_filestore = {
+    .user = &service,
+#ifdef CONFIG_FILE_SYSTEM
+    .open_read = source_open_read,
+    .read = source_read,
+    .close = source_close,
+#endif
+};
+
+static bool transaction_id_matches(const ccsds_cfdp_transaction_id_t *a,
+                                   const ccsds_cfdp_transaction_id_t *b)
+{
+    return a->source_entity_id == b->source_entity_id &&
+           a->transaction_sequence_number == b->transaction_sequence_number;
+}
+
+const char *akira_cfdp_service_status_name(enum ccsds_cfdp_status status)
+{
+    switch (status) {
+    case CCSDS_CFDP_STATUS_OK:
+        return "OK";
+    case CCSDS_CFDP_STATUS_INVALID_ARGUMENT:
+        return "INVALID_ARGUMENT";
+    case CCSDS_CFDP_STATUS_BUFFER_TOO_SMALL:
+        return "BUFFER_TOO_SMALL";
+    case CCSDS_CFDP_STATUS_MALFORMED_PDU:
+        return "MALFORMED_PDU";
+    case CCSDS_CFDP_STATUS_UNSUPPORTED:
+        return "UNSUPPORTED";
+    case CCSDS_CFDP_STATUS_UNSUPPORTED_CHECKSUM:
+        return "UNSUPPORTED_CHECKSUM";
+    case CCSDS_CFDP_STATUS_INVALID_TRANSMISSION_MODE:
+        return "INVALID_TRANSMISSION_MODE";
+    case CCSDS_CFDP_STATUS_CHECKSUM_FAILURE:
+        return "CHECKSUM_FAILURE";
+    case CCSDS_CFDP_STATUS_FILE_SIZE_ERROR:
+        return "FILE_SIZE_ERROR";
+    case CCSDS_CFDP_STATUS_INACTIVITY_DETECTED:
+        return "INACTIVITY_DETECTED";
+    case CCSDS_CFDP_STATUS_NAK_LIMIT_REACHED:
+        return "NAK_LIMIT_REACHED";
+    case CCSDS_CFDP_STATUS_CANCEL_REQUEST:
+        return "CANCEL_REQUEST";
+    case CCSDS_CFDP_STATUS_FILESTORE_REJECTION:
+        return "FILESTORE_REJECTION";
+    case CCSDS_CFDP_STATUS_TRANSACTION_BUSY:
+        return "TRANSACTION_BUSY";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+static void record_terminal_status(struct akira_cfdp_service *svc,
+                                   const ccsds_cfdp_event_t *event)
+{
+    const ccsds_cfdp_transaction_slot_t *slot = NULL;
+    struct akira_cfdp_service_status report = {
+        .valid = true,
+        .event_type = event->type,
+        .status = event->status,
+        .transaction_id = event->transaction_id,
+        .checksum_ok = event->status == CCSDS_CFDP_STATUS_OK,
+    };
+
+    if (svc->entity.sender.active &&
+        transaction_id_matches(&svc->entity.sender.id,
+                               &event->transaction_id)) {
+        slot = &svc->entity.sender;
+    } else if (svc->entity.receiver.active &&
+               transaction_id_matches(&svc->entity.receiver.id,
+                                      &event->transaction_id)) {
+        slot = &svc->entity.receiver;
+    }
+
+    if (slot != NULL) {
+        memcpy(report.source_path, slot->source_path,
+               sizeof(report.source_path));
+        memcpy(report.destination_path, slot->destination_path,
+               sizeof(report.destination_path));
+        report.file_size = slot->file_size;
+        report.checksum = slot->eof_checksum;
+    }
+
+    k_mutex_lock(&service_status_lock, K_FOREVER);
+    service_status = report;
+    k_mutex_unlock(&service_status_lock);
+
+    if (event->type == CCSDS_CFDP_EVENT_COMPLETE) {
+        LOG_INF("transaction=%llu:%llu source=%s dest=%s size=%u checksum=0x%08x checksum=OK status=COMPLETE",
+                (unsigned long long)report.transaction_id.source_entity_id,
+                (unsigned long long)report.transaction_id.transaction_sequence_number,
+                report.source_path, report.destination_path, report.file_size,
+                report.checksum);
+    } else {
+        LOG_ERR("transaction=%llu:%llu source=%s dest=%s size=%u checksum=0x%08x checksum=NOK status=FAILED cfdp_status=%s",
+                (unsigned long long)report.transaction_id.source_entity_id,
+                (unsigned long long)report.transaction_id.transaction_sequence_number,
+                report.source_path, report.destination_path, report.file_size,
+                report.checksum,
+                akira_cfdp_service_status_name(report.status));
+    }
+}
+
 static void service_event_forward(void *user, const ccsds_cfdp_event_t *event)
 {
     struct akira_cfdp_service *svc = user;
+
+    if (svc != NULL && event != NULL &&
+        (event->type == CCSDS_CFDP_EVENT_COMPLETE ||
+         event->type == CCSDS_CFDP_EVENT_FAILED)) {
+        record_terminal_status(svc, event);
+    }
 
     if (svc != NULL && svc->event_cb != NULL) {
         svc->event_cb(svc->event_user, event);
@@ -348,7 +535,11 @@ akira_cfdp_service_init(const akira_cfdp_service_config_t *config)
     }
 
     memset(&service, 0, sizeof(service));
+    k_mutex_lock(&service_status_lock, K_FOREVER);
+    memset(&service_status, 0, sizeof(service_status));
+    k_mutex_unlock(&service_status_lock);
     default_receive_filestore.user = &service;
+    source_filestore.user = &service;
     service.receive_filestore = cfg.receive_filestore != NULL
                                     ? cfg.receive_filestore
                                     : &default_receive_filestore;
@@ -401,6 +592,39 @@ akira_cfdp_service_send_file(const ccsds_cfdp_filestore_ops_t *filestore,
 {
     return ccsds_cfdp_entity_send_file(&service.entity, filestore, request,
                                        transaction_id);
+}
+
+enum ccsds_cfdp_status
+akira_cfdp_service_send_path(const char *source_path,
+                             const char *destination_path,
+                             ccsds_cfdp_transaction_id_t *transaction_id)
+{
+#ifdef CONFIG_FILE_SYSTEM
+    const ccsds_cfdp_put_request_t request = {
+        .source_path = source_path,
+        .destination_path = destination_path,
+        .checksum_type = CCSDS_CFDP_CHECKSUM_TYPE_MODULAR,
+        .closure_requested = false,
+        .acknowledged_mode = false,
+    };
+
+    return akira_cfdp_service_send_file(&source_filestore, &request,
+                                        transaction_id);
+#else
+    ARG_UNUSED(source_path);
+    ARG_UNUSED(destination_path);
+    ARG_UNUSED(transaction_id);
+    return CCSDS_CFDP_STATUS_UNSUPPORTED;
+#endif
+}
+
+void akira_cfdp_service_get_status(struct akira_cfdp_service_status *status)
+{
+    __ASSERT(status != NULL, "Akira CFDP service status output is NULL");
+
+    k_mutex_lock(&service_status_lock, K_FOREVER);
+    *status = service_status;
+    k_mutex_unlock(&service_status_lock);
 }
 
 void akira_cfdp_service_poll(uint64_t now_ms)

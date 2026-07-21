@@ -10,7 +10,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef CONFIG_AKIRA_CCSDS_FRAME_SUPPORT
 #include "ccsds_tm_frame.h"
+#endif
+#ifdef CONFIG_AKIRA_CCSDS_CFDP
+#include "akira_cfdp_service.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,6 +33,8 @@ struct ccsds_shell_tm_status {
     uint16_t last_fhp;
     bool last_cadu;
 };
+
+#ifdef CONFIG_AKIRA_CCSDS_FRAME_SUPPORT
 
 /**
  * @brief Initialize CCSDS TM services used by the shell command.
@@ -121,6 +128,15 @@ int ccsds_shell_tm_route_del(uint8_t vcid, ccsds_tm_route_mask_t route_mask);
  *         -EINVAL for an invalid VCID.
  */
 int ccsds_shell_tm_route_clear(uint8_t vcid);
+#endif /* CONFIG_AKIRA_CCSDS_FRAME_SUPPORT */
+
+#ifdef CONFIG_AKIRA_CCSDS_CFDP
+int ccsds_shell_cfdp_configure(uint64_t local_entity_id,
+                               uint64_t remote_entity_id, uint16_t apid);
+void ccsds_shell_cfdp_get_config(akira_cfdp_service_config_t *config,
+                                 bool *started);
+int ccsds_shell_cfdp_start(void);
+#endif
 
 #ifdef __cplusplus
 }

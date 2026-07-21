@@ -928,10 +928,11 @@ config AKIRA_CCSDS_TM_FECF
 config AKIRA_CCSDS_SHELL
     bool "Enable CCSDS shell commands"
     default y if SHELL
-    depends on AKIRA_CCSDS_FRAME_SUPPORT && SHELL
+    depends on SHELL
     help
-      Enable manual CCSDS TM activation commands. This does not auto-start
-      CCSDS at boot; users must initialize and start TM explicitly from shell.
+      Enable manual CCSDS commands. Frame-support builds provide TM/TC
+      controls, and CFDP builds provide runtime service controls. Services do
+      not auto-start at boot.
 
 config AKIRA_CCSDS_TM_UDP_DEST_IP
     string "CCSDS TM development UDP destination IPv4 address"

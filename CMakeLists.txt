@@ -728,11 +728,12 @@ if(CONFIG_AKIRA_CCSDS)
             )
         endif()
 
-        if(CONFIG_AKIRA_CCSDS_SHELL)
-            target_sources(app PRIVATE
-                src/connectivity/ccsds/ccsds_shell.c
-            )
-        endif()
+    endif()
+
+    if(CONFIG_AKIRA_CCSDS_SHELL)
+        target_sources(app PRIVATE
+            src/connectivity/ccsds/ccsds_shell.c
+        )
     endif()
 endif()
 
