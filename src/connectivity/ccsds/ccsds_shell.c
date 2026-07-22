@@ -871,10 +871,13 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
 #endif /* CONFIG_AKIRA_CCSDS_FRAME_SUPPORT */
 
 #ifdef CONFIG_AKIRA_CCSDS_CFDP
+#define CCSDS_SHELL_CFDP_POLL_INTERVAL K_MSEC(100)
+
 static akira_cfdp_service_config_t cfdp_config;
 static bool cfdp_config_initialized;
 static bool cfdp_started;
 #if defined(CONFIG_NETWORKING) && !defined(CONFIG_AKIRA_CCSDS_FRAME_SUPPORT)
+static struct k_work_delayable cfdp_poll_work;
 static struct ccsds_router cfdp_router;
 static struct ccsds_profile_input cfdp_input;
 #endif
@@ -942,6 +945,19 @@ static uint64_t cfdp_now_ms(void *user)
     ARG_UNUSED(user);
     return (uint64_t)k_uptime_get();
 }
+
+static void cfdp_poll_work_handler(struct k_work *work)
+{
+    ARG_UNUSED(work);
+
+    if (!cfdp_started) {
+        return;
+    }
+
+    akira_cfdp_service_poll(cfdp_now_ms(NULL));
+    (void)k_work_reschedule(&cfdp_poll_work,
+                            CCSDS_SHELL_CFDP_POLL_INTERVAL);
+}
 #endif
 
 int ccsds_shell_cfdp_start(void)
@@ -977,6 +993,9 @@ int ccsds_shell_cfdp_start(void)
     }
 
     cfdp_started = true;
+    k_work_init_delayable(&cfdp_poll_work, cfdp_poll_work_handler);
+    (void)k_work_schedule(&cfdp_poll_work,
+                          CCSDS_SHELL_CFDP_POLL_INTERVAL);
     return 0;
 #else
     return -ENOTSUP;
@@ -1051,14 +1070,22 @@ static int cmd_ccsds_cfdp_put(const struct shell *sh, size_t argc, char **argv)
 {
     ccsds_cfdp_transaction_id_t id;
     enum ccsds_cfdp_status status;
+    const bool acknowledged = argc == 4u && strcmp(argv[1], "ack") == 0;
+    const char *source_path = acknowledged ? argv[2] : argv[1];
+    const char *destination_path = acknowledged ? argv[3] : argv[2];
 
-    ARG_UNUSED(argc);
+    if (argc == 4u && !acknowledged) {
+        shell_error(sh,
+                    "usage: ccsds cfdp put [ack] <source-path> <destination-name>");
+        return -EINVAL;
+    }
     if (!cfdp_started) {
         shell_error(sh, "ccsds cfdp put requires ccsds cfdp start");
         return -EACCES;
     }
 
-    status = akira_cfdp_service_send_path(argv[1], argv[2], &id);
+    status = akira_cfdp_service_send_path_mode(
+        source_path, destination_path, acknowledged, &id);
     if (status != CCSDS_CFDP_STATUS_OK) {
         shell_error(sh, "ccsds cfdp put failed: %d", status);
         return -(int)status;
@@ -1102,7 +1129,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(
     SHELL_CMD_ARG(config, NULL, "Configure CFDP entity IDs and APID",
                   cmd_ccsds_cfdp_config, 7, 0),
     SHELL_CMD(start, NULL, "Start the CFDP service", cmd_ccsds_cfdp_start),
-    SHELL_CMD_ARG(put, NULL, "Send a file", cmd_ccsds_cfdp_put, 3, 0),
+    SHELL_CMD_ARG(put, NULL, "Send a file; prefix paths with 'ack' for acknowledged mode",
+                  cmd_ccsds_cfdp_put, 3, 1),
     SHELL_CMD(status, NULL, "Show last CFDP terminal status",
               cmd_ccsds_cfdp_status),
     SHELL_SUBCMD_SET_END);

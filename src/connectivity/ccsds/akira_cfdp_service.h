@@ -68,6 +68,13 @@ akira_cfdp_service_send_path(const char *source_path,
                              const char *destination_path,
                              ccsds_cfdp_transaction_id_t *transaction_id);
 
+/** Send one filesystem file, selecting acknowledged or unacknowledged mode. */
+enum ccsds_cfdp_status
+akira_cfdp_service_send_path_mode(const char *source_path,
+                                  const char *destination_path,
+                                  bool acknowledged_mode,
+                                  ccsds_cfdp_transaction_id_t *transaction_id);
+
 /** Copy the last persistent COMPLETE or FAILED service report. */
 void akira_cfdp_service_get_status(struct akira_cfdp_service_status *status);
 

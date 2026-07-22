@@ -327,6 +327,162 @@ native simulator and MCU targets. A result with `udp_rx=0` means the UDP
 datagram did not reach the listener; first check the device IP address and the
 printed `local_port`.
 
+## CFDP Commands
+
+The CFDP shell commands configure and run the generic file-transfer service.
+They are available when `CONFIG_AKIRA_CCSDS_CFDP=y` and
+`CONFIG_AKIRA_CCSDS_SHELL=y`.
+
+For direct CFDP-over-UDP operation, use a packet-only build with:
+
+```text
+CONFIG_AKIRA_CCSDS=y
+CONFIG_AKIRA_CCSDS_CFDP=y
+CONFIG_AKIRA_CCSDS_FRAME_SUPPORT=n
+CONFIG_AKIRA_CCSDS_SHELL=y
+CONFIG_NETWORKING=y
+```
+
+In this profile, each UDP datagram contains one encoded CCSDS Space Packet.
+Incoming packets pass through the central CCSDS input path and APID router
+before reaching the CFDP receiver. This profile does not generate CLTUs or
+parse TC/TM transfer frames.
+
+### `ccsds cfdp config local <entity-id> remote <entity-id> apid <apid>`
+
+Sets the local entity ID, expected remote entity ID, and Space Packet APID.
+Configure the service before starting it. Entity IDs must be nonzero and the
+APID must be in the range `0x001` through `0x7ff`.
+
+Example for peer A:
+
+```text
+ccsds cfdp config local 1 remote 2 apid 0x340
+```
+
+Example for peer B:
+
+```text
+ccsds cfdp config local 2 remote 1 apid 0x340
+```
+
+### `ccsds cfdp start`
+
+Initializes the configured CFDP entity, registers its APID handler, and starts
+the packet-level UDP listener. Retry and timeout processing runs periodically
+after the service starts.
+
+The UDP endpoints are compile-time settings:
+
+```text
+CONFIG_AKIRA_CCSDS_UDP_LOCAL_IP
+CONFIG_AKIRA_CCSDS_UDP_LOCAL_PORT
+CONFIG_AKIRA_CCSDS_UDP_PEER_IP
+CONFIG_AKIRA_CCSDS_UDP_PEER_PORT
+```
+
+Two peers on one host must use reciprocal local and peer ports.
+
+### `ccsds cfdp put <source-path> <destination-name>`
+
+Sends an arbitrary filesystem file in unacknowledged mode.
+
+```text
+ccsds cfdp put /lfs/data/sample.bin sample.bin
+```
+
+### `ccsds cfdp put ack <source-path> <destination-name>`
+
+Sends an arbitrary filesystem file in acknowledged mode. A missing file-data
+segment can be requested with a NAK and retransmitted while retry limits are
+not exhausted.
+
+```text
+ccsds cfdp put ack /lfs/data/sample.bin sample.bin
+```
+
+The destination is a logical filename, not a path. It may contain letters,
+digits, `_`, `-`, and `.`, but not path separators or `..`. A successfully
+received file is committed as:
+
+```text
+/lfs/cfdp/received/<destination-name>
+```
+
+### `ccsds cfdp status`
+
+Shows the last persistent COMPLETE or FAILED transaction report, including the
+transaction ID, source and destination names, file size, EOF checksum, checksum
+result, and CFDP status.
+
+Example successful report:
+
+```text
+last transaction=1:1 event=COMPLETE source=sample.bin dest=sample.bin size=2049 checksum=0x0fff0000 checksum=OK status=COMPLETE cfdp_status=OK
+```
+
+Example checksum failure:
+
+```text
+last transaction=1:1 event=FAILED source=sample.bin dest=sample.bin size=2049 checksum=0x0fff0000 checksum=NOK status=FAILED cfdp_status=CHECKSUM_FAILURE
+```
+
+### Two-Peer Native Simulator Test
+
+The focused native simulator application builds two copies of the production
+CFDP service with these reciprocal endpoints:
+
+```text
+Instance A: local 127.0.0.1:5005, peer 127.0.0.1:5006
+Instance B: local 127.0.0.1:5006, peer 127.0.0.1:5005
+```
+
+Run the complete repeatable integration test from the repository root:
+
+```sh
+tests/cfdp_udp/run_cfdp_udp_integration.sh
+```
+
+The harness builds both peers, creates an arbitrary binary input, runs the two
+processes concurrently, and verifies:
+
+- An intact acknowledged transfer reaches COMPLETE and matches byte-for-byte.
+- One dropped file-data segment is recovered by NAK and retransmission.
+- Corrupted data reaches FAILED with `CHECKSUM_FAILURE` and is not committed.
+
+Build the peers without running the automated scenarios:
+
+```sh
+west build -b native_sim tests/cfdp_udp -d build-cfdp-udp-a --pristine -- -DEXTRA_CONF_FILE=instance_a.conf
+west build -b native_sim tests/cfdp_udp -d build-cfdp-udp-b --pristine -- -DEXTRA_CONF_FILE=instance_b.conf
+```
+
+Start receiver instance B in the first terminal. The output file must exist so
+the test-only native host-file adapter can truncate and commit it:
+
+```sh
+: > /tmp/cfdp-received.bin
+CFDP_LOCAL_ENTITY=2 CFDP_REMOTE_ENTITY=1 CFDP_APID=0x340 \
+CFDP_OUTPUT=/tmp/cfdp-received.bin \
+./build-cfdp-udp-b/zephyr/zephyr.exe
+```
+
+Start sender instance A in the second terminal, replacing the source path with
+any binary file no larger than 16384 bytes:
+
+```sh
+CFDP_LOCAL_ENTITY=1 CFDP_REMOTE_ENTITY=2 CFDP_APID=0x340 \
+CFDP_SOURCE=/absolute/path/to/arbitrary.bin \
+CFDP_SOURCE_NAME=arbitrary.bin CFDP_DEST_NAME=arbitrary.bin CFDP_MODE=ack \
+./build-cfdp-udp-a/zephyr/zephyr.exe
+```
+
+After the receiver reports `checksum=OK status=COMPLETE`, compare the files:
+
+```sh
+cmp /absolute/path/to/arbitrary.bin /tmp/cfdp-received.bin
+```
+
 ## Route Names
 
 Supported route names in the current shell:

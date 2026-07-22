@@ -599,13 +599,23 @@ akira_cfdp_service_send_path(const char *source_path,
                              const char *destination_path,
                              ccsds_cfdp_transaction_id_t *transaction_id)
 {
+    return akira_cfdp_service_send_path_mode(
+        source_path, destination_path, false, transaction_id);
+}
+
+enum ccsds_cfdp_status
+akira_cfdp_service_send_path_mode(const char *source_path,
+                                  const char *destination_path,
+                                  bool acknowledged_mode,
+                                  ccsds_cfdp_transaction_id_t *transaction_id)
+{
 #ifdef CONFIG_FILE_SYSTEM
     const ccsds_cfdp_put_request_t request = {
         .source_path = source_path,
         .destination_path = destination_path,
         .checksum_type = CCSDS_CFDP_CHECKSUM_TYPE_MODULAR,
-        .closure_requested = false,
-        .acknowledged_mode = false,
+        .closure_requested = acknowledged_mode,
+        .acknowledged_mode = acknowledged_mode,
     };
 
     return akira_cfdp_service_send_file(&source_filestore, &request,
